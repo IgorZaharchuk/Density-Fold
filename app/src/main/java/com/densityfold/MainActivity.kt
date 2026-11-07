@@ -92,7 +92,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             }
                         }
                     }
-                    HorizontalDivider()
+                    Divider()
                     Text("Внешний экран: ${uiState.outerDpi} dpi", style = MaterialTheme.typography.titleMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(-5, -1, 1, 5).forEach { step ->
