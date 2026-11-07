@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
     steps:
     - uses: actions/checkout@v4
     
@@ -22,15 +24,11 @@ jobs:
       run: chmod +x gradlew
       
     - name: Setup Android SDK components
-      env:
-        ANDROID_HOME: ${{ env.ANDROID_HOME }}
       run: |
         yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
         $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
       
     - name: Build with Gradle
-      env:
-        ANDROID_HOME: ${{ env.ANDROID_HOME }}
       run: ./gradlew :app:assembleDebug --stacktrace
       
     - name: Upload APK
