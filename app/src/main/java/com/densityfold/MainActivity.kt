@@ -11,34 +11,40 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.ViewModelProvider
 import com.densityfold.engine.ShizukuManager
 import com.densityfold.ui.theme.DensityFoldTheme
 import com.densityfold.viewmodel.MainViewModel
 import rikka.shizuku.Shizuku
 
 class MainActivity : ComponentActivity() {
-    private val shizukuPermissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
-        // После изменения прав в Shizuku, пользователь нажмёт "Обновить"
-    }
+    private lateinit var mainViewModel: MainViewModel
+    
+    private val shizukuPermissionListener = Shizuku.OnRequestPermissionResultListener { _, _ -> }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Инициализируем ViewModel как свойство класса
+        mainViewModel = ViewModelProvider(this)[MainViewModel::class.java]
+        
         Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
+        
         setContent {
             DensityFoldTheme {
-                val viewModel: MainViewModel = viewModel()
-                MainScreen(viewModel = viewModel)
+                MainScreen(viewModel = mainViewModel)
             }
         }
     }
     
     override fun onResume() {
         super.onResume()
-        // Автоматически проверяем статус Shizuku при возврате в приложение
-        viewModel.refreshDisplays()
+        // Автоматически проверяем статус Shizuku и дисплеев при возврате в приложение
+        if (::mainViewModel.isInitialized) {
+            mainViewModel.refreshDisplays()
+        }
     }
-
+    
     override fun onDestroy() {
         super.onDestroy()
         Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener)
