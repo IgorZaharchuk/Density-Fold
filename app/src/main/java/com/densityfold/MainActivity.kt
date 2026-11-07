@@ -10,16 +10,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.densityfold.engine.ShizukuManager
 import com.densityfold.ui.theme.DensityFoldTheme
 import com.densityfold.viewmodel.MainViewModel
-import rikka.shizuku.Shizuku as ShizukuApi
+import rikka.shizuku.Shizuku
 
 class MainActivity : ComponentActivity() {
-    private val shizukuPermissionListener = ShizukuApi.OnRequestPermissionResultListener { _, _ -> }
+    private val shizukuPermissionListener = Shizuku.OnRequestPermissionResultListener { _, _ -> }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        ShizukuApi.addRequestPermissionResultListener(shizukuPermissionListener)
+        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
         setContent {
             DensityFoldTheme {
                 val viewModel: MainViewModel = viewModel()
@@ -30,7 +31,7 @@ class MainActivity : ComponentActivity() {
     
     override fun onDestroy() {
         super.onDestroy()
-        ShizukuApi.removeRequestPermissionResultListener(shizukuPermissionListener)
+        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener)
     }
 }
 

@@ -4,7 +4,7 @@ import android.app.Activity
 import android.os.Bundle
 import android.widget.Toast
 import com.densityfold.data.DensityPreferences
-import com.densityfold.shizuku.ShizukuManager
+import com.densityfold.engine.ShizukuManager
 import com.densityfold.utils.DisplayUtils
 import kotlinx.coroutines.*
 

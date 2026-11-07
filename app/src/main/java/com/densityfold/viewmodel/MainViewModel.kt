@@ -5,7 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.densityfold.data.DensityPreferences
 import com.densityfold.data.DisplayInfo
-import com.densityfold.shizuku.ShizukuManager
+import com.densityfold.engine.ShizukuManager
 import com.densityfold.utils.DisplayUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
