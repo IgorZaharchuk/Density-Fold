@@ -1,11 +1,13 @@
 package com.densityfold.shizuku
 
 import android.content.pm.PackageManager
+// Используем псевдоним, чтобы избежать конфликта с именем пакета
+import rikka.shizuku.Shizuku as ShizukuApi
 
 object ShizukuManager {
     fun isShizukuAvailable(): Boolean {
         return try {
-            rikka.shizuku.Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+            ShizukuApi.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
         } catch (e: Exception) { 
             false 
         }
@@ -13,8 +15,8 @@ object ShizukuManager {
 
     fun requestPermission(requestCode: Int) {
         try {
-            if (rikka.shizuku.Shizuku.getUid() != -1) {
-                rikka.shizuku.Shizuku.requestPermission(requestCode)
+            if (ShizukuApi.getUid() != -1) {
+                ShizukuApi.requestPermission(requestCode)
             }
         } catch (e: Exception) { 
             e.printStackTrace() 
@@ -24,8 +26,7 @@ object ShizukuManager {
     suspend fun setDensity(displayId: Int, dpi: Int): Result<String> {
         return try {
             val command = "wm density $dpi -d $displayId"
-            // Явное указание полного пути к классу Shizuku решает проблему видимости
-            val process = rikka.shizuku.Shizuku.newProcess(
+            val process = ShizukuApi.newProcess(
                 arrayOf("sh", "-c", command), 
                 null, 
                 null
