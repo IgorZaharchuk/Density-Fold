@@ -4,9 +4,9 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.densityfold.data.DensityPreferences
-import com.densityfold.data.DisplayInfo
+import com.densityfold.engine.DisplayInfo
+import com.densityfold.engine.DisplayUtils
 import com.densityfold.engine.ShizukuManager
-import com.densityfold.utils.DisplayUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,16 +14,15 @@ import kotlinx.coroutines.launch
 
 data class UiState(
     val activeDisplay: DisplayInfo? = null,
-    val internalDisplay: DisplayInfo? = null,
-    val externalDisplay: DisplayInfo? = null,
+    val allDisplays: List<DisplayInfo> = emptyList(),
     val currentDensity: Int = 0,
-    val targetDensity: Int = 0,
     val innerDpi: Int = 360,
     val outerDpi: Int = 411,
     val isShizukuAvailable: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
-    val successMessage: String? = null
+    val successMessage: String? = null,
+    val diagnosticInfo: String = ""
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -49,15 +48,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshDisplays() {
         viewModelScope.launch {
             val context = getApplication<Application>().applicationContext
-            val (internal, external) = DisplayUtils.identifyFoldDisplays(context)
-            val active = internal // Упрощение: считаем активным внутренний по умолчанию, можно доработать
+            val active = DisplayUtils.getActiveDisplay(context)
+            val all = DisplayUtils.getAllDisplays(context)
             
+            val currentDpi = active?.let { 
+                ShizukuManager.getCurrentDensity(it.displayId).getOrNull() ?: it.density 
+            } ?: 0
+
             _uiState.value = _uiState.value.copy(
                 activeDisplay = active,
-                internalDisplay = internal,
-                externalDisplay = external,
-                currentDensity = active?.density ?: 0,
-                targetDensity = if (active == internal) _uiState.value.innerDpi else _uiState.value.outerDpi
+                allDisplays = all,
+                currentDensity = currentDpi,
+                diagnosticInfo = DisplayUtils.getDiagnosticString(context),
+                errorMessage = null
             )
         }
     }
@@ -69,12 +72,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val state = _uiState.value
             val display = state.activeDisplay ?: run {
-                _uiState.value = state.copy(errorMessage = "Дисплей не найден")
+                _uiState.value = state.copy(errorMessage = "Активный дисплей не найден")
                 return@launch
             }
-            val targetDpi = if (display == state.internalDisplay) state.innerDpi else state.outerDpi
             
-            _uiState.value = state.copy(isLoading = true, errorMessage = null)
+            // Эвристика: если имя содержит "internal" или "fold", берём innerDpi, иначе outerDpi
+            // На реальном устройстве это можно будет скорректировать по диагностике
+            val targetDpi = if (display.name.contains("internal", ignoreCase = true) || display.name.contains("fold", ignoreCase = true)) {
+                state.innerDpi
+            } else {
+                state.outerDpi
+            }
+            
+            _uiState.value = state.copy(isLoading = true, errorMessage = null, successMessage = null)
             val result = ShizukuManager.setDensity(display.displayId, targetDpi)
             
             result.fold(
@@ -82,5 +92,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 onFailure = { _uiState.value = _uiState.value.copy(errorMessage = it.message, isLoading = false) }
             )
         }
+    }
+    
+    fun requestShizukuPermission() {
+        ShizukuManager.requestPermission(1001)
+        // После запроса пользователь должен вручную разрешить в приложении Shizuku,
+        // затем можно нажать кнопку "Обновить" в UI.
     }
 }
