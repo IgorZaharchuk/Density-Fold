@@ -59,6 +59,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 activeDisplay = active,
                 allDisplays = all,
                 currentDensity = currentDpi,
+                isShizukuAvailable = ShizukuManager.isShizukuAvailable(), // <-- ИСПРАВЛЕНИЕ: обновляем статус
                 diagnosticInfo = DisplayUtils.getDiagnosticString(context),
                 errorMessage = null
             )
@@ -76,9 +77,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
             
-            // Эвристика: если имя содержит "internal" или "fold", берём innerDpi, иначе outerDpi
-            // На реальном устройстве это можно будет скорректировать по диагностике
-            val targetDpi = if (display.name.contains("internal", ignoreCase = true) || display.name.contains("fold", ignoreCase = true)) {
+            // Используем надёжное сравнение по Display ID, а не по имени
+            val innerDisplay = DisplayUtils.getInnerDisplay(getApplication())
+            val targetDpi = if (innerDisplay != null && display.displayId == innerDisplay.displayId) {
                 state.innerDpi
             } else {
                 state.outerDpi
@@ -96,7 +97,5 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     fun requestShizukuPermission() {
         ShizukuManager.requestPermission(1001)
-        // После запроса пользователь должен вручную разрешить в приложении Shizuku,
-        // затем можно нажать кнопку "Обновить" в UI.
     }
 }

@@ -4,8 +4,8 @@ import android.app.Activity
 import android.os.Bundle
 import android.widget.Toast
 import com.densityfold.data.DensityPreferences
+import com.densityfold.engine.DisplayUtils
 import com.densityfold.engine.ShizukuManager
-import com.densityfold.utils.DisplayUtils
 import kotlinx.coroutines.*
 
 class ClosedActionActivity : Activity() {
@@ -16,26 +16,24 @@ class ClosedActionActivity : Activity() {
             finish()
             return
         }
-        // Вызываем ту же логику, но для внешнего экрана
-        applyDensity(false)
+        applyDensityToOuter()
     }
 
-    private fun applyDensity(isInner: Boolean) {
+    private fun applyDensityToOuter() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val prefs = DensityPreferences(applicationContext)
-                val targetDpi = if (isInner) prefs.getInnerDpi() else prefs.getOuterDpi()
-                val (internal, external) = DisplayUtils.identifyFoldDisplays(applicationContext)
-                val display = if (isInner) internal else external
+                val targetDpi = prefs.getOuterDpi()
+                val outerDisplay = DisplayUtils.getOuterDisplay(applicationContext)
                 
-                if (display == null) {
-                    withContext(Dispatchers.Main) { showToast("Дисплей не найден"); finish() }
+                if (outerDisplay == null) {
+                    withContext(Dispatchers.Main) { showToast("Внешний дисплей не найден"); finish() }
                     return@launch
                 }
                 
-                val result = ShizukuManager.setDensity(display.displayId, targetDpi)
+                val result = ShizukuManager.setDensity(outerDisplay.displayId, targetDpi)
                 withContext(Dispatchers.Main) {
-                    showToast(if (result.isSuccess) "Применено: $targetDpi dpi" else "Ошибка: ${result.exceptionOrNull()?.message}")
+                    showToast(if (result.isSuccess) "Внешний: $targetDpi dpi" else "Ошибка: ${result.exceptionOrNull()?.message}")
                     finish()
                 }
             } catch (e: Exception) {

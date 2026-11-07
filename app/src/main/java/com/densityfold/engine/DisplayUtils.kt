@@ -2,8 +2,6 @@ package com.densityfold.engine
 
 import android.content.Context
 import android.hardware.display.DisplayManager
-import android.view.Display
-import android.view.WindowManager
 
 data class DisplayInfo(
     val displayId: Int,
@@ -32,7 +30,7 @@ object DisplayUtils {
     }
 
     fun getActiveDisplay(context: Context): DisplayInfo? {
-        val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
         val currentDisplay = windowManager.defaultDisplay
         val metrics = android.util.DisplayMetrics()
         currentDisplay.getRealMetrics(metrics)
@@ -47,11 +45,27 @@ object DisplayUtils {
         )
     }
 
+    // Надёжная эвристика: внутренний экран Fold всегда имеет максимальную ширину
+    fun getInnerDisplay(context: Context): DisplayInfo? {
+        return getAllDisplays(context).maxByOrNull { it.width }
+    }
+
+    // Внешний экран всегда имеет минимальную ширину
+    fun getOuterDisplay(context: Context): DisplayInfo? {
+        return getAllDisplays(context).minByOrNull { it.width }
+    }
+
     fun getDiagnosticString(context: Context): String {
         val displays = getAllDisplays(context)
         val active = getActiveDisplay(context)
+        val inner = getInnerDisplay(context)
+        val outer = getOuterDisplay(context)
+        
         val sb = StringBuilder("=== DIAGNOSTICS ===\n")
-        sb.append("Active Display ID: ${active?.displayId}\n\n")
+        sb.append("Active Display ID: ${active?.displayId}\n")
+        sb.append("Identified Inner (max width): ID ${inner?.displayId} (${inner?.width}x${inner?.height})\n")
+        sb.append("Identified Outer (min width): ID ${outer?.displayId} (${outer?.width}x${outer?.height})\n\n")
+        
         displays.forEach {
             sb.append("ID: ${it.displayId} | Name: ${it.name}\n")
             sb.append("Res: ${it.width}x${it.height} | DPI: ${it.density} | Default: ${it.isDefault}\n\n")

@@ -4,8 +4,8 @@ import android.app.Activity
 import android.os.Bundle
 import android.widget.Toast
 import com.densityfold.data.DensityPreferences
+import com.densityfold.engine.DisplayUtils
 import com.densityfold.engine.ShizukuManager
-import com.densityfold.utils.DisplayUtils
 import kotlinx.coroutines.*
 
 class OpenActionActivity : Activity() {
@@ -16,25 +16,24 @@ class OpenActionActivity : Activity() {
             finish()
             return
         }
-        applyDensity(true)
+        applyDensityToInner()
     }
 
-    private fun applyDensity(isInner: Boolean) {
+    private fun applyDensityToInner() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val prefs = DensityPreferences(applicationContext)
-                val targetDpi = if (isInner) prefs.getInnerDpi() else prefs.getOuterDpi()
-                val (internal, external) = DisplayUtils.identifyFoldDisplays(applicationContext)
-                val display = if (isInner) internal else external
+                val targetDpi = prefs.getInnerDpi()
+                val innerDisplay = DisplayUtils.getInnerDisplay(applicationContext)
                 
-                if (display == null) {
-                    withContext(Dispatchers.Main) { showToast("Дисплей не найден"); finish() }
+                if (innerDisplay == null) {
+                    withContext(Dispatchers.Main) { showToast("Внутренний дисплей не найден"); finish() }
                     return@launch
                 }
                 
-                val result = ShizukuManager.setDensity(display.displayId, targetDpi)
+                val result = ShizukuManager.setDensity(innerDisplay.displayId, targetDpi)
                 withContext(Dispatchers.Main) {
-                    showToast(if (result.isSuccess) "Применено: $targetDpi dpi" else "Ошибка: ${result.exceptionOrNull()?.message}")
+                    showToast(if (result.isSuccess) "Внутренний: $targetDpi dpi" else "Ошибка: ${result.exceptionOrNull()?.message}")
                     finish()
                 }
             } catch (e: Exception) {
