@@ -33,6 +33,12 @@ class MainActivity : ComponentActivity() {
         }
     }
     
+    override fun onResume() {
+        super.onResume()
+        // Автоматически проверяем статус Shizuku при возврате в приложение
+        viewModel.refreshDisplays()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener)
