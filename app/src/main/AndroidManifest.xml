@@ -46,6 +46,11 @@
             </intent-filter>
         </activity>
         
+        <service
+            android:name=".engine.ShizukuUserService"
+            android:enabled="true"
+            android:exported="false" />
+            
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
             android:authorities="${applicationId}.shizuku"
