@@ -21,10 +21,16 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
       
-    - name: Accept Android SDK licenses
-      run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+    - name: Setup Android SDK components
+      env:
+        ANDROID_HOME: ${{ env.ANDROID_HOME }}
+      run: |
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
       
     - name: Build with Gradle
+      env:
+        ANDROID_HOME: ${{ env.ANDROID_HOME }}
       run: ./gradlew :app:assembleDebug --stacktrace
       
     - name: Upload APK
