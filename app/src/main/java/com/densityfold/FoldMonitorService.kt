@@ -56,7 +56,12 @@ class FoldMonitorService : Service() {
         
         scope.launch {
             for (event in checkChannel) {
-                performDensityCheck()
+                try {
+                    performDensityCheck()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Исключение при обработке события DPI: ${e.message}", e)
+                    // Worker продолжает работу, следующее событие будет обработано
+                }
             }
         }
     }
@@ -129,8 +134,17 @@ class FoldMonitorService : Service() {
         val currentDpi = ShizukuManager.getCurrentDensity().getOrNull()
         
         if (currentDpi == targetDpi) {
-            lastWasExternal = isExternal
-            Log.d(TAG, "DPI уже установлен корректно ($targetDpi). Состояние зафиксировано.")
+            // DPI уже правильный — но нужно подтвердить, что дисплей не сменился
+            val currentActive = DisplayUtils.getActiveDisplay(applicationContext)
+            if (currentActive != null && currentActive.isExternal == isExternal) {
+                lastWasExternal = isExternal
+                Log.d(TAG, "DPI уже установлен корректно ($targetDpi). Состояние зафиксировано.")
+            } else if (currentActive == null) {
+                Log.w(TAG, "DPI уже правильный, но не удалось определить текущий дисплей. Состояние НЕ зафиксировано.")
+            } else {
+                Log.w(TAG, "Экран сменился во время проверки DPI. Состояние НЕ зафиксировано, запланирована повторная проверка.")
+                scheduleDensityCheck()
+            }
             return
         }
 
