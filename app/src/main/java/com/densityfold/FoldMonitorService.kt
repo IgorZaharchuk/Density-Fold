@@ -20,7 +20,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import rikka.shizuku.Shizuku
 
@@ -30,16 +29,7 @@ class FoldMonitorService : Service() {
     private var displayManager: DisplayManager? = null
     private var lastWasExternal: Boolean? = null
     
-    // Используем conflated channel для надёжного коалесцирования событий
-    // CONFLATED гарантирует, что ни одно последнее событие не будет потеряно
-    private val densityCheckChannel = Channel<Unit>(Channel.CONFLATED)
-    
-    // Worker coroutine, которая обрабатывает запросы последовательно
-    private val densityCheckWorker = scope.launch {
-        densityCheckChannel.receiveAsFlow().collect {
-            processDensityCheck()
-        }
-    }
+    private val checkChannel = Channel<Unit>(Channel.CONFLATED)
 
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
@@ -63,6 +53,12 @@ class FoldMonitorService : Service() {
         displayManager?.registerDisplayListener(displayListener, null)
         Shizuku.addBinderReceivedListenerSticky(shizukuListener)
         startForegroundSafely()
+        
+        scope.launch {
+            for (event in checkChannel) {
+                performDensityCheck()
+            }
+        }
     }
 
     private fun startForegroundSafely() {
@@ -102,83 +98,77 @@ class FoldMonitorService : Service() {
     }
 
     private fun scheduleDensityCheck() {
-        // Отправляем сигнал в conflated channel
-        // Если канал уже содержит Unit, он будет заменён (конфлейшн)
-        // Это гарантирует, что ни одно последнее событие не будет потеряно
-        densityCheckChannel.trySend(Unit)
+        checkChannel.trySend(Unit)
     }
 
-    private suspend fun processDensityCheck() {
-        try {
-            Log.d(TAG, "Начало проверки и применения DPI")
+    private suspend fun performDensityCheck() {
+        Log.d(TAG, "Начало проверки и применения DPI")
 
-            val active = DisplayUtils.getActiveDisplay(applicationContext)
-            if (active == null) {
-                Log.e(TAG, "Не удалось определить активный дисплей")
-                return
-            }
+        val active = DisplayUtils.getActiveDisplay(applicationContext)
+        if (active == null) {
+            Log.e(TAG, "Не удалось определить активный дисплей. Ожидание следующего события.")
+            return
+        }
 
-            val isExternal = active.isExternal
+        val isExternal = active.isExternal
 
-            if (!ShizukuManager.isShizukuAvailable()) {
-                Log.w(TAG, "Shizuku недоступен. Состояние НЕ зафиксировано, ожидание восстановления.")
-                return // lastWasExternal не обновляется
-            }
+        if (!ShizukuManager.isShizukuAvailable()) {
+            Log.w(TAG, "Shizuku недоступен. Состояние НЕ зафиксировано, ожидание восстановления.")
+            return
+        }
 
-            val prefs = DensityPreferences(applicationContext)
-            val targetDp = if (isExternal) prefs.getOuterDp() else prefs.getInnerDp()
-            val targetDpi = DisplayUtils.dpToDpi(targetDp, active.shortPx)
-            
-            if (targetDpi == null) {
-                Log.e(TAG, "Некорректные параметры для расчёта DPI")
-                return
-            }
+        val prefs = DensityPreferences(applicationContext)
+        val targetDp = if (isExternal) prefs.getOuterDp() else prefs.getInnerDp()
+        val targetDpi = DisplayUtils.dpToDpi(targetDp, active.shortPx)
+        
+        if (targetDpi == null) {
+            Log.e(TAG, "Некорректные параметры для расчёта DPI. Ожидание следующего события.")
+            return
+        }
 
-            val currentDpi = ShizukuManager.getCurrentDensity().getOrNull()
-            
-            if (currentDpi == targetDpi) {
-                // ПЕРЕПРОВЕРЯЕМ дисплей после получения текущего DPI
-                val recheckActive = DisplayUtils.getActiveDisplay(applicationContext)
-                if (recheckActive != null && recheckActive.isExternal == isExternal) {
+        val currentDpi = ShizukuManager.getCurrentDensity().getOrNull()
+        
+        if (currentDpi == targetDpi) {
+            lastWasExternal = isExternal
+            Log.d(TAG, "DPI уже установлен корректно ($targetDpi). Состояние зафиксировано.")
+            return
+        }
+
+        Log.d(TAG, "Применение DPI: $targetDpi для ${if (isExternal) "внешнего" else "внутреннего"} экрана")
+        val result = ShizukuManager.setDensity(targetDpi)
+        
+        result.fold(
+            onSuccess = { 
+                val actualDpi = ShizukuManager.getCurrentDensity().getOrNull()
+                val currentActive = DisplayUtils.getActiveDisplay(applicationContext)
+                
+                if (actualDpi != null && actualDpi == targetDpi && currentActive != null && currentActive.isExternal == isExternal) {
                     lastWasExternal = isExternal
-                    Log.d(TAG, "DPI уже установлен корректно ($targetDpi). Состояние зафиксировано.")
+                    Log.d(TAG, "DPI успешно применён и подтверждён ($targetDpi). Состояние зафиксировано.")
                 } else {
-                    Log.d(TAG, "DPI правильный, но экран изменился. Планируем повторную проверку.")
-                    scheduleDensityCheck()
-                }
-                return
-            }
-
-            Log.d(TAG, "Применение DPI: $targetDpi для ${if (isExternal) "внешнего" else "внутреннего"} экрана")
-            val result = ShizukuManager.setDensity(targetDpi)
-            
-            // ПЕРЕПРОВЕРЯЕМ дисплей после применения DPI
-            val recheckActive = DisplayUtils.getActiveDisplay(applicationContext)
-            
-            result.fold(
-                onSuccess = { 
-                    if (recheckActive != null && recheckActive.isExternal == isExternal) {
-                        lastWasExternal = isExternal
-                        Log.d(TAG, "DPI успешно применён. Состояние зафиксировано.")
-                    } else {
-                        Log.d(TAG, "DPI применён, но экран изменился во время операции. Планируем повторную проверку.")
+                    if (actualDpi == null) {
+                        Log.w(TAG, "Не удалось подтвердить применение DPI: не удалось получить текущий DPI. Состояние НЕ зафиксировано.")
+                    } else if (actualDpi != targetDpi) {
+                        Log.w(TAG, "Не удалось подтвердить применение DPI: целевой=$targetDpi, фактический=$actualDpi. Состояние НЕ зафиксировано.")
+                    } else if (currentActive == null) {
+                        Log.w(TAG, "Не удалось подтвердить применение DPI: не удалось определить текущий дисплей. Состояние НЕ зафиксировано.")
+                    } else if (currentActive.isExternal != isExternal) {
+                        Log.w(TAG, "Экран сменился во время применения DPI. Состояние НЕ зафиксировано, запланирована повторная проверка.")
                         scheduleDensityCheck()
                     }
-                },
-                onFailure = { 
-                    Log.e(TAG, "Ошибка применения DPI: ${it.message}. Состояние НЕ зафиксировано, будет повторная попытка.")
-                    // lastWasExternal не обновляется
                 }
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Необработанная ошибка в processDensityCheck: ${e.message}")
-        }
+            },
+            onFailure = { 
+                Log.e(TAG, "Ошибка применения DPI: ${it.message}. Состояние НЕ зафиксировано, будет повторная попытка.")
+            }
+        )
     }
 
     override fun onDestroy() {
         Log.d(TAG, "Сервис останавливается, очистка ресурсов")
         displayManager?.unregisterDisplayListener(displayListener)
         Shizuku.removeBinderReceivedListener(shizukuListener)
+        checkChannel.close()
         scope.cancel()
         super.onDestroy()
     }
