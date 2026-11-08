@@ -16,8 +16,8 @@ data class UiState(
     val activeDisplay: DisplayInfo? = null,
     val currentDensity: Int = 0,
     val currentDp: Int = 0,
-    val innerDp: Int = 420, // Соответствует DEFAULT_INNER_DP
-    val outerDp: Int = 411, // Соответствует DEFAULT_OUTER_DP
+    val innerDp: Int = 900,
+    val outerDp: Int = 411,
     val isShizukuAvailable: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
@@ -40,8 +40,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun loadSettingsInternal() {
         val innerShortPx = DisplayUtils.getInnerShortPx(getApplication())
         val outerShortPx = DisplayUtils.getOuterShortPx(getApplication())
-        
-        // Безопасная миграция (выполняется только один раз при первом запуске)
         preferences.migrateLegacyDpiToDp(innerShortPx, outerShortPx)
         
         val inner = preferences.getInnerDp()
@@ -59,13 +57,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val active = DisplayUtils.getActiveDisplay(context)
         val currentDpi = ShizukuManager.getCurrentDensity().getOrNull() ?: 0
         
-        // Рассчитываем текущий dp только для ОТОБРАЖЕНИЯ
         val currentDp = if (currentDpi > 0 && active != null) {
             DisplayUtils.dpiToDp(currentDpi, active.shortPx)
         } else { 0 }
 
-        // ВАЖНО: Мы обновляем ТОЛЬКО текущее состояние (currentDp, currentDensity).
-        // Мы НИКОГДА не перезаписываем innerDp и outerDp значениями с текущего экрана.
         _uiState.value = _uiState.value.copy(
             activeDisplay = active,
             currentDensity = currentDpi,

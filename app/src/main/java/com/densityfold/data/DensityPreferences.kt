@@ -18,26 +18,33 @@ class DensityPreferences(private val context: Context) {
         val INNER_DPI_LEGACY = intPreferencesKey("inner_dpi")
         val OUTER_DPI_LEGACY = intPreferencesKey("outer_dpi")
         
-        // Делаем дефолтные значения РАЗНЫМИ, чтобы при первом запуске 
-        // было сразу видно, что поля независимы.
-        const val DEFAULT_INNER_DP = 420
+        // Дефолтные значения для первого запуска
+        const val DEFAULT_INNER_DP = 900
         const val DEFAULT_OUTER_DP = 411
+        
+        // Диапазон допустимых значений dp
+        const val MIN_DP = 200
+        const val MAX_DP = 1200
     }
 
     suspend fun getInnerDp(): Int = context.dataStore.data.first()[INNER_DP] ?: DEFAULT_INNER_DP
     suspend fun getOuterDp(): Int = context.dataStore.data.first()[OUTER_DP] ?: DEFAULT_OUTER_DP
     
-    suspend fun setInnerDp(dp: Int) { context.dataStore.edit { it[INNER_DP] = dp } }
-    suspend fun setOuterDp(dp: Int) { context.dataStore.edit { it[OUTER_DP] = dp } }
+    suspend fun setInnerDp(dp: Int) { 
+        context.dataStore.edit { it[INNER_DP] = dp.coerceIn(MIN_DP, MAX_DP) } 
+    }
+    
+    suspend fun setOuterDp(dp: Int) { 
+        context.dataStore.edit { it[OUTER_DP] = dp.coerceIn(MIN_DP, MAX_DP) } 
+    }
     
     suspend fun migrateLegacyDpiToDp(innerShortPx: Int, outerShortPx: Int) {
         val prefs = context.dataStore.data.first()
         
-        // Мигрируем только если нового ключа нет, а старый есть
         if (!prefs.contains(INNER_DP) && prefs.contains(INNER_DPI_LEGACY)) {
             val legacyDpi = prefs[INNER_DPI_LEGACY]
             val newDp = if (legacyDpi != null && legacyDpi > 0 && innerShortPx > 0) {
-                (innerShortPx * 160f / legacyDpi).toInt().coerceIn(200, 800)
+                (innerShortPx * 160f / legacyDpi).toInt().coerceIn(MIN_DP, MAX_DP)
             } else {
                 DEFAULT_INNER_DP
             }
@@ -50,7 +57,7 @@ class DensityPreferences(private val context: Context) {
         if (!prefs.contains(OUTER_DP) && prefs.contains(OUTER_DPI_LEGACY)) {
             val legacyDpi = prefs[OUTER_DPI_LEGACY]
             val newDp = if (legacyDpi != null && legacyDpi > 0 && outerShortPx > 0) {
-                (outerShortPx * 160f / legacyDpi).toInt().coerceIn(200, 800)
+                (outerShortPx * 160f / legacyDpi).toInt().coerceIn(MIN_DP, MAX_DP)
             } else {
                 DEFAULT_OUTER_DP
             }

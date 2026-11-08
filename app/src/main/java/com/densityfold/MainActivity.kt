@@ -116,6 +116,7 @@ fun MainScreen(viewModel: MainViewModel) {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("Настройка плотности (dp)", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("Допустимый диапазон: 200–1200 dp", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
@@ -123,7 +124,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             onValueChange = { newText ->
                                 innerDpText = newText
                                 newText.toIntOrNull()?.let { dp ->
-                                    if (dp in 200..800) viewModel.setInnerDp(dp)
+                                    if (dp in 200..1200) viewModel.setInnerDp(dp)
                                 }
                             },
                             label = { Text("Внутренний, dp") },
@@ -143,7 +144,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             onValueChange = { newText ->
                                 outerDpText = newText
                                 newText.toIntOrNull()?.let { dp ->
-                                    if (dp in 200..800) viewModel.setOuterDp(dp)
+                                    if (dp in 200..1200) viewModel.setOuterDp(dp)
                                 }
                             },
                             label = { Text("Внешний, dp") },

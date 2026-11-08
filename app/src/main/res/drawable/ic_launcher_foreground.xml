@@ -1,5 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#FFFFFF" android:pathData="M54,27 L81,27 L81,81 L54,81 L54,54 L27,54 L27,27 Z M27,54 L27,81 L54,81 L54,54 Z"/>
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Левая панель (внешний экран, узкая) -->
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M25,20 L45,20 L45,88 L25,88 Z" />
+    
+    <!-- Правая панель (внутренний экран, широкая) -->
+    <path
+        android:fillColor="#90caf9"
+        android:pathData="M45,20 L85,20 L85,88 L45,88 Z" />
+    
+    <!-- Складка посередине -->
+    <path
+        android:fillColor="#0d47a1"
+        android:pathData="M44,20 L46,20 L46,88 L44,88 Z" />
+    
+    <!-- Блик на внутренней панели -->
+    <path
+        android:fillColor="#e3f2fd"
+        android:pathData="M50,25 L80,25 L80,30 L50,30 Z"
+        android:alpha="0.3" />
 </vector>
