@@ -19,13 +19,7 @@ data class DisplayInfo(
 }
 
 object DisplayUtils {
-    
-    // Порог определения внутреннего экрана
     const val INNER_THRESHOLD_PX = 1400
-    
-    // Физические разрешения Fold 7 (для миграции, когда экран недоступен)
-    const val PHYSICAL_INNER_SHORT_PX = 1968
-    const val PHYSICAL_OUTER_SHORT_PX = 1080
     
     fun getActiveDisplay(context: Context): DisplayInfo? {
         val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager ?: return null
@@ -72,40 +66,21 @@ object DisplayUtils {
         }
     }
     
-    /**
-     * Получить shortPx для внутреннего экрана (по текущему активному или физическому).
-     */
     fun getInnerShortPx(context: Context): Int {
         val active = getActiveDisplay(context)
-        if (active != null && !active.isExternal) return active.shortPx
-        // Fallback на физическое разрешение
-        return PHYSICAL_INNER_SHORT_PX
+        return if (active != null && !active.isExternal) active.shortPx else 1968
     }
     
-    /**
-     * Получить shortPx для внешнего экрана (по текущему активному или физическому).
-     */
     fun getOuterShortPx(context: Context): Int {
         val active = getActiveDisplay(context)
-        if (active != null && active.isExternal) return active.shortPx
-        // Fallback на физическое разрешение
-        return PHYSICAL_OUTER_SHORT_PX
+        return if (active != null && active.isExternal) active.shortPx else 1080
     }
     
-    /**
-     * Конвертация dp → dpi для команды wm density.
-     * Формула: dpi = shortPx * 160 / dp
-     * Возвращает null если dp <= 0 или shortPx <= 0 (защита от деления на ноль).
-     */
     fun dpToDpi(dp: Int, shortPx: Int): Int? {
         if (dp <= 0 || shortPx <= 0) return null
         return (shortPx * 160f / dp).toInt().coerceIn(72, 2000)
     }
     
-    /**
-     * Конвертация dpi → dp для отображения.
-     * Формула: dp = shortPx * 160 / dpi
-     */
     fun dpiToDp(dpi: Int, shortPx: Int): Int {
         if (dpi <= 0 || shortPx <= 0) return 0
         return (shortPx * 160f / dpi).toInt()
@@ -118,16 +93,15 @@ object DisplayUtils {
         sb.append("Разрешение: ${active?.width ?: 0} x ${active?.height ?: 0}\n")
         
         val shortPx = active?.shortPx ?: 0
-        sb.append("shortPx: $shortPx (порог внутреннего: $INNER_THRESHOLD_PX)\n")
+        sb.append("Физический shortPx: $shortPx (порог внутреннего: $INNER_THRESHOLD_PX)\n")
         
-        // Безопасное чтение текущего DPI из сырого вывода
         val rawOutput = ShizukuManager.lastRawOutput
         val currentDpi = extractPhysicalDensity(rawOutput)
-        sb.append("Текущий DPI (физический): $currentDpi\n")
+        sb.append("Текущий DPI: $currentDpi\n")
         
         if (currentDpi > 0 && shortPx > 0) {
             val currentDp = dpiToDp(currentDpi, shortPx)
-            sb.append("Логическая ширина: $currentDp dp\n")
+            sb.append("Логическая ширина (расчётная): $currentDp dp\n")
         } else {
             sb.append("Логическая ширина: — (невозможно рассчитать)\n")
         }
@@ -137,9 +111,6 @@ object DisplayUtils {
         return sb.toString()
     }
     
-    /**
-     * Безопасное извлечение Physical density из сырого вывода wm density.
-     */
     private fun extractPhysicalDensity(rawOutput: String): Int {
         if (rawOutput.isBlank()) return 0
         val match = Regex("Physical density:\\s*(\\d+)").find(rawOutput)
