@@ -35,64 +35,66 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var outerDpiInitialized = false
 
     init {
-        // Сначала загружаем настройки
-        loadSettings()
-        // Затем обновляем информацию о дисплеях (но не перезаписываем настройки)
-        refreshDisplays()
-    }
-
-    private fun loadSettings() {
+        // ПОСЛЕДОВАТЕЛЬНАЯ инициализация: сначала настройки, потом дисплеи
         viewModelScope.launch {
-            val inner = preferences.getInnerDpi()
-            val outer = preferences.getOuterDpi()
-            
-            // Проверяем, были ли значения реально сохранены
-            val hasInner = preferences.hasInnerDpi()
-            val hasOuter = preferences.hasOuterDpi()
-            
-            innerDpiInitialized = hasInner
-            outerDpiInitialized = hasOuter
-            
-            _uiState.value = _uiState.value.copy(
-                innerDpi = inner,
-                outerDpi = outer,
-                isShizukuAvailable = ShizukuManager.isShizukuAvailable()
-            )
+            loadSettingsInternal()
+            refreshDisplaysInternal()
         }
     }
 
-    fun refreshDisplays() {
-        viewModelScope.launch {
-            val context = getApplication<Application>().applicationContext
-            val active = DisplayUtils.getActiveDisplay(context)
-            val all = DisplayUtils.getAllDisplays(context)
-            
-            val currentDpi = ShizukuManager.getCurrentDensity().getOrNull() ?: 0
-            
-            _uiState.value = _uiState.value.copy(
-                activeDisplay = active,
-                allDisplays = all,
-                currentDensity = currentDpi,
-                isShizukuAvailable = ShizukuManager.isShizukuAvailable(),
-                diagnosticInfo = DisplayUtils.getDiagnosticString(context),
-                errorMessage = null
-            )
-            
-            // ТОЛЬКО при первом запуске (если ключи не существовали) 
-            // инициализируем значения текущим DPI системы
-            if (!innerDpiInitialized && currentDpi > 0 && active?.isExternal == false) {
-                preferences.setInnerDpi(currentDpi)
-                innerDpiInitialized = true
-                _uiState.value = _uiState.value.copy(innerDpi = currentDpi)
-            }
-            
-            if (!outerDpiInitialized && currentDpi > 0 && active?.isExternal == true) {
-                preferences.setOuterDpi(currentDpi)
-                outerDpiInitialized = true
-                _uiState.value = _uiState.value.copy(outerDpi = currentDpi)
-            }
+    // Внутренняя функция загрузки настроек (без launch)
+    private suspend fun loadSettingsInternal() {
+        val inner = preferences.getInnerDpi()
+        val outer = preferences.getOuterDpi()
+        
+        val hasInner = preferences.hasInnerDpi()
+        val hasOuter = preferences.hasOuterDpi()
+        
+        innerDpiInitialized = hasInner
+        outerDpiInitialized = hasOuter
+        
+        _uiState.value = _uiState.value.copy(
+            innerDpi = inner,
+            outerDpi = outer,
+            isShizukuAvailable = ShizukuManager.isShizukuAvailable()
+        )
+    }
+
+    // Внутренняя функция обновления дисплеев (без launch)
+    private suspend fun refreshDisplaysInternal() {
+        val context = getApplication<Application>().applicationContext
+        val active = DisplayUtils.getActiveDisplay(context)
+        val all = DisplayUtils.getAllDisplays(context)
+        
+        val currentDpi = ShizukuManager.getCurrentDensity().getOrNull() ?: 0
+        
+        _uiState.value = _uiState.value.copy(
+            activeDisplay = active,
+            allDisplays = all,
+            currentDensity = currentDpi,
+            isShizukuAvailable = ShizukuManager.isShizukuAvailable(),
+            diagnosticInfo = DisplayUtils.getDiagnosticString(context),
+            errorMessage = null
+        )
+        
+        // ТОЛЬКО при первом запуске (если ключи не существовали) 
+        // инициализируем значения текущим DPI системы
+        if (!innerDpiInitialized && currentDpi > 0 && active?.isExternal == false) {
+            preferences.setInnerDpi(currentDpi)
+            innerDpiInitialized = true
+            _uiState.value = _uiState.value.copy(innerDpi = currentDpi)
+        }
+        
+        if (!outerDpiInitialized && currentDpi > 0 && active?.isExternal == true) {
+            preferences.setOuterDpi(currentDpi)
+            outerDpiInitialized = true
+            _uiState.value = _uiState.value.copy(outerDpi = currentDpi)
         }
     }
+
+    // Публичные методы-оболочки
+    fun loadSettings() { viewModelScope.launch { loadSettingsInternal() } }
+    fun refreshDisplays() { viewModelScope.launch { refreshDisplaysInternal() } }
 
     fun setInnerDpi(dpi: Int) { 
         viewModelScope.launch { 
