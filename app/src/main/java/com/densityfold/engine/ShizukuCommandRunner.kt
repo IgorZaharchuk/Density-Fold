@@ -1,63 +1,35 @@
 package com.densityfold.engine
 
-import kotlinx.coroutines.suspendCancellableCoroutine
 import rikka.shizuku.Shizuku
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
 object ShizukuCommandRunner {
     
-    private var isBound = false
-    private var service: Any? = null
-    
+    /**
+     * Выполняет shell-команду через Shizuku.
+     * Использует Shizuku.newProcess — это официальный и самый надёжный способ,
+     * который исключает ошибки двойного resume и ручного управления биндером.
+     */
     suspend fun execute(command: String): Result<String> {
         return try {
-            ensureBound()
-            val result = executeCommand(command)
-            Result.success(result)
+            // Запускаем shell-процесс с правами Shizuku
+            val process = Shizuku.newProcess(arrayOf("sh", "-c", command), null, null)
+            
+            // Читаем стандартный вывод и ошибки
+            val output = BufferedReader(InputStreamReader(process.inputStream)).use { it.readText() }
+            val error = BufferedReader(InputStreamReader(process.errorStream)).use { it.readText() }
+            
+            // Ждём завершения процесса
+            val exitCode = process.waitFor()
+            
+            if (exitCode == 0) {
+                Result.success(output.trim())
+            } else {
+                Result.failure(Exception("Command failed with code $exitCode: $error"))
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }
-    }
-    
-    private suspend fun ensureBound() {
-        if (isBound) return
-        
-        suspendCancellableCoroutine { cont ->
-            var resumed = false
-            
-            val listener = object : Shizuku.OnBinderReceivedListener {
-                override fun onBinderReceived() {
-                    if (!resumed) {
-                        resumed = true
-                        isBound = true
-                        Shizuku.removeBinderReceivedListener(this)
-                        cont.resume(Unit)
-                    }
-                }
-            }
-            
-            Shizuku.addBinderReceivedListener(listener)
-            
-            // Если уже привязан — сразу завершаем
-            if (Shizuku.pingBinder()) {
-                if (!resumed) {
-                    resumed = true
-                    isBound = true
-                    Shizuku.removeBinderReceivedListener(listener)
-                    cont.resume(Unit)
-                }
-            }
-            
-            cont.invokeOnCancellation {
-                Shizuku.removeBinderReceivedListener(listener)
-            }
-        }
-    }
-    
-    private fun executeCommand(command: String): String {
-        // Здесь должна быть реальная логика выполнения команды через Shizuku
-        // Пока возвращаем заглушку — замени на реальный код
-        return "Command executed: $command"
     }
 }

@@ -57,7 +57,7 @@ class ClosedActionActivity : Activity() {
         timeoutHandler.removeCallbacks(timeoutRunnable)
         try { unregisterReceiver(completionReceiver) } catch (_: Exception) {}
         
-        // АГРЕССИВНЫЙ МЕТОД: полностью удаляем задачу из стека
+        // ЭКСПЕРИМЕНТ: полностью удаляем задачу из стека
         Log.d(TAG, "Calling finishAndRemoveTask() to force restore previous app")
         finishAndRemoveTask()
     }
