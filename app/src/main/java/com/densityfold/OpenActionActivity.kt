@@ -1,46 +1,16 @@
 package com.densityfold
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
-import android.widget.Toast
-import com.densityfold.data.DensityPreferences
-import com.densityfold.engine.ShizukuManager
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class OpenActionActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // Сразу делаем Activity "прозрачным" — не показываем UI
-        window.setBackgroundDrawableResource(android.R.color.transparent)
-        
-        if (!ShizukuManager.isShizukuAvailable()) {
-            Toast.makeText(this, "Shizuku не активен", Toast.LENGTH_SHORT).show()
-            finishAndRemoveTask()
-            return
-        }
-        
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val prefs = DensityPreferences(applicationContext)
-                val targetDpi = prefs.getInnerDpi()
-                val result = ShizukuManager.setDensity(targetDpi)
-                withContext(Dispatchers.Main) {
-                    val message = if (result.isSuccess) "Внутренний экран: $targetDpi dpi" 
-                                  else "Ошибка: ${result.exceptionOrNull()?.message}"
-                    Toast.makeText(applicationContext, message, Toast.LENGTH_SHORT).show()
-                    // finishAndRemoveTask() полностью удаляет задачу из стека
-                    finishAndRemoveTask()
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) { 
-                    Toast.makeText(applicationContext, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
-                    finishAndRemoveTask()
-                }
-            }
-        }
+        // Мгновенно отправляем broadcast нашему Receiver
+        sendBroadcast(Intent("com.densityfold.ACTION_OPEN").setPackage(packageName))
+        // И сразу закрываем Activity. 
+        // Обычный finish() в onCreate с темой NoDisplay предотвращает переход на рабочий стол.
+        finish()
     }
 }
