@@ -1,13 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Density Fold</string>
-    
-    <!-- App Shortcuts labels -->
-    <string name="shortcut_open_short">Открыто</string>
-    <string name="shortcut_open_long">Применить DPI внутреннего экрана</string>
-    <string name="shortcut_open_disabled">Открыто (недоступно)</string>
-    
-    <string name="shortcut_closed_short">Закрыто</string>
-    <string name="shortcut_closed_long">Применить DPI внешнего экрана</string>
-    <string name="shortcut_closed_disabled">Закрыто (недоступно)</string>
+    <string name="shortcut_open_short">Внутренний</string>
+    <string name="shortcut_open_long">Внутренний экран</string>
+    <string name="shortcut_open_disabled">Недоступно</string>
+    <string name="shortcut_closed_short">Внешний</string>
+    <string name="shortcut_closed_long">Внешний экран</string>
+    <string name="shortcut_closed_disabled">Недоступно</string>
 </resources>

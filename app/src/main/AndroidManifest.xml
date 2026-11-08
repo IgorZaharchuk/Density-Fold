@@ -36,7 +36,7 @@
             android:noHistory="true"
             android:launchMode="singleInstance"
             android:finishOnTaskLaunch="true"
-            android:label="Открыто">
+            android:label="Внутренний экран">
             <intent-filter>
                 <action android:name="com.densityfold.action.OPEN" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -52,7 +52,7 @@
             android:noHistory="true"
             android:launchMode="singleInstance"
             android:finishOnTaskLaunch="true"
-            android:label="Закрыто">
+            android:label="Внешний экран">
             <intent-filter>
                 <action android:name="com.densityfold.action.CLOSED" />
                 <category android:name="android.intent.category.DEFAULT" />
