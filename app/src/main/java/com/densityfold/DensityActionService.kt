@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.densityfold.data.DensityPreferences
 import com.densityfold.engine.DisplayUtils
@@ -18,22 +19,26 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class DensityActionService : Service() {
+    private val TAG = "DensityFold-Service"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action ?: run {
+            Log.d(TAG, "onStartCommand: null action, stopping")
             stopSelf(startId)
             return START_NOT_STICKY
         }
 
+        Log.d(TAG, "onStartCommand: action=$action, startId=$startId")
         val isClosed = action == ACTION_CLOSED
         val screenName = if (isClosed) "Внешний" else "Внутренний"
 
         scope.launch {
             try {
                 if (!ShizukuManager.isShizukuAvailable()) {
+                    Log.d(TAG, "Shizuku not available")
                     showNotification(applicationContext, screenName, 0, false, "Shizuku не активен")
                     return@launch
                 }
@@ -46,27 +51,36 @@ class DensityActionService : Service() {
                 
                 val targetDpi = DisplayUtils.dpToDpi(targetDp, shortPx)
                 if (targetDpi == null) {
+                    Log.d(TAG, "Invalid targetDpi calculation")
                     showNotification(applicationContext, screenName, 0, false, "Некорректные параметры")
                     return@launch
                 }
 
-                // Байпасс: проверяем текущий DPI
                 val currentDpi = ShizukuManager.getCurrentDensity().getOrNull()
                 if (currentDpi != null && currentDpi == targetDpi) {
-                    // Уже нужная плотность, ничего не делаем
+                    Log.d(TAG, "Bypass: currentDpi ($currentDpi) == targetDpi ($targetDpi)")
                     return@launch
                 }
 
+                Log.d(TAG, "Executing wm density $targetDpi")
                 val result = ShizukuManager.setDensity(targetDpi)
                 result.fold(
-                    onSuccess = { showNotification(applicationContext, screenName, targetDp, true, null) },
-                    onFailure = { showNotification(applicationContext, screenName, targetDp, false, it.message) }
+                    onSuccess = { 
+                        Log.d(TAG, "wm density success")
+                        showNotification(applicationContext, screenName, targetDp, true, null) 
+                    },
+                    onFailure = { 
+                        Log.d(TAG, "wm density failed: ${it.message}")
+                        showNotification(applicationContext, screenName, targetDp, false, it.message) 
+                    }
                 )
             } catch (e: Exception) {
+                Log.d(TAG, "Exception in service: ${e.message}")
                 showNotification(applicationContext, screenName, 0, false, e.message ?: "Неизвестная ошибка")
             } finally {
-                // Отправляем broadcast РОВНО ОДИН РАЗ при любом исходе
+                Log.d(TAG, "finally block: sending ACTION_COMPLETED")
                 sendCompletionBroadcast()
+                Log.d(TAG, "finally block: calling stopSelf($startId)")
                 stopSelf(startId)
             }
         }
@@ -103,6 +117,7 @@ class DensityActionService : Service() {
     }
 
     override fun onDestroy() {
+        Log.d(TAG, "onDestroy")
         scope.cancel()
         super.onDestroy()
     }

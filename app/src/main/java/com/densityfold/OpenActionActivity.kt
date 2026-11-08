@@ -9,23 +9,30 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 
 class OpenActionActivity : Activity() {
+    private val TAG = "DensityFold-Open"
+
     private val completionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == DensityActionService.ACTION_COMPLETED) {
+                Log.d(TAG, "Broadcast received: ACTION_COMPLETED")
                 cleanupAndFinish()
             }
         }
     }
     
     private val timeoutHandler = Handler(Looper.getMainLooper())
-    private val timeoutRunnable = Runnable { cleanupAndFinish() }
+    private val timeoutRunnable = Runnable { 
+        Log.d(TAG, "Timeout triggered (5s)")
+        cleanupAndFinish() 
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d(TAG, "onCreate: taskId=$taskId, isTaskRoot=$isTaskRoot, taskAffinity=$taskAffinity")
         
-        // Безопасная регистрация для Android 14+ (API 33+)
         val filter = IntentFilter(DensityActionService.ACTION_COMPLETED)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(completionReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -34,21 +41,23 @@ class OpenActionActivity : Activity() {
             registerReceiver(completionReceiver, filter)
         }
         
-        // Запускаем сервис
+        Log.d(TAG, "Starting DensityActionService (OPEN)")
         DensityActionService.startOpen(this)
         
-        // Увеличенный таймаут: 5 секунд (достаточно для Shizuku + wm density)
         timeoutHandler.postDelayed(timeoutRunnable, 5000)
     }
 
+    override fun onResume() {
+        super.onResume()
+        Log.d(TAG, "onResume: taskId=$taskId, isTaskRoot=$isTaskRoot")
+    }
+
     private fun cleanupAndFinish() {
-        // Отменяем таймаут, если он ещё активен
+        Log.d(TAG, "cleanupAndFinish called")
         timeoutHandler.removeCallbacks(timeoutRunnable)
-        
-        // Безопасное отключение receiver
         try { unregisterReceiver(completionReceiver) } catch (_: Exception) {}
         
-        // Возвращаем предыдущее приложение на передний план
+        Log.d(TAG, "Calling moveTaskToBack(true) and finish()")
         moveTaskToBack(true)
         finish()
         overridePendingTransition(0, 0)
@@ -56,6 +65,7 @@ class OpenActionActivity : Activity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        cleanupAndFinish() // Гарантированная очистка при уничтожении
+        Log.d(TAG, "onDestroy: taskId=$taskId")
+        cleanupAndFinish()
     }
 }
