@@ -108,9 +108,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
             
-            // БАЙПАСС: если текущий DPI уже равен целевому — не выполняем команду
-            if (state.currentDensity == targetDpi) {
+            // БАЙПАСС: получаем свежее значение DPI перед проверкой
+            val freshDpi = ShizukuManager.getCurrentDensity().getOrNull()
+            
+            if (freshDpi != null && freshDpi == targetDpi) {
+                // Текущий DPI уже равен целевому — пропускаем команду
+                val currentDp = DisplayUtils.dpiToDp(targetDpi, active.shortPx)
                 _uiState.value = state.copy(
+                    currentDensity = targetDpi,
+                    currentDp = currentDp,
                     successMessage = "Внутренний экран: уже ${state.innerDp} dp (без изменений)",
                     isLoading = false
                 )
@@ -155,9 +161,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
             
-            // БАЙПАСС: если текущий DPI уже равен целевому — не выполняем команду
-            if (state.currentDensity == targetDpi) {
+            // БАЙПАСС: получаем свежее значение DPI перед проверкой
+            val freshDpi = ShizukuManager.getCurrentDensity().getOrNull()
+            
+            if (freshDpi != null && freshDpi == targetDpi) {
+                // Текущий DPI уже равен целевому — пропускаем команду
+                val currentDp = DisplayUtils.dpiToDp(targetDpi, active.shortPx)
                 _uiState.value = state.copy(
+                    currentDensity = targetDpi,
+                    currentDp = currentDp,
                     successMessage = "Внешний экран: уже ${state.outerDp} dp (без изменений)",
                     isLoading = false
                 )
