@@ -8,7 +8,6 @@ import android.content.Intent
 import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.IBinder
-import android.util.Log
 import android.view.Display
 import androidx.core.app.NotificationCompat
 import com.densityfold.data.DensityPreferences
@@ -21,7 +20,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class FoldMonitorService : Service() {
-    private val TAG = "DensityFold-Monitor"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var displayManager: DisplayManager? = null
     private var lastWasExternal: Boolean? = null
@@ -31,7 +29,6 @@ class FoldMonitorService : Service() {
         override fun onDisplayRemoved(displayId: Int) {}
         override fun onDisplayChanged(displayId: Int) {
             if (displayId != Display.DEFAULT_DISPLAY) return
-            Log.d(TAG, "Display changed: $displayId")
             checkAndApplyDensity()
         }
     }
@@ -42,13 +39,32 @@ class FoldMonitorService : Service() {
         super.onCreate()
         displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         displayManager?.registerDisplayListener(displayListener, null)
-        Log.d(TAG, "FoldMonitorService created, display listener registered")
+        startForegroundServiceNotification()
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "FoldMonitorService started")
         checkAndApplyDensity()
         return START_STICKY
+    }
+    
+    private fun startForegroundServiceNotification() {
+        val channelId = "fold_monitor_channel"
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(channelId, "Монитор складывания", NotificationManager.IMPORTANCE_LOW)
+            notificationManager.createNotificationChannel(channel)
+        }
+        
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(android.R.drawable.ic_menu_manage)
+            .setContentTitle("Density Fold")
+            .setContentText("Мониторинг складывания активен")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .build()
+            
+        startForeground(1, notification)
     }
     
     private fun checkAndApplyDensity() {
@@ -57,37 +73,44 @@ class FoldMonitorService : Service() {
                 val active = DisplayUtils.getActiveDisplay(applicationContext) ?: return@launch
                 val isExternal = active.isExternal
                 
-                // Проверяем, изменился ли тип экрана
+                // Если состояние не изменилось, ничего не делаем
                 if (lastWasExternal == isExternal) return@launch
-                lastWasExternal = isExternal
                 
-                val screenName = if (isExternal) "Внешний" else "Внутренний"
-                Log.d(TAG, "Screen changed to: $screenName")
-                
+                // ВАЖНО: Если Shizuku недоступен, НЕ обновляем lastWasExternal.
+                // Это позволит сервису повторить попытку при следующем изменении дисплея,
+                // когда Shizuku снова станет доступен.
                 if (!ShizukuManager.isShizukuAvailable()) {
-                    Log.d(TAG, "Shizuku not available")
                     return@launch
                 }
                 
+                val screenName = if (isExternal) "Внешний" else "Внутренний"
                 val prefs = DensityPreferences(applicationContext)
                 val targetDp = if (isExternal) prefs.getOuterDp() else prefs.getInnerDp()
                 val targetDpi = DisplayUtils.dpToDpi(targetDp, active.shortPx) ?: return@launch
                 
-                // Байпасс: проверяем текущий DPI
                 val currentDpi = ShizukuManager.getCurrentDensity().getOrNull()
+                
+                // Байпасс: если DPI уже правильный, считаем это успехом и обновляем состояние
                 if (currentDpi == targetDpi) {
-                    Log.d(TAG, "Bypass: DPI already correct ($targetDpi)")
+                    lastWasExternal = isExternal
+                    showNotification(screenName, targetDp, true, "Уже установлено")
                     return@launch
                 }
                 
-                Log.d(TAG, "Applying DPI: $targetDpi for $screenName screen")
                 val result = ShizukuManager.setDensity(targetDpi)
                 result.fold(
-                    onSuccess = { showNotification(screenName, targetDp, true, null) },
-                    onFailure = { showNotification(screenName, targetDp, false, it.message) }
+                    onSuccess = { 
+                        // Обновляем состояние ТОЛЬКО после успешного применения
+                        lastWasExternal = isExternal
+                        showNotification(screenName, targetDp, true, null) 
+                    },
+                    onFailure = { 
+                        // При ошибке НЕ обновляем lastWasExternal, чтобы можно было повторить
+                        showNotification(screenName, targetDp, false, it.message) 
+                    }
                 )
             } catch (e: Exception) {
-                Log.e(TAG, "Error in checkAndApplyDensity", e)
+                // Тихо игнорируем ошибки в фоне, чтобы не крашить сервис
             }
         }
     }
@@ -95,11 +118,6 @@ class FoldMonitorService : Service() {
     private fun showNotification(screenName: String, dp: Int, isSuccess: Boolean, errorMsg: String?) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "fold_monitor_channel"
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "Монитор складывания", NotificationManager.IMPORTANCE_LOW)
-            notificationManager.createNotificationChannel(channel)
-        }
         
         val title = if (isSuccess) "Density Fold: $screenName экран" else "Density Fold: Ошибка"
         val text = if (isSuccess) "Установлено $dp dp" else (errorMsg ?: "Неизвестная ошибка")
@@ -112,7 +130,8 @@ class FoldMonitorService : Service() {
             .setAutoCancel(true)
             .build()
         
-        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+        // Используем уникальный ID для каждого уведомления, чтобы они не затирали друг друга
+        notificationManager.notify((System.currentTimeMillis() % 10000).toInt(), notification)
     }
     
     override fun onDestroy() {
