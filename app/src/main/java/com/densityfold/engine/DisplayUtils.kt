@@ -96,8 +96,9 @@ object DisplayUtils {
         sb.append("Физический shortPx: $shortPx (порог внутреннего: $INNER_THRESHOLD_PX)\n")
         
         val rawOutput = ShizukuManager.lastRawOutput
-        val currentDpi = extractPhysicalDensity(rawOutput)
-        sb.append("Текущий DPI: $currentDpi\n")
+        // ИСПОЛЬЗУЕМ ЕДИНЫЙ МЕТОД ПАРСИНГА
+        val currentDpi = ShizukuManager.parseDensity(rawOutput)
+        sb.append("Текущий DPI (действующий): $currentDpi\n")
         
         if (currentDpi > 0 && shortPx > 0) {
             val currentDp = dpiToDp(currentDpi, shortPx)
@@ -109,11 +110,5 @@ object DisplayUtils {
         sb.append("\n=== WM DENSITY RAW OUTPUT ===\n")
         sb.append(rawOutput.ifEmpty { "(не запрашивался)" })
         return sb.toString()
-    }
-    
-    private fun extractPhysicalDensity(rawOutput: String): Int {
-        if (rawOutput.isBlank()) return 0
-        val match = Regex("Physical density:\\s*(\\d+)").find(rawOutput)
-        return match?.groupValues?.get(1)?.toIntOrNull() ?: 0
     }
 }
