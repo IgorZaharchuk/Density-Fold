@@ -57,8 +57,8 @@ class ClosedActionActivity : Activity() {
         timeoutHandler.removeCallbacks(timeoutRunnable)
         try { unregisterReceiver(completionReceiver) } catch (_: Exception) {}
         
-        Log.d(TAG, "Calling moveTaskToBack(true) and finish()")
-        moveTaskToBack(true)
+        // ЭКСПЕРИМЕНТ: убираем moveTaskToBack(true).
+        Log.d(TAG, "Calling finish() without moveTaskToBack to test native task stack restoration")
         finish()
         overridePendingTransition(0, 0)
     }
@@ -66,7 +66,6 @@ class ClosedActionActivity : Activity() {
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "onDestroy: taskId=$taskId, cleaning up resources only")
-        // ТОЛЬКО очистка ресурсов. Никакой навигации или изменения состояния задачи.
         timeoutHandler.removeCallbacks(timeoutRunnable)
         try { unregisterReceiver(completionReceiver) } catch (_: Exception) {}
     }
