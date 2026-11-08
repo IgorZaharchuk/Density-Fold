@@ -28,7 +28,7 @@
         <activity
             android:name=".OpenActionActivity"
             android:exported="true"
-            android:theme="@android:style/Theme.NoDisplay"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
             android:taskAffinity=""
             android:noHistory="true"
@@ -44,7 +44,7 @@
         <activity
             android:name=".ClosedActionActivity"
             android:exported="true"
-            android:theme="@android:style/Theme.NoDisplay"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
             android:taskAffinity=""
             android:noHistory="true"
