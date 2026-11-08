@@ -19,9 +19,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import rikka.shizuku.Shizuku
 
 class FoldMonitorService : Service() {
@@ -30,8 +30,16 @@ class FoldMonitorService : Service() {
     private var displayManager: DisplayManager? = null
     private var lastWasExternal: Boolean? = null
     
-    private val dpiMutex = Mutex()
-    @Volatile private var pendingRecheck = false
+    // Используем conflated channel для надёжного коалесцирования событий
+    // CONFLATED гарантирует, что ни одно последнее событие не будет потеряно
+    private val densityCheckChannel = Channel<Unit>(Channel.CONFLATED)
+    
+    // Worker coroutine, которая обрабатывает запросы последовательно
+    private val densityCheckWorker = scope.launch {
+        densityCheckChannel.receiveAsFlow().collect {
+            processDensityCheck()
+        }
+    }
 
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
@@ -39,7 +47,6 @@ class FoldMonitorService : Service() {
         override fun onDisplayChanged(displayId: Int) {
             if (displayId != Display.DEFAULT_DISPLAY) return
             Log.d(TAG, "Обнаружено изменение дисплея (ID: $displayId)")
-            pendingRecheck = true
             scheduleDensityCheck()
         }
     }
@@ -95,70 +102,76 @@ class FoldMonitorService : Service() {
     }
 
     private fun scheduleDensityCheck() {
-        scope.launch {
-            // Коалесцирование: если Mutex уже захвачен, просто помечаем, что нужна повторная проверка
-            if (dpiMutex.isLocked) {
-                pendingRecheck = true
-                Log.d(TAG, "Операция DPI уже выполняется, запланирована повторная проверка")
-                return@launch
+        // Отправляем сигнал в conflated channel
+        // Если канал уже содержит Unit, он будет заменён (конфлейшн)
+        // Это гарантирует, что ни одно последнее событие не будет потеряно
+        densityCheckChannel.trySend(Unit)
+    }
+
+    private suspend fun processDensityCheck() {
+        try {
+            Log.d(TAG, "Начало проверки и применения DPI")
+
+            val active = DisplayUtils.getActiveDisplay(applicationContext)
+            if (active == null) {
+                Log.e(TAG, "Не удалось определить активный дисплей")
+                return
             }
 
-            dpiMutex.withLock {
-                do {
-                    // Сбрасываем флаг в начале итерации. Если придёт новое событие во время выполнения,
-                    // цикл выполнится ещё раз с самыми актуальными данными дисплея.
-                    pendingRecheck = false
-                    Log.d(TAG, "Начало проверки и применения DPI")
+            val isExternal = active.isExternal
 
-                    val active = DisplayUtils.getActiveDisplay(applicationContext)
-                    if (active == null) {
-                        Log.e(TAG, "Не удалось определить активный дисплей. Повторная попытка при следующем событии.")
-                        break
-                    }
+            if (!ShizukuManager.isShizukuAvailable()) {
+                Log.w(TAG, "Shizuku недоступен. Состояние НЕ зафиксировано, ожидание восстановления.")
+                return // lastWasExternal не обновляется
+            }
 
-                    val isExternal = active.isExternal
+            val prefs = DensityPreferences(applicationContext)
+            val targetDp = if (isExternal) prefs.getOuterDp() else prefs.getInnerDp()
+            val targetDpi = DisplayUtils.dpToDpi(targetDp, active.shortPx)
+            
+            if (targetDpi == null) {
+                Log.e(TAG, "Некорректные параметры для расчёта DPI")
+                return
+            }
 
-                    if (!ShizukuManager.isShizukuAvailable()) {
-                        Log.w(TAG, "Shizuku недоступен. Состояние НЕ зафиксировано, ожидание восстановления.")
-                        break // lastWasExternal не обновляется
-                    }
-
-                    val prefs = DensityPreferences(applicationContext)
-                    val targetDp = if (isExternal) prefs.getOuterDp() else prefs.getInnerDp()
-                    val targetDpi = DisplayUtils.dpToDpi(targetDp, active.shortPx)
-                    
-                    if (targetDpi == null) {
-                        Log.e(TAG, "Некорректные параметры для расчёта DPI. Повторная попытка при следующем событии.")
-                        break
-                    }
-
-                    val currentDpi = ShizukuManager.getCurrentDensity().getOrNull()
-                    
-                    if (currentDpi == targetDpi) {
-                        lastWasExternal = isExternal
-                        Log.d(TAG, "DPI уже установлен корректно ($targetDpi). Состояние зафиксировано.")
-                        break
-                    }
-
-                    Log.d(TAG, "Применение DPI: $targetDpi для ${if (isExternal) "внешнего" else "внутреннего"} экрана")
-                    val result = ShizukuManager.setDensity(targetDpi)
-                    
-                    result.fold(
-                        onSuccess = { 
-                            lastWasExternal = isExternal
-                            Log.d(TAG, "DPI успешно применён. Состояние зафиксировано.")
-                        },
-                        onFailure = { 
-                            Log.e(TAG, "Ошибка применения DPI: ${it.message}. Состояние НЕ зафиксировано, будет повторная попытка.")
-                            // lastWasExternal не обновляется
-                        }
-                    )
-                } while (pendingRecheck)
-                
-                if (pendingRecheck) {
-                    Log.d(TAG, "Завершена обработка с учётом отложенных изменений дисплея")
+            val currentDpi = ShizukuManager.getCurrentDensity().getOrNull()
+            
+            if (currentDpi == targetDpi) {
+                // ПЕРЕПРОВЕРЯЕМ дисплей после получения текущего DPI
+                val recheckActive = DisplayUtils.getActiveDisplay(applicationContext)
+                if (recheckActive != null && recheckActive.isExternal == isExternal) {
+                    lastWasExternal = isExternal
+                    Log.d(TAG, "DPI уже установлен корректно ($targetDpi). Состояние зафиксировано.")
+                } else {
+                    Log.d(TAG, "DPI правильный, но экран изменился. Планируем повторную проверку.")
+                    scheduleDensityCheck()
                 }
+                return
             }
+
+            Log.d(TAG, "Применение DPI: $targetDpi для ${if (isExternal) "внешнего" else "внутреннего"} экрана")
+            val result = ShizukuManager.setDensity(targetDpi)
+            
+            // ПЕРЕПРОВЕРЯЕМ дисплей после применения DPI
+            val recheckActive = DisplayUtils.getActiveDisplay(applicationContext)
+            
+            result.fold(
+                onSuccess = { 
+                    if (recheckActive != null && recheckActive.isExternal == isExternal) {
+                        lastWasExternal = isExternal
+                        Log.d(TAG, "DPI успешно применён. Состояние зафиксировано.")
+                    } else {
+                        Log.d(TAG, "DPI применён, но экран изменился во время операции. Планируем повторную проверку.")
+                        scheduleDensityCheck()
+                    }
+                },
+                onFailure = { 
+                    Log.e(TAG, "Ошибка применения DPI: ${it.message}. Состояние НЕ зафиксировано, будет повторная попытка.")
+                    // lastWasExternal не обновляется
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Необработанная ошибка в processDensityCheck: ${e.message}")
         }
     }
 

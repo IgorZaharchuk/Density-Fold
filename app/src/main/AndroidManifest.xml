@@ -42,7 +42,6 @@
             <intent-filter>
                 <action android:name="com.densityfold.action.OPEN" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
             </intent-filter>
         </activity>
         
@@ -59,7 +58,6 @@
             <intent-filter>
                 <action android:name="com.densityfold.action.CLOSED" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
             </intent-filter>
         </activity>
         
