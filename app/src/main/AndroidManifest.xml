@@ -41,6 +41,7 @@
             android:label="Внутренний экран">
             <intent-filter>
                 <action android:name="com.densityfold.action.OPEN" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
@@ -57,6 +58,7 @@
             android:label="Внешний экран">
             <intent-filter>
                 <action android:name="com.densityfold.action.CLOSED" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
