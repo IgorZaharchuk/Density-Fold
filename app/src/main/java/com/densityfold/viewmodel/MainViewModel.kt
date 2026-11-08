@@ -51,9 +51,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val active = DisplayUtils.getActiveDisplay(context)
             val all = DisplayUtils.getAllDisplays(context)
             
-            val currentDpi = ShizukuManager.getCurrentDensity().getOrNull() ?: active?.density ?: 0
-
-            _uiState.value = _uiState.value.copy(
+            // Запрашиваем текущий DPI из системы
+            val currentDpi = ShizukuManager.getCurrentDensity().getOrNull() ?: 0
+            
+            // Подставляем текущий DPI в соответствующее поле
+            val newState = _uiState.value.copy(
                 activeDisplay = active,
                 allDisplays = all,
                 currentDensity = currentDpi,
@@ -61,37 +63,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 diagnosticInfo = DisplayUtils.getDiagnosticString(context),
                 errorMessage = null
             )
-        }
-    }
-
-    fun setInnerDpi(dpi: Int) { viewModelScope.launch { preferences.setInnerDpi(dpi); _uiState.value = _uiState.value.copy(innerDpi = dpi) } }
-    fun setOuterDpi(dpi: Int) { viewModelScope.launch { preferences.setOuterDpi(dpi); _uiState.value = _uiState.value.copy(outerDpi = dpi) } }
-
-    fun autoApplyDensityForCurrentState() {
-        viewModelScope.launch {
-            val state = _uiState.value
-            val display = state.activeDisplay ?: return@launch
             
-            val targetDpi = if (display.isExternal) state.outerDpi else state.innerDpi
-            
-            if (state.currentDensity != targetDpi) {
-                _uiState.value = state.copy(isLoading = true, errorMessage = null, successMessage = null)
-                val result = ShizukuManager.setDensity(targetDpi)
-                
-                result.fold(
-                    onSuccess = { 
-                        _uiState.value = _uiState.value.copy(
-                            currentDensity = targetDpi, 
-                            successMessage = if (display.isExternal) "Внешний экран: $targetDpi dpi" else "Внутренний экран: $targetDpi dpi",
-                            isLoading = false
-                        ) 
-                    },
-                    onFailure = { _uiState.value = _uiState.value.copy(errorMessage = it.message, isLoading = false) }
-                )
+            // Если активен внутренний экран и текущий DPI отличается от сохранённого — подставляем
+            if (active?.isExternal == false && currentDpi > 0 && currentDpi != _uiState.value.innerDpi) {
+                _uiState.value = newState.copy(innerDpi = currentDpi)
+                preferences.setInnerDpi(currentDpi)
+            } 
+            // Если активен внешний экран — подставляем в outerDpi
+            else if (active?.isExternal == true && currentDpi > 0 && currentDpi != _uiState.value.outerDpi) {
+                _uiState.value = newState.copy(outerDpi = currentDpi)
+                preferences.setOuterDpi(currentDpi)
+            } 
+            else {
+                _uiState.value = newState
             }
         }
     }
 
+    fun setInnerDpi(dpi: Int) { 
+        viewModelScope.launch { 
+            preferences.setInnerDpi(dpi)
+            _uiState.value = _uiState.value.copy(innerDpi = dpi) 
+        } 
+    }
+    
+    fun setOuterDpi(dpi: Int) { 
+        viewModelScope.launch { 
+            preferences.setOuterDpi(dpi)
+            _uiState.value = _uiState.value.copy(outerDpi = dpi) 
+        } 
+    }
+
+    // Применяем DPI только по кнопке
     fun applyCurrentScreenDensity() {
         viewModelScope.launch {
             val state = _uiState.value
@@ -106,7 +109,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val result = ShizukuManager.setDensity(targetDpi)
             
             result.fold(
-                onSuccess = { _uiState.value = _uiState.value.copy(currentDensity = targetDpi, successMessage = it, isLoading = false) },
+                onSuccess = { 
+                    _uiState.value = _uiState.value.copy(
+                        currentDensity = targetDpi, 
+                        successMessage = "${if (display.isExternal) "Внешний" else "Внутренний"} экран: $targetDpi dpi",
+                        isLoading = false
+                    ) 
+                },
                 onFailure = { _uiState.value = _uiState.value.copy(errorMessage = it.message, isLoading = false) }
             )
         }

@@ -1,16 +1,20 @@
 package com.densityfold
 
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import com.densityfold.engine.ShizukuManager
 import com.densityfold.ui.theme.DensityFoldTheme
@@ -25,7 +29,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Инициализируем ViewModel как свойство класса
         mainViewModel = ViewModelProvider(this)[MainViewModel::class.java]
         
         Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
@@ -39,8 +42,16 @@ class MainActivity : ComponentActivity() {
     
     override fun onResume() {
         super.onResume()
-        // Автоматически проверяем статус Shizuku и дисплеев при возврате в приложение
         if (::mainViewModel.isInitialized) {
+            // Только обновляем информацию, НЕ применяем DPI
+            mainViewModel.refreshDisplays()
+        }
+    }
+    
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (::mainViewModel.isInitialized) {
+            // Только обновляем информацию при смене экрана, НЕ применяем DPI
             mainViewModel.refreshDisplays()
         }
     }
@@ -57,37 +68,54 @@ fun MainScreen(viewModel: MainViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     var showDiagnostics by remember { mutableStateOf(false) }
 
-    Scaffold(topBar = { 
-        TopAppBar(
-            title = { Text("Density Fold") },
-            actions = {
-                IconButton(onClick = { showDiagnostics = true }) {
-                    Text("ℹ️")
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { 
+                    Column {
+                        Text("Плотность Fold", fontWeight = FontWeight.Bold)
+                        Text("Galaxy Z Fold 7", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showDiagnostics = true }) {
+                        Icon(Icons.Default.Info, "Диагностика")
+                    }
                 }
-            }
-        ) 
-    }) { padding ->
+            )
+        }
+    ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Карточка статуса
+            // Карточка активного экрана
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Дисплей: ${uiState.activeDisplay?.name ?: "Не определён"}")
-                    Text("Display ID: ${uiState.activeDisplay?.displayId ?: "?"}")
-                    Text("Разрешение: ${uiState.activeDisplay?.width ?: 0} x ${uiState.activeDisplay?.height ?: 0}")
-                    Text("Текущий DPI: ${uiState.currentDensity}")
-                    Text("Shizuku: ${if (uiState.isShizukuAvailable) "Подключено" else "Нет"}", 
-                         color = if (uiState.isShizukuAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+                    val displayName = if (uiState.activeDisplay?.isExternal == true) "Внешний экран" else "Внутренний экран"
+                    
+                    Text(
+                        displayName,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Text("Дисплей ${uiState.activeDisplay?.displayId ?: "?"} · ${uiState.activeDisplay?.width ?: 0}×${uiState.activeDisplay?.height ?: 0} px")
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Text(
+                        "Доступ: ${if (uiState.isShizukuAvailable) "Shizuku, команда wm выполнится в shell" else "Shizuku не подключен"}",
+                        color = if (uiState.isShizukuAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                    )
                     
                     if (!uiState.isShizukuAvailable) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Button(onClick = { viewModel.requestShizukuPermission() }) {
                             Text("Запросить разрешение Shizuku")
-                        }
-                        Button(onClick = { viewModel.refreshDisplays() }, modifier = Modifier.padding(top = 4.dp)) {
-                            Text("Обновить статус")
                         }
                     }
                 }
@@ -96,23 +124,25 @@ fun MainScreen(viewModel: MainViewModel) {
             // Настройки DPI
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Внутренний экран: ${uiState.innerDpi} dpi", style = MaterialTheme.typography.titleMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(-5, -1, 1, 5).forEach { step ->
-                            Button(onClick = { viewModel.setInnerDpi((uiState.innerDpi + step).coerceIn(100, 1000)) }) { 
-                                Text(if (step > 0) "+$step" else "$step") 
-                            }
-                        }
-                    }
-                    Divider()
-                    Text("Внешний экран: ${uiState.outerDpi} dpi", style = MaterialTheme.typography.titleMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(-5, -1, 1, 5).forEach { step ->
-                            Button(onClick = { viewModel.setOuterDpi((uiState.outerDpi + step).coerceIn(100, 1000)) }) { 
-                                Text(if (step > 0) "+$step" else "$step") 
-                            }
-                        }
-                    }
+                    Text("Плотность экранов", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    
+                    OutlinedTextField(
+                        value = uiState.innerDpi.toString(),
+                        onValueChange = { 
+                            it.toIntOrNull()?.let { dpi -> viewModel.setInnerDpi(dpi.coerceIn(100, 1000)) }
+                        },
+                        label = { Text("Внутренний экран, dpi") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    
+                    OutlinedTextField(
+                        value = uiState.outerDpi.toString(),
+                        onValueChange = { 
+                            it.toIntOrNull()?.let { dpi -> viewModel.setOuterDpi(dpi.coerceIn(100, 1000)) }
+                        },
+                        label = { Text("Внешний экран, dpi") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
 
@@ -122,11 +152,20 @@ fun MainScreen(viewModel: MainViewModel) {
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 enabled = uiState.isShizukuAvailable && !uiState.isLoading
             ) {
-                Text(if (uiState.isLoading) "Применение..." else "Применить к текущему экрану")
+                Text(if (uiState.isLoading) "Применение..." else "Применить к текущему экрану", fontSize = 16.sp)
             }
 
-            uiState.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            uiState.successMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+            uiState.errorMessage?.let { 
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                    Text(it, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onErrorContainer)
+                }
+            }
+            
+            uiState.successMessage?.let { 
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                    Text(it, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onPrimary)
+                }
+            }
         }
     }
 
