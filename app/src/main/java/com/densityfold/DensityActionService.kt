@@ -41,18 +41,25 @@ class DensityActionService : Service() {
                 val prefs = DensityPreferences(applicationContext)
                 val targetDp = if (isClosed) prefs.getOuterDp() else prefs.getInnerDp()
                 
-                // Получаем реальное shortPx для нужного типа экрана
                 val shortPx = if (isClosed) {
                     DisplayUtils.getOuterShortPx(applicationContext)
                 } else {
                     DisplayUtils.getInnerShortPx(applicationContext)
                 }
                 
-                // Пересчёт dp → dpi
                 val targetDpi = DisplayUtils.dpToDpi(targetDp, shortPx)
                 if (targetDpi == null) {
                     showNotification(applicationContext, screenName, 0, false, 
                         "Некорректные параметры: dp=$targetDp, shortPx=$shortPx")
+                    return@launch
+                }
+
+                // БАЙПАСС: проверяем текущий DPI перед выполнением
+                val currentDpiResult = ShizukuManager.getCurrentDensity()
+                val currentDpi = currentDpiResult.getOrNull()
+                
+                if (currentDpi != null && currentDpi == targetDpi) {
+                    // Уже нужная плотность — не выполняем команду и не показываем уведомление
                     return@launch
                 }
 

@@ -108,6 +108,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
             
+            // БАЙПАСС: если текущий DPI уже равен целевому — не выполняем команду
+            if (state.currentDensity == targetDpi) {
+                _uiState.value = state.copy(
+                    successMessage = "Внутренний экран: уже ${state.innerDp} dp (без изменений)",
+                    isLoading = false
+                )
+                return@launch
+            }
+            
             _uiState.value = state.copy(isLoading = true, errorMessage = null, successMessage = null)
             val result = ShizukuManager.setDensity(targetDpi)
             
@@ -143,6 +152,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val targetDpi = DisplayUtils.dpToDpi(state.outerDp, active.shortPx)
             if (targetDpi == null) {
                 _uiState.value = state.copy(errorMessage = "Некорректные параметры для расчёта DPI")
+                return@launch
+            }
+            
+            // БАЙПАСС: если текущий DPI уже равен целевому — не выполняем команду
+            if (state.currentDensity == targetDpi) {
+                _uiState.value = state.copy(
+                    successMessage = "Внешний экран: уже ${state.outerDp} dp (без изменений)",
+                    isLoading = false
+                )
                 return@launch
             }
             
