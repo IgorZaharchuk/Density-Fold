@@ -31,7 +31,7 @@ class ClosedActionActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.d(TAG, "onCreate: taskId=$taskId, isTaskRoot=$isTaskRoot, taskAffinity=$taskAffinity")
+        Log.d(TAG, "onCreate: taskId=$taskId, isTaskRoot=$isTaskRoot")
         
         val filter = IntentFilter(DensityActionService.ACTION_COMPLETED)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
