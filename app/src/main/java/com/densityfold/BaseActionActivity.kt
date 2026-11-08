@@ -9,8 +9,11 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 
 abstract class BaseActionActivity : Activity() {
+    private val TAG = "DensityFold-Action"
+
     private val completionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == DensityActionService.ACTION_COMPLETED) {
@@ -35,7 +38,15 @@ abstract class BaseActionActivity : Activity() {
             registerReceiver(completionReceiver, filter)
         }
 
-        startService(Intent(this, DensityActionService::class.java).apply { this.action = action })
+        // Диагностический лог перед запуском сервиса
+        Log.d(TAG, "Запуск сервиса с действием: $action")
+
+        // ВАЖНО: this@BaseActionActivity.action ссылается на свойство Activity,
+        // а не на Intent.action (иначе сервис получал бы null action)
+        startService(Intent(this, DensityActionService::class.java).apply {
+            this.action = this@BaseActionActivity.action
+        })
+
         timeoutHandler.postDelayed(timeoutRunnable, TIMEOUT_MS)
     }
 
