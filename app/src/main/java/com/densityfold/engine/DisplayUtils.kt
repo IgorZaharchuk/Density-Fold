@@ -9,7 +9,8 @@ data class DisplayInfo(
     val width: Int,
     val height: Int,
     val density: Int,
-    val isDefault: Boolean
+    val isDefault: Boolean,
+    val isExternal: Boolean = false
 )
 
 object DisplayUtils {
@@ -24,7 +25,8 @@ object DisplayUtils {
                 width = metrics.widthPixels,
                 height = metrics.heightPixels,
                 density = metrics.densityDpi,
-                isDefault = display.displayId == android.view.Display.DEFAULT_DISPLAY
+                isDefault = display.displayId == android.view.Display.DEFAULT_DISPLAY,
+                isExternal = isExternalScreen(metrics.widthPixels)
             )
         }
     }
@@ -37,22 +39,26 @@ object DisplayUtils {
         
         return DisplayInfo(
             displayId = currentDisplay.displayId,
-            name = currentDisplay.name ?: "Active",
+            name = if (isExternalScreen(metrics.widthPixels)) "Внешний экран" else "Внутренний экран",
             width = metrics.widthPixels,
             height = metrics.heightPixels,
             density = metrics.densityDpi,
-            isDefault = true
+            isDefault = true,
+            isExternal = isExternalScreen(metrics.widthPixels)
         )
     }
 
-    // Надёжная эвристика: внутренний экран Fold всегда имеет максимальную ширину
-    fun getInnerDisplay(context: Context): DisplayInfo? {
-        return getAllDisplays(context).maxByOrNull { it.width }
+    // Для Fold 7: внешний экран 1080px шириной, внутренний 1968px
+    private fun isExternalScreen(width: Int): Boolean {
+        return width < 1200
     }
 
-    // Внешний экран всегда имеет минимальную ширину
+    fun getInnerDisplay(context: Context): DisplayInfo? {
+        return getAllDisplays(context).firstOrNull { !it.isExternal }
+    }
+
     fun getOuterDisplay(context: Context): DisplayInfo? {
-        return getAllDisplays(context).minByOrNull { it.width }
+        return getAllDisplays(context).firstOrNull { it.isExternal }
     }
 
     fun getDiagnosticString(context: Context): String {
@@ -63,12 +69,14 @@ object DisplayUtils {
         
         val sb = StringBuilder("=== DIAGNOSTICS ===\n")
         sb.append("Active Display ID: ${active?.displayId}\n")
-        sb.append("Identified Inner (max width): ID ${inner?.displayId} (${inner?.width}x${inner?.height})\n")
-        sb.append("Identified Outer (min width): ID ${outer?.displayId} (${outer?.width}x${outer?.height})\n\n")
+        sb.append("Active is External: ${active?.isExternal}\n")
+        sb.append("Active Resolution: ${active?.width}x${active?.height}\n")
+        sb.append("Identified Inner: ID ${inner?.displayId} (${inner?.width}x${inner?.height})\n")
+        sb.append("Identified Outer: ID ${outer?.displayId} (${outer?.width}x${outer?.height})\n\n")
         
         displays.forEach {
             sb.append("ID: ${it.displayId} | Name: ${it.name}\n")
-            sb.append("Res: ${it.width}x${it.height} | DPI: ${it.density} | Default: ${it.isDefault}\n\n")
+            sb.append("Res: ${it.width}x${it.height} | DPI: ${it.density} | External: ${it.isExternal}\n\n")
         }
         return sb.toString()
     }
