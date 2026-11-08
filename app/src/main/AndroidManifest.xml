@@ -25,7 +25,6 @@
                 android:resource="@xml/shortcuts" />
         </activity>
         
-        <!-- Прокси-Activity для ярлыков Samsung Modes -->
         <activity
             android:name=".OpenActionActivity"
             android:exported="true"
@@ -33,6 +32,8 @@
             android:excludeFromRecents="true"
             android:taskAffinity=""
             android:noHistory="true"
+            android:launchMode="singleInstance"
+            android:finishOnTaskLaunch="true"
             android:label="Открыто">
             <intent-filter>
                 <action android:name="com.densityfold.action.OPEN" />
@@ -47,6 +48,8 @@
             android:excludeFromRecents="true"
             android:taskAffinity=""
             android:noHistory="true"
+            android:launchMode="singleInstance"
+            android:finishOnTaskLaunch="true"
             android:label="Закрыто">
             <intent-filter>
                 <action android:name="com.densityfold.action.CLOSED" />
@@ -54,16 +57,10 @@
             </intent-filter>
         </activity>
         
-        <!-- Receiver, который выполняет реальную работу в фоне -->
-        <receiver
-            android:name=".ActionReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.densityfold.ACTION_OPEN" />
-                <action android:name="com.densityfold.ACTION_CLOSED" />
-            </intent-filter>
-        </receiver>
-        
+        <service
+            android:name=".DensityActionService"
+            android:exported="false" />
+            
         <service
             android:name=".engine.ShizukuUserService"
             android:enabled="true"
