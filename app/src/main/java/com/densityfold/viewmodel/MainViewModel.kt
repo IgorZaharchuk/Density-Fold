@@ -62,31 +62,72 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshDisplays() { viewModelScope.launch { refreshDisplaysInternal() } }
 
-    fun setInnerDpi(dpi: Int) { viewModelScope.launch { preferences.setInnerDpi(dpi); _uiState.value = _uiState.value.copy(innerDpi = dpi) } }
-    fun setOuterDpi(dpi: Int) { viewModelScope.launch { preferences.setOuterDpi(dpi); _uiState.value = _uiState.value.copy(outerDpi = dpi) } }
+    fun setInnerDpi(dpi: Int) { 
+        viewModelScope.launch { 
+            preferences.setInnerDpi(dpi)
+            _uiState.value = _uiState.value.copy(innerDpi = dpi) 
+        } 
+    }
+    
+    fun setOuterDpi(dpi: Int) { 
+        viewModelScope.launch { 
+            preferences.setOuterDpi(dpi)
+            _uiState.value = _uiState.value.copy(outerDpi = dpi) 
+        } 
+    }
 
-    // Применение конкретно внутреннего DPI
+    // Применение ВНУТРЕННЕГО DPI (работает только если мы сейчас на внутреннем экране)
     fun applyInnerDensity() {
-        applyDensityToScreen(_uiState.value.innerDpi, "Внутренний")
-    }
-
-    // Применение конкретно внешнего DPI
-    fun applyOuterDensity() {
-        applyDensityToScreen(_uiState.value.outerDpi, "Внешний")
-    }
-
-    private fun applyDensityToScreen(targetDpi: Int, screenName: String) {
         viewModelScope.launch {
             val state = _uiState.value
-            _uiState.value = state.copy(isLoading = true, errorMessage = null, successMessage = null)
+            val display = state.activeDisplay
             
-            val result = ShizukuManager.setDensity(targetDpi)
+            // Защита: применяем только если текущий экран НЕ внешний
+            if (display?.isExternal == true) {
+                _uiState.value = state.copy(
+                    errorMessage = "Для применения настроек внутреннего экрана, пожалуйста, раскройте телефон."
+                )
+                return@launch
+            }
+            
+            _uiState.value = state.copy(isLoading = true, errorMessage = null, successMessage = null)
+            val result = ShizukuManager.setDensity(state.innerDpi)
             
             result.fold(
                 onSuccess = { 
                     _uiState.value = _uiState.value.copy(
-                        currentDensity = targetDpi, 
-                        successMessage = "$screenName экран: $targetDpi dpi",
+                        currentDensity = state.innerDpi, 
+                        successMessage = "Внутренний экран: ${state.innerDpi} dpi",
+                        isLoading = false
+                    ) 
+                },
+                onFailure = { _uiState.value = _uiState.value.copy(errorMessage = it.message, isLoading = false) }
+            )
+        }
+    }
+
+    // Применение ВНЕШНЕГО DPI (работает только если мы сейчас на внешнем экране)
+    fun applyOuterDensity() {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val display = state.activeDisplay
+            
+            // Защита: применяем только если текущий экран внешний
+            if (display?.isExternal == false) {
+                _uiState.value = state.copy(
+                    errorMessage = "Для применения настроек внешнего экрана, пожалуйста, закройте телефон."
+                )
+                return@launch
+            }
+            
+            _uiState.value = state.copy(isLoading = true, errorMessage = null, successMessage = null)
+            val result = ShizukuManager.setDensity(state.outerDpi)
+            
+            result.fold(
+                onSuccess = { 
+                    _uiState.value = _uiState.value.copy(
+                        currentDensity = state.outerDpi, 
+                        successMessage = "Внешний экран: ${state.outerDpi} dpi",
                         isLoading = false
                     ) 
                 },
