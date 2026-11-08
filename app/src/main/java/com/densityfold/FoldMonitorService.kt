@@ -60,7 +60,6 @@ class FoldMonitorService : Service() {
                     performDensityCheck()
                 } catch (e: Exception) {
                     Log.e(TAG, "Исключение при обработке события DPI: ${e.message}", e)
-                    // Worker продолжает работу, следующее событие будет обработано
                 }
             }
         }
@@ -153,23 +152,27 @@ class FoldMonitorService : Service() {
         
         result.fold(
             onSuccess = { 
-                val actualDpi = ShizukuManager.getCurrentDensity().getOrNull()
+                // ПРИОРИТЕТ 1: Проверяем, не сменился ли экран во время применения DPI
                 val currentActive = DisplayUtils.getActiveDisplay(applicationContext)
+                if (currentActive == null) {
+                    Log.w(TAG, "Не удалось подтвердить применение DPI: не удалось определить текущий дисплей. Состояние НЕ зафиксировано.")
+                    return@fold
+                }
+                if (currentActive.isExternal != isExternal) {
+                    Log.w(TAG, "Экран сменился во время применения DPI. Состояние НЕ зафиксировано, запланирована повторная проверка.")
+                    scheduleDensityCheck()
+                    return@fold
+                }
                 
-                if (actualDpi != null && actualDpi == targetDpi && currentActive != null && currentActive.isExternal == isExternal) {
+                // ПРИОРИТЕТ 2: Экран не сменился — проверяем фактический DPI
+                val actualDpi = ShizukuManager.getCurrentDensity().getOrNull()
+                if (actualDpi == null) {
+                    Log.w(TAG, "Не удалось подтвердить применение DPI: не удалось получить текущий DPI. Состояние НЕ зафиксировано.")
+                } else if (actualDpi == targetDpi) {
                     lastWasExternal = isExternal
                     Log.d(TAG, "DPI успешно применён и подтверждён ($targetDpi). Состояние зафиксировано.")
                 } else {
-                    if (actualDpi == null) {
-                        Log.w(TAG, "Не удалось подтвердить применение DPI: не удалось получить текущий DPI. Состояние НЕ зафиксировано.")
-                    } else if (actualDpi != targetDpi) {
-                        Log.w(TAG, "Не удалось подтвердить применение DPI: целевой=$targetDpi, фактический=$actualDpi. Состояние НЕ зафиксировано.")
-                    } else if (currentActive == null) {
-                        Log.w(TAG, "Не удалось подтвердить применение DPI: не удалось определить текущий дисплей. Состояние НЕ зафиксировано.")
-                    } else if (currentActive.isExternal != isExternal) {
-                        Log.w(TAG, "Экран сменился во время применения DPI. Состояние НЕ зафиксировано, запланирована повторная проверка.")
-                        scheduleDensityCheck()
-                    }
+                    Log.w(TAG, "Не удалось подтвердить применение DPI: целевой=$targetDpi, фактический=$actualDpi. Состояние НЕ зафиксировано.")
                 }
             },
             onFailure = { 
