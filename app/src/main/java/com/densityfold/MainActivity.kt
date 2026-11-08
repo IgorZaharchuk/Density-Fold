@@ -12,11 +12,11 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
-import com.densityfold.engine.ShizukuManager
 import com.densityfold.ui.theme.DensityFoldTheme
 import com.densityfold.viewmodel.MainViewModel
 import rikka.shizuku.Shizuku
@@ -29,9 +29,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         mainViewModel = ViewModelProvider(this)[MainViewModel::class.java]
         Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
-        setContent {
-            DensityFoldTheme { MainScreen(viewModel = mainViewModel) }
-        }
+        setContent { DensityFoldTheme { MainScreen(viewModel = mainViewModel) } }
     }
     
     override fun onResume() {
@@ -54,13 +52,12 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
     var showDiagnostics by remember { mutableStateOf(false) }
     
-    // Отдельные состояния для текстовых полей (разрешают промежуточный ввод)
     var innerDpiText by remember { mutableStateOf(uiState.innerDpi.toString()) }
     var outerDpiText by remember { mutableStateOf(uiState.outerDpi.toString()) }
 
-    // Синхронизируем текст при изменении значений из ViewModel (например, при загрузке)
     LaunchedEffect(uiState.innerDpi) { innerDpiText = uiState.innerDpi.toString() }
     LaunchedEffect(uiState.outerDpi) { outerDpiText = uiState.outerDpi.toString() }
 
@@ -93,12 +90,21 @@ fun MainScreen(viewModel: MainViewModel) {
                     Text("Дисплей ${uiState.activeDisplay?.displayId ?: "?"} · ${uiState.activeDisplay?.width ?: 0}×${uiState.activeDisplay?.height ?: 0} px")
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        "Доступ: ${if (uiState.isShizukuAvailable) "Shizuku, команда wm выполнится в shell" else "Shizuku не подключен"}",
+                        "Доступ: ${if (uiState.isShizukuAvailable) "Shizuku подключен" else "Shizuku не подключен"}",
                         color = if (uiState.isShizukuAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                     )
                     if (!uiState.isShizukuAvailable) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { viewModel.requestShizukuPermission() }) {
+                        Button(onClick = { 
+                            // Прямой запрос из Activity context — диалог Shizuku откроется корректно
+                            try {
+                                if (Shizuku.getUid() != -1) {
+                                    Shizuku.requestPermission(1001)
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }) {
                             Text("Запросить разрешение Shizuku")
                         }
                     }
@@ -112,12 +118,9 @@ fun MainScreen(viewModel: MainViewModel) {
                     OutlinedTextField(
                         value = innerDpiText,
                         onValueChange = { newText ->
-                            innerDpiText = newText // Всегда обновляем текст поля
-                            // Сохраняем в ViewModel только если введено корректное число
+                            innerDpiText = newText
                             newText.toIntOrNull()?.let { dpi ->
-                                if (dpi in 100..1000) {
-                                    viewModel.setInnerDpi(dpi)
-                                }
+                                if (dpi in 100..1000) viewModel.setInnerDpi(dpi)
                             }
                         },
                         label = { Text("Внутренний экран, dpi") },
@@ -128,11 +131,9 @@ fun MainScreen(viewModel: MainViewModel) {
                     OutlinedTextField(
                         value = outerDpiText,
                         onValueChange = { newText ->
-                            outerDpiText = newText // Всегда обновляем текст поля
+                            outerDpiText = newText
                             newText.toIntOrNull()?.let { dpi ->
-                                if (dpi in 100..1000) {
-                                    viewModel.setOuterDpi(dpi)
-                                }
+                                if (dpi in 100..1000) viewModel.setOuterDpi(dpi)
                             }
                         },
                         label = { Text("Внешний экран, dpi") },

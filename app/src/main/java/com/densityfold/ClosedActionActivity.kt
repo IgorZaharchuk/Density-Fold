@@ -7,9 +7,9 @@ import android.os.Bundle
 class ClosedActionActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Мгновенно отправляем broadcast нашему Receiver
         sendBroadcast(Intent("com.densityfold.ACTION_CLOSED").setPackage(packageName))
-        // И сразу закрываем Activity
+        moveTaskToBack(true)
         finish()
+        overridePendingTransition(0, 0)
     }
 }
