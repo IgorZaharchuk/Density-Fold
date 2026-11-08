@@ -1,35 +1,84 @@
 package com.densityfold.engine
 
+import android.content.ComponentName
+import android.content.ServiceConnection
+import android.os.IBinder
+import kotlinx.coroutines.suspendCancellableCoroutine
 import rikka.shizuku.Shizuku
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import rikka.shizuku.Shizuku.UserServiceArgs
+import kotlin.coroutines.resume
 
 object ShizukuCommandRunner {
-    
-    /**
-     * Выполняет shell-команду через Shizuku.
-     * Использует Shizuku.newProcess — это официальный и самый надёжный способ,
-     * который исключает ошибки двойного resume и ручного управления биндером.
-     */
+    private var service: IShizukuService? = null
+    private var isBound = false
+
+    private val userServiceArgs = UserServiceArgs(
+        ComponentName("com.densityfold", "com.densityfold.engine.ShizukuUserService")
+    )
+        .daemon(false)
+        .processNameSuffix("shizuku_service")
+        .debuggable(false)
+        .version(1)
+
     suspend fun execute(command: String): Result<String> {
         return try {
-            // Запускаем shell-процесс с правами Shizuku
-            val process = Shizuku.newProcess(arrayOf("sh", "-c", command), null, null)
-            
-            // Читаем стандартный вывод и ошибки
-            val output = BufferedReader(InputStreamReader(process.inputStream)).use { it.readText() }
-            val error = BufferedReader(InputStreamReader(process.errorStream)).use { it.readText() }
-            
-            // Ждём завершения процесса
-            val exitCode = process.waitFor()
-            
-            if (exitCode == 0) {
-                Result.success(output.trim())
+            ensureBound()
+            val result = service?.executeCommand(command)
+            if (result != null) {
+                Result.success(result)
             } else {
-                Result.failure(Exception("Command failed with code $exitCode: $error"))
+                Result.failure(IllegalStateException("Service returned null"))
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    private suspend fun ensureBound() {
+        if (isBound && service != null) return
+
+        suspendCancellableCoroutine { cont ->
+            var resumed = false
+
+            val serviceConnection = object : ServiceConnection {
+                override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+                    // ЖЕСТКАЯ ЗАЩИТА от двойного resume
+                    if (!resumed && binder != null) {
+                        resumed = true
+                        service = IShizukuService.Stub.asInterface(binder)
+                        isBound = true
+                        cont.resume(Unit)
+                    }
+                }
+
+                override fun onServiceDisconnected(name: ComponentName?) {
+                    service = null
+                    isBound = false
+                }
+            }
+
+            val binderReceivedListener = Shizuku.OnBinderReceivedListener {
+                if (!isBound) {
+                    Shizuku.bindUserService(userServiceArgs, serviceConnection)
+                } else if (!resumed) {
+                    // Уже привязан, но корутина ещё не возобновлена (например, отменена и вызвана снова)
+                    resumed = true
+                    cont.resume(Unit)
+                }
+            }
+
+            // Sticky listener гарантирует немедленный вызов, если биндер уже получен
+            Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
+
+            // Дополнительная страховка: если сервис уже был привязан до создания корутины
+            if (isBound && service != null && !resumed) {
+                resumed = true
+                cont.resume(Unit)
+            }
+
+            cont.invokeOnCancellation {
+                Shizuku.removeBinderReceivedListener(binderReceivedListener)
+            }
         }
     }
 }
