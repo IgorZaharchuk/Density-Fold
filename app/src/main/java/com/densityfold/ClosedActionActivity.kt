@@ -65,7 +65,9 @@ class ClosedActionActivity : Activity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d(TAG, "onDestroy: taskId=$taskId")
-        cleanupAndFinish()
+        Log.d(TAG, "onDestroy: taskId=$taskId, cleaning up resources only")
+        // ТОЛЬКО очистка ресурсов. Никакой навигации или изменения состояния задачи.
+        timeoutHandler.removeCallbacks(timeoutRunnable)
+        try { unregisterReceiver(completionReceiver) } catch (_: Exception) {}
     }
 }
