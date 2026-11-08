@@ -83,6 +83,11 @@ object DisplayUtils {
             sb.append("Res: ${it.width}x${it.height} | DPI: ${it.density} | External: ${it.isExternal}\n")
             sb.append("  min side: ${minOf(it.width, it.height)}\n\n")
         }
+        
+        // Показываем сырой вывод wm density для отладки
+        sb.append("=== WM DENSITY RAW OUTPUT ===\n")
+        sb.append(ShizukuManager.lastRawOutput.ifEmpty { "(ещё не запрашивался)" })
+        
         return sb.toString()
     }
 }
