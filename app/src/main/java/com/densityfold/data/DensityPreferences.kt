@@ -5,7 +5,6 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.remove
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -50,7 +49,6 @@ class DensityPreferences(private val context: Context) {
      * Возвращает true, если миграция произошла.
      */
     suspend fun migrateLegacyDpiToDp(innerShortPx: Int, outerShortPx: Int): Boolean {
-        val prefs = context.dataStore.data.first()
         var migrated = false
         
         context.dataStore.edit { store ->
