@@ -35,6 +35,7 @@ class DensityActionService : Service() {
             try {
                 if (!ShizukuManager.isShizukuAvailable()) {
                     showNotification(applicationContext, screenName, 0, false, "Shizuku не активен")
+                    sendCompletionBroadcast()
                     return@launch
                 }
 
@@ -51,15 +52,17 @@ class DensityActionService : Service() {
                 if (targetDpi == null) {
                     showNotification(applicationContext, screenName, 0, false, 
                         "Некорректные параметры: dp=$targetDp, shortPx=$shortPx")
+                    sendCompletionBroadcast()
                     return@launch
                 }
 
-                // БАЙПАСС: проверяем текущий DPI перед выполнением
+                // Байпасс: проверяем текущий DPI
                 val currentDpiResult = ShizukuManager.getCurrentDensity()
                 val currentDpi = currentDpiResult.getOrNull()
                 
                 if (currentDpi != null && currentDpi == targetDpi) {
-                    // Уже нужная плотность — не выполняем команду и не показываем уведомление
+                    // Уже нужная плотность
+                    sendCompletionBroadcast()
                     return@launch
                 }
 
@@ -72,11 +75,19 @@ class DensityActionService : Service() {
             } catch (e: Exception) {
                 showNotification(applicationContext, screenName, 0, false, e.message)
             } finally {
+                // Отправляем broadcast о завершении
+                sendCompletionBroadcast()
                 stopSelf(startId)
             }
         }
 
         return START_NOT_STICKY
+    }
+
+    private fun sendCompletionBroadcast() {
+        val intent = Intent(ACTION_COMPLETED)
+        intent.setPackage(packageName)
+        sendBroadcast(intent)
     }
 
     private fun showNotification(context: Context, screenName: String, dp: Int, isSuccess: Boolean, errorMsg: String?) {
@@ -110,6 +121,7 @@ class DensityActionService : Service() {
     companion object {
         const val ACTION_OPEN = "com.densityfold.ACTION_OPEN"
         const val ACTION_CLOSED = "com.densityfold.ACTION_CLOSED"
+        const val ACTION_COMPLETED = "com.densityfold.ACTION_COMPLETED"
 
         fun startOpen(context: Context) {
             val intent = Intent(context, DensityActionService::class.java).apply { action = ACTION_OPEN }
