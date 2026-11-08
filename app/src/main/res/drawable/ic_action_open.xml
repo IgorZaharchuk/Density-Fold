@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Фон -->
+    <path
+        android:fillColor="#1a237e"
+        android:pathData="M0,0 L108,0 L108,108 L0,108 Z" />
+    
+    <!-- Левая панель -->
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M24,38 L50,38 L50,70 L24,70 Z" />
+    
+    <!-- Правая панель -->
+    <path
+        android:fillColor="#64b5f6"
+        android:pathData="M58,38 L84,38 L84,70 L58,70 Z" />
+    
+    <!-- Стрелка раскрытия (две стрелки в стороны) -->
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M54,50 L48,50 L48,46 L42,50 L48,54 L48,50 Z" />
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M54,50 L60,50 L60,46 L66,50 L60,54 L60,50 Z" />
+</vector>

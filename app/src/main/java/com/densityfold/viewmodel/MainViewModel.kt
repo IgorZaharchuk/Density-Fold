@@ -1,6 +1,7 @@
 package com.densityfold.viewmodel
 
 import android.app.Application
+import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.densityfold.data.DensityPreferences
@@ -18,6 +19,7 @@ data class UiState(
     val currentDp: Int = 0,
     val innerDp: Int = 900,
     val outerDp: Int = 411,
+    val isFoldMonitorEnabled: Boolean = false,
     val isShizukuAvailable: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
@@ -44,12 +46,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         
         val inner = preferences.getInnerDp()
         val outer = preferences.getOuterDp()
+        val monitorEnabled = preferences.isFoldMonitorEnabled()
         
         _uiState.value = _uiState.value.copy(
             innerDp = inner,
             outerDp = outer,
+            isFoldMonitorEnabled = monitorEnabled,
             isShizukuAvailable = ShizukuManager.isShizukuAvailable()
         )
+        
+        // Запускаем или останавливаем монитор
+        updateFoldMonitorService(monitorEnabled)
+    }
+
+    private fun updateFoldMonitorService(enabled: Boolean) {
+        val intent = Intent(getApplication(), FoldMonitorService::class.java)
+        if (enabled) {
+            getApplication<Application>().startService(intent)
+        } else {
+            getApplication<Application>().stopService(intent)
+        }
+    }
+
+    fun setFoldMonitorEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.setFoldMonitorEnabled(enabled)
+            _uiState.value = _uiState.value.copy(isFoldMonitorEnabled = enabled)
+            updateFoldMonitorService(enabled)
+        }
     }
 
     private suspend fun refreshDisplaysInternal() {
@@ -108,11 +132,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
             
-            // БАЙПАСС: получаем свежее значение DPI перед проверкой
             val freshDpi = ShizukuManager.getCurrentDensity().getOrNull()
-            
             if (freshDpi != null && freshDpi == targetDpi) {
-                // Текущий DPI уже равен целевому — пропускаем команду
                 val currentDp = DisplayUtils.dpiToDp(targetDpi, active.shortPx)
                 _uiState.value = state.copy(
                     currentDensity = targetDpi,
@@ -161,11 +182,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
             
-            // БАЙПАСС: получаем свежее значение DPI перед проверкой
             val freshDpi = ShizukuManager.getCurrentDensity().getOrNull()
-            
             if (freshDpi != null && freshDpi == targetDpi) {
-                // Текущий DPI уже равен целевому — пропускаем команду
                 val currentDp = DisplayUtils.dpiToDp(targetDpi, active.shortPx)
                 _uiState.value = state.copy(
                     currentDensity = targetDpi,

@@ -5,24 +5,24 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     
-    <!-- Левая панель (внешний экран, узкая) -->
+    <!-- Левая панель (внешний экран, узкая) — в safe zone -->
     <path
         android:fillColor="#ffffff"
-        android:pathData="M25,20 L45,20 L45,88 L25,88 Z" />
+        android:pathData="M36,38 L48,38 L48,70 L36,70 Z" />
     
-    <!-- Правая панель (внутренний экран, широкая) -->
+    <!-- Правая панель (внутренний экран, широкая) — в safe zone -->
     <path
-        android:fillColor="#90caf9"
-        android:pathData="M45,20 L85,20 L85,88 L45,88 Z" />
+        android:fillColor="#64b5f6"
+        android:pathData="M50,38 L72,38 L72,70 L50,70 Z" />
     
     <!-- Складка посередине -->
     <path
-        android:fillColor="#0d47a1"
-        android:pathData="M44,20 L46,20 L46,88 L44,88 Z" />
+        android:fillColor="#1a237e"
+        android:pathData="M49,38 L51,38 L51,70 L49,70 Z" />
     
     <!-- Блик на внутренней панели -->
     <path
-        android:fillColor="#e3f2fd"
-        android:pathData="M50,25 L80,25 L80,30 L50,30 Z"
-        android:alpha="0.3" />
+        android:fillColor="#ffffff"
+        android:pathData="M53,42 L69,42 L69,46 L53,46 Z"
+        android:alpha="0.4" />
 </vector>

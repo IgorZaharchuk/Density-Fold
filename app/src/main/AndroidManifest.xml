@@ -62,6 +62,10 @@
         <service
             android:name=".DensityActionService"
             android:exported="false" />
+        
+        <service
+            android:name=".FoldMonitorService"
+            android:exported="false" />
             
         <service
             android:name=".engine.ShizukuUserService"

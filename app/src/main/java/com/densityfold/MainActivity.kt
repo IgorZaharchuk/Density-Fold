@@ -1,6 +1,7 @@
 package com.densityfold
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
@@ -91,6 +92,7 @@ fun MainScreen(viewModel: MainViewModel) {
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Карточка статуса
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     val displayName = if (uiState.activeDisplay?.isExternal == true) "Внешний экран" else "Внутренний экран"
@@ -113,6 +115,24 @@ fun MainScreen(viewModel: MainViewModel) {
                 }
             }
 
+            // Переключатель автоматического мониторинга
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Автоприменение при складывании", fontWeight = FontWeight.Bold)
+                        Text("Автоматически менять DPI при раскрытии/закрытии", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = uiState.isFoldMonitorEnabled,
+                        onCheckedChange = { viewModel.setFoldMonitorEnabled(it) }
+                    )
+                }
+            }
+
+            // Настройки плотности
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("Настройка плотности (dp)", fontSize = 20.sp, fontWeight = FontWeight.Bold)
