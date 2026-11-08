@@ -32,17 +32,22 @@ class DensityActionService : Service() {
 
         scope.launch {
             try {
-                if (!ShizukuManager.isShizukuAvailable()) return@launch
+                if (!ShizukuManager.isShizukuAvailable()) {
+                    showNotification(applicationContext, screenName, 0, false, "Shizuku не активен")
+                    return@launch
+                }
 
                 val prefs = DensityPreferences(applicationContext)
                 val targetDpi = if (isClosed) prefs.getOuterDpi() else prefs.getInnerDpi()
 
-                ShizukuManager.setDensity(targetDpi)
+                val result = ShizukuManager.setDensity(targetDpi)
                 
-                // Отправляем уведомление в статус-бар
-                showNotification(applicationContext, screenName, targetDpi)
-            } catch (_: Exception) {
-                // Тихо игнорируем
+                result.fold(
+                    onSuccess = { showNotification(applicationContext, screenName, targetDpi, true, null) },
+                    onFailure = { showNotification(applicationContext, screenName, targetDpi, false, it.message) }
+                )
+            } catch (e: Exception) {
+                showNotification(applicationContext, screenName, 0, false, e.message)
             } finally {
                 stopSelf(startId)
             }
@@ -51,7 +56,7 @@ class DensityActionService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun showNotification(context: Context, screenName: String, dpi: Int) {
+    private fun showNotification(context: Context, screenName: String, dpi: Int, isSuccess: Boolean, errorMsg: String?) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "density_actions_channel"
         
@@ -60,10 +65,13 @@ class DensityActionService : Service() {
             notificationManager.createNotificationChannel(channel)
         }
         
+        val title = if (isSuccess) "Density Fold: Успешно" else "Density Fold: Ошибка"
+        val text = if (isSuccess) "$screenName экран: установлено $dpi dpi" else (errorMsg ?: "Неизвестная ошибка")
+        
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_menu_manage)
-            .setContentTitle("Density Fold")
-            .setContentText("$screenName экран: установлено $dpi dpi")
+            .setContentTitle(title)
+            .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setAutoCancel(true)
             .build()

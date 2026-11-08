@@ -1,9 +1,13 @@
 package com.densityfold
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -13,10 +17,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import com.densityfold.ui.theme.DensityFoldTheme
 import com.densityfold.viewmodel.MainViewModel
@@ -26,8 +30,20 @@ class MainActivity : ComponentActivity() {
     private lateinit var mainViewModel: MainViewModel
     private val shizukuPermissionListener = Shizuku.OnRequestPermissionResultListener { _, _ -> }
     
+    private val requestNotificationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ -> }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Запрос разрешения на уведомления для Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
         mainViewModel = ViewModelProvider(this)[MainViewModel::class.java]
         Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
         setContent { DensityFoldTheme { MainScreen(viewModel = mainViewModel) } }
@@ -53,7 +69,6 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
     val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
     var showDiagnostics by remember { mutableStateOf(false) }
     
     var innerDpiText by remember { mutableStateOf(uiState.innerDpi.toString()) }
@@ -67,7 +82,7 @@ fun MainScreen(viewModel: MainViewModel) {
             TopAppBar(
                 title = { 
                     Column {
-                        Text("Density Fold", fontWeight = FontWeight.Bold) // ИЗМЕНЕНО
+                        Text("Density Fold", fontWeight = FontWeight.Bold)
                         Text("Galaxy Z Fold 7", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
@@ -83,7 +98,6 @@ fun MainScreen(viewModel: MainViewModel) {
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Карточка статуса
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     val displayName = if (uiState.activeDisplay?.isExternal == true) "Внешний экран" else "Внутренний экран"
@@ -105,12 +119,10 @@ fun MainScreen(viewModel: MainViewModel) {
                 }
             }
 
-            // Настройки с кнопками применения
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("Настройка плотности", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     
-                    // Внутренний экран
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
                             value = innerDpiText,
@@ -128,12 +140,9 @@ fun MainScreen(viewModel: MainViewModel) {
                         Button(
                             onClick = { viewModel.applyInnerDensity() },
                             enabled = uiState.isShizukuAvailable && !uiState.isLoading
-                        ) {
-                            Text("Применить")
-                        }
+                        ) { Text("Применить") }
                     }
                     
-                    // Внешний экран
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
                             value = outerDpiText,
@@ -151,14 +160,11 @@ fun MainScreen(viewModel: MainViewModel) {
                         Button(
                             onClick = { viewModel.applyOuterDensity() },
                             enabled = uiState.isShizukuAvailable && !uiState.isLoading
-                        ) {
-                            Text("Применить")
-                        }
+                        ) { Text("Применить") }
                     }
                 }
             }
 
-            // Сообщения об ошибках/успехе
             uiState.errorMessage?.let { 
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                     Text(it, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onErrorContainer)
