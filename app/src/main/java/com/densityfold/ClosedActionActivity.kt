@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -13,40 +14,39 @@ class ClosedActionActivity : Activity() {
     private val completionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == DensityActionService.ACTION_COMPLETED) {
-                // Сервис завершил работу — уходим в фон
-                moveTaskToBack(true)
-                finish()
-                overridePendingTransition(0, 0)
+                cleanupAndFinish()
             }
         }
     }
+    
+    private val timeoutHandler = Handler(Looper.getMainLooper())
+    private val timeoutRunnable = Runnable { cleanupAndFinish() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Регистрируем receiver для получения уведомления о завершении
         val filter = IntentFilter(DensityActionService.ACTION_COMPLETED)
-        registerReceiver(completionReceiver, filter)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(completionReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(completionReceiver, filter)
+        }
         
-        // Запускаем сервис
         DensityActionService.startClosed(this)
-        
-        // Таймаут на случай если сервис не ответит (3 секунды)
-        Handler(Looper.getMainLooper()).postDelayed({
-            if (!isFinishing) {
-                moveTaskToBack(true)
-                finish()
-                overridePendingTransition(0, 0)
-            }
-        }, 3000)
+        timeoutHandler.postDelayed(timeoutRunnable, 5000)
+    }
+
+    private fun cleanupAndFinish() {
+        timeoutHandler.removeCallbacks(timeoutRunnable)
+        try { unregisterReceiver(completionReceiver) } catch (_: Exception) {}
+        moveTaskToBack(true)
+        finish()
+        overridePendingTransition(0, 0)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        try {
-            unregisterReceiver(completionReceiver)
-        } catch (e: Exception) {
-            // Receiver уже unregister'ed
-        }
+        cleanupAndFinish()
     }
 }

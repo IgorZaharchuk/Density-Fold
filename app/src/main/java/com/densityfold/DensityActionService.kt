@@ -35,47 +35,37 @@ class DensityActionService : Service() {
             try {
                 if (!ShizukuManager.isShizukuAvailable()) {
                     showNotification(applicationContext, screenName, 0, false, "Shizuku не активен")
-                    sendCompletionBroadcast()
                     return@launch
                 }
 
                 val prefs = DensityPreferences(applicationContext)
                 val targetDp = if (isClosed) prefs.getOuterDp() else prefs.getInnerDp()
                 
-                val shortPx = if (isClosed) {
-                    DisplayUtils.getOuterShortPx(applicationContext)
-                } else {
-                    DisplayUtils.getInnerShortPx(applicationContext)
-                }
+                val shortPx = if (isClosed) DisplayUtils.getOuterShortPx(applicationContext) 
+                              else DisplayUtils.getInnerShortPx(applicationContext)
                 
                 val targetDpi = DisplayUtils.dpToDpi(targetDp, shortPx)
                 if (targetDpi == null) {
-                    showNotification(applicationContext, screenName, 0, false, 
-                        "Некорректные параметры: dp=$targetDp, shortPx=$shortPx")
-                    sendCompletionBroadcast()
+                    showNotification(applicationContext, screenName, 0, false, "Некорректные параметры")
                     return@launch
                 }
 
                 // Байпасс: проверяем текущий DPI
-                val currentDpiResult = ShizukuManager.getCurrentDensity()
-                val currentDpi = currentDpiResult.getOrNull()
-                
+                val currentDpi = ShizukuManager.getCurrentDensity().getOrNull()
                 if (currentDpi != null && currentDpi == targetDpi) {
-                    // Уже нужная плотность
-                    sendCompletionBroadcast()
+                    // Уже нужная плотность, ничего не делаем
                     return@launch
                 }
 
                 val result = ShizukuManager.setDensity(targetDpi)
-                
                 result.fold(
                     onSuccess = { showNotification(applicationContext, screenName, targetDp, true, null) },
                     onFailure = { showNotification(applicationContext, screenName, targetDp, false, it.message) }
                 )
             } catch (e: Exception) {
-                showNotification(applicationContext, screenName, 0, false, e.message)
+                showNotification(applicationContext, screenName, 0, false, e.message ?: "Неизвестная ошибка")
             } finally {
-                // Отправляем broadcast о завершении
+                // Отправляем broadcast РОВНО ОДИН РАЗ при любом исходе
                 sendCompletionBroadcast()
                 stopSelf(startId)
             }
@@ -85,8 +75,7 @@ class DensityActionService : Service() {
     }
 
     private fun sendCompletionBroadcast() {
-        val intent = Intent(ACTION_COMPLETED)
-        intent.setPackage(packageName)
+        val intent = Intent(ACTION_COMPLETED).apply { setPackage(packageName) }
         sendBroadcast(intent)
     }
 
@@ -124,13 +113,11 @@ class DensityActionService : Service() {
         const val ACTION_COMPLETED = "com.densityfold.ACTION_COMPLETED"
 
         fun startOpen(context: Context) {
-            val intent = Intent(context, DensityActionService::class.java).apply { action = ACTION_OPEN }
-            context.startService(intent)
+            context.startService(Intent(context, DensityActionService::class.java).apply { action = ACTION_OPEN })
         }
 
         fun startClosed(context: Context) {
-            val intent = Intent(context, DensityActionService::class.java).apply { action = ACTION_CLOSED }
-            context.startService(intent)
+            context.startService(Intent(context, DensityActionService::class.java).apply { action = ACTION_CLOSED })
         }
     }
 }
