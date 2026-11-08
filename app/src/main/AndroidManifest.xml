@@ -13,6 +13,9 @@
         tools:targetApi="34">
         
         <activity
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
             android:name=".MainActivity"
             android:exported="true"
             android:theme="@style/Theme.DensityFold">
@@ -24,6 +27,9 @@
         
         <!-- Activity для действия "Открыто" (внутренний экран) -->
         <activity
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
             android:name=".OpenActionActivity"
             android:exported="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
@@ -38,6 +44,9 @@
         
         <!-- Activity для действия "Закрыто" (внешний экран) -->
         <activity
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
             android:name=".ClosedActionActivity"
             android:exported="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"

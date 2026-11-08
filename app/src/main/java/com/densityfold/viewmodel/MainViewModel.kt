@@ -22,7 +22,8 @@ data class UiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val successMessage: String? = null,
-    val diagnosticInfo: String = ""
+    val diagnosticInfo: String = "",
+    val isFirstLaunch: Boolean = true
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -37,10 +38,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun loadSettings() {
         viewModelScope.launch {
+            val inner = preferences.getInnerDpi()
+            val outer = preferences.getOuterDpi()
             _uiState.value = _uiState.value.copy(
-                innerDpi = preferences.getInnerDpi(),
-                outerDpi = preferences.getOuterDpi(),
-                isShizukuAvailable = ShizukuManager.isShizukuAvailable()
+                innerDpi = inner,
+                outerDpi = outer,
+                isFirstLaunch = (inner == 360 && outer == 411)
             )
         }
     }
@@ -51,10 +54,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val active = DisplayUtils.getActiveDisplay(context)
             val all = DisplayUtils.getAllDisplays(context)
             
-            // Запрашиваем текущий DPI из системы
             val currentDpi = ShizukuManager.getCurrentDensity().getOrNull() ?: 0
             
-            // Подставляем текущий DPI в соответствующее поле
             val newState = _uiState.value.copy(
                 activeDisplay = active,
                 allDisplays = all,
@@ -64,19 +65,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 errorMessage = null
             )
             
-            // Если активен внутренний экран и текущий DPI отличается от сохранённого — подставляем
-            if (active?.isExternal == false && currentDpi > 0 && currentDpi != _uiState.value.innerDpi) {
-                _uiState.value = newState.copy(innerDpi = currentDpi)
-                preferences.setInnerDpi(currentDpi)
-            } 
-            // Если активен внешний экран — подставляем в outerDpi
-            else if (active?.isExternal == true && currentDpi > 0 && currentDpi != _uiState.value.outerDpi) {
-                _uiState.value = newState.copy(outerDpi = currentDpi)
-                preferences.setOuterDpi(currentDpi)
-            } 
-            else {
-                _uiState.value = newState
+            // Только при первом запуске подставляем текущий DPI
+            if (_uiState.value.isFirstLaunch && currentDpi > 0) {
+                if (active?.isExternal == false) {
+                    preferences.setInnerDpi(currentDpi)
+                    newState.copy(innerDpi = currentDpi, isFirstLaunch = false)
+                } else if (active?.isExternal == true) {
+                    preferences.setOuterDpi(currentDpi)
+                    newState.copy(outerDpi = currentDpi, isFirstLaunch = false)
+                }
             }
+            
+            _uiState.value = newState
         }
     }
 
@@ -94,7 +94,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } 
     }
 
-    // Применяем DPI только по кнопке
     fun applyCurrentScreenDensity() {
         viewModelScope.launch {
             val state = _uiState.value
