@@ -26,7 +26,9 @@ object ShizukuManager {
     }
 
     suspend fun setDensity(dpi: Int): Result<String> {
-        // Применяем глобально (флаг -d не работает адресно на Fold 7)
+        if (dpi <= 0) {
+            return Result.failure(IllegalArgumentException("DPI должен быть положительным: $dpi"))
+        }
         val command = "wm density $dpi"
         return ShizukuCommandRunner.execute(command).map { "DPI изменён на $dpi" }
     }
@@ -36,18 +38,12 @@ object ShizukuManager {
         return ShizukuCommandRunner.execute(command).mapCatching { rawOutput ->
             lastRawOutput = rawOutput
             
-            // Формат: "Physical density: 420\nOverride density: 360"
-            val overrideRegex = Regex("[Oo]verride density: (\\d+)")
-            val overrideMatch = overrideRegex.find(rawOutput)
-            if (overrideMatch != null) {
-                return@mapCatching overrideMatch.groupValues[1].toInt()
-            }
-            
-            // Если нет override, берём физическую плотность
-            val physicalRegex = Regex("Physical density: (\\d+)")
+            // Ищем Physical density (всегда присутствует)
+            val physicalRegex = Regex("Physical density:\\s*(\\d+)")
             val physicalMatch = physicalRegex.find(rawOutput)
             if (physicalMatch != null) {
-                return@mapCatching physicalMatch.groupValues[1].toInt()
+                val value = physicalMatch.groupValues[1].toIntOrNull()
+                if (value != null && value > 0) return@mapCatching value
             }
             
             throw Exception("Не удалось определить плотность. Вывод: $rawOutput")

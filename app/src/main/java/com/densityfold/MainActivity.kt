@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -64,7 +63,6 @@ class MainActivity : ComponentActivity() {
 fun MainScreen(viewModel: MainViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     var showDiagnostics by remember { mutableStateOf(false) }
-    var showCalculator by remember { mutableStateOf(false) }
     
     var innerDpText by remember { mutableStateOf(uiState.innerDp.toString()) }
     var outerDpText by remember { mutableStateOf(uiState.outerDp.toString()) }
@@ -82,9 +80,6 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showCalculator = true }) {
-                        Icon(Icons.Default.Calculate, "Калькулятор")
-                    }
                     IconButton(onClick = { showDiagnostics = true }) {
                         Icon(Icons.Default.Info, "Диагностика")
                     }
@@ -175,15 +170,6 @@ fun MainScreen(viewModel: MainViewModel) {
                 }
             }
         }
-    }
-
-    if (showCalculator) {
-        AlertDialog(
-            onDismissRequest = { showCalculator = false },
-            title = { Text("Информация") },
-            text = { Text("Теперь приложение работает с dp значениями (как в меню разработчика).\n\nВы вводите dp, а программа сама рассчитывает нужный dpi для команды wm density.\n\nФормула:\ndpi = px × 160 / dp") },
-            confirmButton = { TextButton(onClick = { showCalculator = false }) { Text("OK") } }
-        )
     }
 
     if (showDiagnostics) {

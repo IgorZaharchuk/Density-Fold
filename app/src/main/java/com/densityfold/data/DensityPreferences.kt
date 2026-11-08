@@ -5,8 +5,8 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.remove
 import androidx.datastore.preferences.preferencesDataStore
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
@@ -14,9 +14,15 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "de
 
 class DensityPreferences(private val context: Context) {
     companion object {
-        val INNER_DP = intPreferencesKey("inner_dp")  // Теперь храним dp, не dpi!
+        // Новые ключи (dp значения)
+        val INNER_DP = intPreferencesKey("inner_dp")
         val OUTER_DP = intPreferencesKey("outer_dp")
-        const val DEFAULT_INNER_DP = 411  // Стандартное значение для Fold
+        
+        // Старые ключи (dpi значения) — для миграции
+        val INNER_DPI_LEGACY = intPreferencesKey("inner_dpi")
+        val OUTER_DPI_LEGACY = intPreferencesKey("outer_dpi")
+        
+        const val DEFAULT_INNER_DP = 411
         const val DEFAULT_OUTER_DP = 411
     }
 
@@ -39,9 +45,43 @@ class DensityPreferences(private val context: Context) {
         context.dataStore.edit { it[OUTER_DP] = dp } 
     }
     
-    // Для обратной совместимости (если вдруг есть старые dpi значения)
-    suspend fun getInnerDpi(): Int = getInnerDp()
-    suspend fun getOuterDpi(): Int = getOuterDp()
-    suspend fun setInnerDpi(dpi: Int) { setInnerDp(dpi) }
-    suspend fun setOuterDpi(dpi: Int) { setOuterDp(dpi) }
+    /**
+     * Миграция: если есть старые dpi значения, пересчитываем в dp.
+     * Возвращает true, если миграция произошла.
+     */
+    suspend fun migrateLegacyDpiToDp(innerShortPx: Int, outerShortPx: Int): Boolean {
+        val prefs = context.dataStore.data.first()
+        var migrated = false
+        
+        context.dataStore.edit { store ->
+            // Миграция внутреннего
+            if (!store.contains(INNER_DP) && store.contains(INNER_DPI_LEGACY)) {
+                val legacyDpi = store[INNER_DPI_LEGACY]
+                if (legacyDpi != null && legacyDpi > 0 && innerShortPx > 0) {
+                    // dp = shortPx * 160 / dpi
+                    val dp = (innerShortPx * 160f / legacyDpi).toInt().coerceIn(200, 800)
+                    store[INNER_DP] = dp
+                } else {
+                    store[INNER_DP] = DEFAULT_INNER_DP
+                }
+                store.remove(INNER_DPI_LEGACY)
+                migrated = true
+            }
+            
+            // Миграция внешнего
+            if (!store.contains(OUTER_DP) && store.contains(OUTER_DPI_LEGACY)) {
+                val legacyDpi = store[OUTER_DPI_LEGACY]
+                if (legacyDpi != null && legacyDpi > 0 && outerShortPx > 0) {
+                    val dp = (outerShortPx * 160f / legacyDpi).toInt().coerceIn(200, 800)
+                    store[OUTER_DP] = dp
+                } else {
+                    store[OUTER_DP] = DEFAULT_OUTER_DP
+                }
+                store.remove(OUTER_DPI_LEGACY)
+                migrated = true
+            }
+        }
+        
+        return migrated
+    }
 }

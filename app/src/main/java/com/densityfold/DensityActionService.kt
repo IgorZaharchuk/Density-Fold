@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.densityfold.data.DensityPreferences
+import com.densityfold.engine.DisplayUtils
 import com.densityfold.engine.ShizukuManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,13 +39,28 @@ class DensityActionService : Service() {
                 }
 
                 val prefs = DensityPreferences(applicationContext)
-                val targetDpi = if (isClosed) prefs.getOuterDpi() else prefs.getInnerDpi()
+                val targetDp = if (isClosed) prefs.getOuterDp() else prefs.getInnerDp()
+                
+                // Получаем реальное shortPx для нужного типа экрана
+                val shortPx = if (isClosed) {
+                    DisplayUtils.getOuterShortPx(applicationContext)
+                } else {
+                    DisplayUtils.getInnerShortPx(applicationContext)
+                }
+                
+                // Пересчёт dp → dpi
+                val targetDpi = DisplayUtils.dpToDpi(targetDp, shortPx)
+                if (targetDpi == null) {
+                    showNotification(applicationContext, screenName, 0, false, 
+                        "Некорректные параметры: dp=$targetDp, shortPx=$shortPx")
+                    return@launch
+                }
 
                 val result = ShizukuManager.setDensity(targetDpi)
                 
                 result.fold(
-                    onSuccess = { showNotification(applicationContext, screenName, targetDpi, true, null) },
-                    onFailure = { showNotification(applicationContext, screenName, targetDpi, false, it.message) }
+                    onSuccess = { showNotification(applicationContext, screenName, targetDp, true, null) },
+                    onFailure = { showNotification(applicationContext, screenName, targetDp, false, it.message) }
                 )
             } catch (e: Exception) {
                 showNotification(applicationContext, screenName, 0, false, e.message)
@@ -56,7 +72,7 @@ class DensityActionService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun showNotification(context: Context, screenName: String, dpi: Int, isSuccess: Boolean, errorMsg: String?) {
+    private fun showNotification(context: Context, screenName: String, dp: Int, isSuccess: Boolean, errorMsg: String?) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "density_actions_channel"
         
@@ -66,7 +82,7 @@ class DensityActionService : Service() {
         }
         
         val title = if (isSuccess) "Density Fold: Успешно" else "Density Fold: Ошибка"
-        val text = if (isSuccess) "$screenName экран: установлено $dpi dpi" else (errorMsg ?: "Неизвестная ошибка")
+        val text = if (isSuccess) "$screenName экран: установлено $dp dp" else (errorMsg ?: "Неизвестная ошибка")
         
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_menu_manage)
