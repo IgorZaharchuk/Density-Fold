@@ -37,7 +37,6 @@ object ShizukuCommandRunner {
 
     private fun parseServiceResult(rawResult: String): Result<String> {
         return when {
-            // substringAfter корректно работает как с "SUCCESS:", так и с "SUCCESS: "
             rawResult.startsWith("SUCCESS:") -> Result.success(rawResult.substringAfter("SUCCESS:").trim())
             rawResult.startsWith("ERROR:") -> Result.failure(Exception(rawResult.substringAfter("ERROR:").trim()))
             rawResult.startsWith("EXCEPTION:") -> Result.failure(Exception(rawResult.substringAfter("EXCEPTION:").trim()))
@@ -51,31 +50,35 @@ object ShizukuCommandRunner {
         suspendCancellableCoroutine { cont ->
             var resumed = false
 
-            // 1. Сначала объявляем listener, чтобы он был виден в ServiceConnection ниже
+            // 1. Объявляем lateinit ПЕРЕД созданием listener'а
+            lateinit var serviceConnection: ServiceConnection
+
+            // 2. Создаем listener, используя явную ссылку на себя для удаления
             val binderReceivedListener = Shizuku.OnBinderReceivedListener {
                 try {
                     if (!isBound) {
                         Shizuku.bindUserService(userServiceArgs, serviceConnection)
                     } else if (!resumed) {
                         resumed = true
-                        Shizuku.removeBinderReceivedListener(this)
+                        // 3. Явная ссылка вместо 'this'
+                        Shizuku.removeBinderReceivedListener(binderReceivedListener)
                         cont.resume(Unit)
                     }
                 } catch (e: Exception) {
                     // Защита от зависания корутины при ошибке bindUserService
                     if (!resumed) {
                         resumed = true
-                        Shizuku.removeBinderReceivedListener(this)
+                        // 3. Явная ссылка вместо 'this'
+                        Shizuku.removeBinderReceivedListener(binderReceivedListener)
                         cont.resumeWithException(e)
                     }
                 }
             }
 
-            // 2. Затем создаем ServiceConnection, который использует этот listener
-            val serviceConnection = object : ServiceConnection {
+            // 4. Теперь безопасно присваиваем реализацию, так как listener уже создан
+            serviceConnection = object : ServiceConnection {
                 override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
                     if (!resumed) {
-                        // Удаляем слушатель сразу после подключения
                         Shizuku.removeBinderReceivedListener(binderReceivedListener)
                         if (binder != null) {
                             resumed = true
@@ -95,17 +98,17 @@ object ShizukuCommandRunner {
                 }
             }
 
-            // 3. Регистрируем sticky listener
+            // 5. Регистрируем sticky listener
             Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
 
-            // 4. Дополнительная страховка: если сервис уже был привязан до создания корутины
+            // 6. Дополнительная страховка: если сервис уже был привязан до создания корутины
             if (isBound && service != null && !resumed) {
                 resumed = true
                 Shizuku.removeBinderReceivedListener(binderReceivedListener)
                 cont.resume(Unit)
             }
 
-            // 5. Очистка при отмене корутины
+            // 7. Очистка при отмене корутины
             cont.invokeOnCancellation {
                 Shizuku.removeBinderReceivedListener(binderReceivedListener)
             }
