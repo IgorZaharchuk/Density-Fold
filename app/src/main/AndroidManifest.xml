@@ -20,7 +20,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Метаданные для App Shortcuts находятся ВНУТРИ тега activity, после intent-filter -->
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
@@ -32,6 +31,8 @@
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
             android:taskAffinity=""
+            android:launchMode="singleInstance"
+            android:noHistory="true"
             android:label="Открыто">
             <intent-filter>
                 <action android:name="com.densityfold.action.OPEN" />
@@ -45,6 +46,8 @@
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
             android:taskAffinity=""
+            android:launchMode="singleInstance"
+            android:noHistory="true"
             android:label="Закрыто">
             <intent-filter>
                 <action android:name="com.densityfold.action.CLOSED" />

@@ -13,9 +13,13 @@ import kotlinx.coroutines.withContext
 class OpenActionActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Сразу делаем Activity "прозрачным" — не показываем UI
+        window.setBackgroundDrawableResource(android.R.color.transparent)
+        
         if (!ShizukuManager.isShizukuAvailable()) {
             Toast.makeText(this, "Shizuku не активен", Toast.LENGTH_SHORT).show()
-            finish()
+            finishAndRemoveTask()
             return
         }
         
@@ -28,12 +32,13 @@ class OpenActionActivity : Activity() {
                     val message = if (result.isSuccess) "Внутренний экран: $targetDpi dpi" 
                                   else "Ошибка: ${result.exceptionOrNull()?.message}"
                     Toast.makeText(applicationContext, message, Toast.LENGTH_SHORT).show()
-                    finish()
+                    // finishAndRemoveTask() полностью удаляет задачу из стека
+                    finishAndRemoveTask()
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) { 
                     Toast.makeText(applicationContext, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
-                    finish()
+                    finishAndRemoveTask()
                 }
             }
         }
