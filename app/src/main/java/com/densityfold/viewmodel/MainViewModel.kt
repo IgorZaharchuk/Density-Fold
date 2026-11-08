@@ -22,17 +22,22 @@ data class UiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val successMessage: String? = null,
-    val diagnosticInfo: String = "",
-    val isFirstLaunch: Boolean = true
+    val diagnosticInfo: String = ""
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val preferences = DensityPreferences(application)
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+    
+    // Флаги инициализации (отслеживают, были ли сохранены значения)
+    private var innerDpiInitialized = false
+    private var outerDpiInitialized = false
 
     init {
+        // Сначала загружаем настройки
         loadSettings()
+        // Затем обновляем информацию о дисплеях (но не перезаписываем настройки)
         refreshDisplays()
     }
 
@@ -40,10 +45,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val inner = preferences.getInnerDpi()
             val outer = preferences.getOuterDpi()
+            
+            // Проверяем, были ли значения реально сохранены
+            val hasInner = preferences.hasInnerDpi()
+            val hasOuter = preferences.hasOuterDpi()
+            
+            innerDpiInitialized = hasInner
+            outerDpiInitialized = hasOuter
+            
             _uiState.value = _uiState.value.copy(
                 innerDpi = inner,
                 outerDpi = outer,
-                isFirstLaunch = (inner == 360 && outer == 411)
+                isShizukuAvailable = ShizukuManager.isShizukuAvailable()
             )
         }
     }
@@ -56,8 +69,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             
             val currentDpi = ShizukuManager.getCurrentDensity().getOrNull() ?: 0
             
-            // Создаем базовое состояние
-            var newState = _uiState.value.copy(
+            _uiState.value = _uiState.value.copy(
                 activeDisplay = active,
                 allDisplays = all,
                 currentDensity = currentDpi,
@@ -66,28 +78,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 errorMessage = null
             )
             
-            // Только при первом запуске подставляем текущий системный DPI в настройки
-            if (newState.isFirstLaunch && currentDpi > 0) {
-                if (active?.isExternal == false) {
-                    preferences.setInnerDpi(currentDpi)
-                    newState = newState.copy(innerDpi = currentDpi, isFirstLaunch = false)
-                } else if (active?.isExternal == true) {
-                    preferences.setOuterDpi(currentDpi)
-                    newState = newState.copy(outerDpi = currentDpi, isFirstLaunch = false)
-                } else {
-                    // Если не удалось определить тип экрана, просто снимаем флаг первого запуска
-                    newState = newState.copy(isFirstLaunch = false)
-                }
+            // ТОЛЬКО при первом запуске (если ключи не существовали) 
+            // инициализируем значения текущим DPI системы
+            if (!innerDpiInitialized && currentDpi > 0 && active?.isExternal == false) {
+                preferences.setInnerDpi(currentDpi)
+                innerDpiInitialized = true
+                _uiState.value = _uiState.value.copy(innerDpi = currentDpi)
             }
             
-            // Применяем обновленное состояние
-            _uiState.value = newState
+            if (!outerDpiInitialized && currentDpi > 0 && active?.isExternal == true) {
+                preferences.setOuterDpi(currentDpi)
+                outerDpiInitialized = true
+                _uiState.value = _uiState.value.copy(outerDpi = currentDpi)
+            }
         }
     }
 
     fun setInnerDpi(dpi: Int) { 
         viewModelScope.launch { 
             preferences.setInnerDpi(dpi)
+            innerDpiInitialized = true
             _uiState.value = _uiState.value.copy(innerDpi = dpi) 
         } 
     }
@@ -95,6 +105,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setOuterDpi(dpi: Int) { 
         viewModelScope.launch { 
             preferences.setOuterDpi(dpi)
+            outerDpiInitialized = true
             _uiState.value = _uiState.value.copy(outerDpi = dpi) 
         } 
     }

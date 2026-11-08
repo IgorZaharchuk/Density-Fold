@@ -4,9 +4,9 @@
         android:shortcutId="density_open"
         android:enabled="true"
         android:icon="@mipmap/ic_launcher"
-        android:shortcutShortLabel="Открыто"
-        android:shortcutLongLabel="Применить DPI внутреннего экрана"
-        android:shortcutDisabledMessage="Открыто">
+        android:shortcutShortLabel="@string/shortcut_open_short"
+        android:shortcutLongLabel="@string/shortcut_open_long"
+        android:shortcutDisabledMessage="@string/shortcut_open_disabled">
         <intent
             android:action="com.densityfold.action.OPEN"
             android:targetPackage="com.densityfold"
@@ -16,9 +16,9 @@
         android:shortcutId="density_closed"
         android:enabled="true"
         android:icon="@mipmap/ic_launcher"
-        android:shortcutShortLabel="Закрыто"
-        android:shortcutLongLabel="Применить DPI внешнего экрана"
-        android:shortcutDisabledMessage="Закрыто">
+        android:shortcutShortLabel="@string/shortcut_closed_short"
+        android:shortcutLongLabel="@string/shortcut_closed_long"
+        android:shortcutDisabledMessage="@string/shortcut_closed_disabled">
         <intent
             android:action="com.densityfold.action.CLOSED"
             android:targetPackage="com.densityfold"

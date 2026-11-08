@@ -20,9 +20,29 @@ class DensityPreferences(private val context: Context) {
         const val DEFAULT_OUTER_DPI = 411
     }
 
-    suspend fun getInnerDpi(): Int = context.dataStore.data.map { it[INNER_DPI] ?: DEFAULT_INNER_DPI }.first()
-    suspend fun getOuterDpi(): Int = context.dataStore.data.map { it[OUTER_DPI] ?: DEFAULT_OUTER_DPI }.first()
+    // Проверяем, существует ли ключ inner_dpi
+    suspend fun hasInnerDpi(): Boolean {
+        return context.dataStore.data.first().contains(INNER_DPI)
+    }
+
+    // Проверяем, существует ли ключ outer_dpi
+    suspend fun hasOuterDpi(): Boolean {
+        return context.dataStore.data.first().contains(OUTER_DPI)
+    }
+
+    suspend fun getInnerDpi(): Int = context.dataStore.data.map { 
+        it[INNER_DPI] ?: DEFAULT_INNER_DPI 
+    }.first()
     
-    suspend fun setInnerDpi(dpi: Int) { context.dataStore.edit { it[INNER_DPI] = dpi } }
-    suspend fun setOuterDpi(dpi: Int) { context.dataStore.edit { it[OUTER_DPI] = dpi } }
+    suspend fun getOuterDpi(): Int = context.dataStore.data.map { 
+        it[OUTER_DPI] ?: DEFAULT_OUTER_DPI 
+    }.first()
+    
+    suspend fun setInnerDpi(dpi: Int) { 
+        context.dataStore.edit { it[INNER_DPI] = dpi } 
+    }
+    
+    suspend fun setOuterDpi(dpi: Int) { 
+        context.dataStore.edit { it[OUTER_DPI] = dpi } 
+    }
 }
