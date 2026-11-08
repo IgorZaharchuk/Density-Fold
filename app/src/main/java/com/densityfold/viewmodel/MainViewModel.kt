@@ -4,11 +4,11 @@ import android.app.Application
 import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.densityfold.FoldMonitorService
 import com.densityfold.data.DensityPreferences
 import com.densityfold.engine.DisplayInfo
 import com.densityfold.engine.DisplayUtils
 import com.densityfold.engine.ShizukuManager
-import com.densityfold.FoldMonitorService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,29 +44,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val innerShortPx = DisplayUtils.getInnerShortPx(getApplication())
         val outerShortPx = DisplayUtils.getOuterShortPx(getApplication())
         preferences.migrateLegacyDpiToDp(innerShortPx, outerShortPx)
-        
-        val inner = preferences.getInnerDp()
-        val outer = preferences.getOuterDp()
-        val monitorEnabled = preferences.isFoldMonitorEnabled()
-        
+
         _uiState.value = _uiState.value.copy(
-            innerDp = inner,
-            outerDp = outer,
-            isFoldMonitorEnabled = monitorEnabled,
+            innerDp = preferences.getInnerDp(),
+            outerDp = preferences.getOuterDp(),
+            isFoldMonitorEnabled = preferences.isFoldMonitorEnabled(),
             isShizukuAvailable = ShizukuManager.isShizukuAvailable()
         )
-        
-        // Запускаем или останавливаем монитор
-        updateFoldMonitorService(monitorEnabled)
+
+        updateFoldMonitorService(_uiState.value.isFoldMonitorEnabled)
     }
 
     private fun updateFoldMonitorService(enabled: Boolean) {
         val intent = Intent(getApplication(), FoldMonitorService::class.java)
-        if (enabled) {
-            getApplication<Application>().startService(intent)
-        } else {
-            getApplication<Application>().stopService(intent)
-        }
+        if (enabled) getApplication<Application>().startService(intent)
+        else getApplication<Application>().stopService(intent)
     }
 
     fun setFoldMonitorEnabled(enabled: Boolean) {
@@ -81,10 +73,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val context = getApplication<Application>().applicationContext
         val active = DisplayUtils.getActiveDisplay(context)
         val currentDpi = ShizukuManager.getCurrentDensity().getOrNull() ?: 0
-        
-        val currentDp = if (currentDpi > 0 && active != null) {
-            DisplayUtils.dpiToDp(currentDpi, active.shortPx)
-        } else { 0 }
+        val currentDp = if (currentDpi > 0 && active != null) DisplayUtils.dpiToDp(currentDpi, active.shortPx) else 0
 
         _uiState.value = _uiState.value.copy(
             activeDisplay = active,
@@ -98,120 +87,100 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshDisplays() { viewModelScope.launch { refreshDisplaysInternal() } }
 
-    fun setInnerDp(dp: Int) { 
-        viewModelScope.launch { 
+    fun setInnerDp(dp: Int) {
+        viewModelScope.launch {
             preferences.setInnerDp(dp)
-            _uiState.value = _uiState.value.copy(innerDp = dp) 
-        } 
+            _uiState.value = _uiState.value.copy(innerDp = dp)
+        }
     }
-    
-    fun setOuterDp(dp: Int) { 
-        viewModelScope.launch { 
+
+    fun setOuterDp(dp: Int) {
+        viewModelScope.launch {
             preferences.setOuterDp(dp)
-            _uiState.value = _uiState.value.copy(outerDp = dp) 
-        } 
+            _uiState.value = _uiState.value.copy(outerDp = dp)
+        }
     }
 
     fun applyInnerDensity() {
         viewModelScope.launch {
-            val state = _uiState.value
-            val context = getApplication<Application>().applicationContext
-            val active = DisplayUtils.getActiveDisplay(context)
-            
-            if (active == null) {
-                _uiState.value = state.copy(errorMessage = "Не удалось определить активный экран")
-                return@launch
-            }
-            if (active.isExternal) {
-                _uiState.value = state.copy(errorMessage = "Для применения настроек внутреннего экрана раскройте телефон")
-                return@launch
-            }
-            
-            val targetDpi = DisplayUtils.dpToDpi(state.innerDp, active.shortPx)
-            if (targetDpi == null) {
-                _uiState.value = state.copy(errorMessage = "Некорректные параметры для расчёта DPI")
-                return@launch
-            }
-            
-            val freshDpi = ShizukuManager.getCurrentDensity().getOrNull()
-            if (freshDpi != null && freshDpi == targetDpi) {
-                val currentDp = DisplayUtils.dpiToDp(targetDpi, active.shortPx)
-                _uiState.value = state.copy(
-                    currentDensity = targetDpi,
-                    currentDp = currentDp,
-                    successMessage = "Внутренний экран: уже ${state.innerDp} dp (без изменений)",
-                    isLoading = false
-                )
-                return@launch
-            }
-            
-            _uiState.value = state.copy(isLoading = true, errorMessage = null, successMessage = null)
-            val result = ShizukuManager.setDensity(targetDpi)
-            
-            result.fold(
-                onSuccess = { 
-                    _uiState.value = _uiState.value.copy(
-                        currentDensity = targetDpi,
-                        currentDp = state.innerDp,
-                        successMessage = "Внутренний экран: ${state.innerDp} dp",
-                        isLoading = false
-                    ) 
-                },
-                onFailure = { _uiState.value = _uiState.value.copy(errorMessage = it.message, isLoading = false) }
+            applyDensity(
+                targetDp = _uiState.value.innerDp,
+                isInner = true,
+                successMessage = { "Внутренний экран: ${it} dp" },
+                bypassMessage = { "Внутренний экран: уже ${it} dp (без изменений)" },
+                wrongScreenMessage = "Для применения настроек внутреннего экрана раскройте телефон"
             )
         }
     }
 
     fun applyOuterDensity() {
         viewModelScope.launch {
-            val state = _uiState.value
-            val context = getApplication<Application>().applicationContext
-            val active = DisplayUtils.getActiveDisplay(context)
-            
-            if (active == null) {
-                _uiState.value = state.copy(errorMessage = "Не удалось определить активный экран")
-                return@launch
-            }
-            if (!active.isExternal) {
-                _uiState.value = state.copy(errorMessage = "Для применения настроек внешнего экрана закройте телефон")
-                return@launch
-            }
-            
-            val targetDpi = DisplayUtils.dpToDpi(state.outerDp, active.shortPx)
-            if (targetDpi == null) {
-                _uiState.value = state.copy(errorMessage = "Некорректные параметры для расчёта DPI")
-                return@launch
-            }
-            
-            val freshDpi = ShizukuManager.getCurrentDensity().getOrNull()
-            if (freshDpi != null && freshDpi == targetDpi) {
-                val currentDp = DisplayUtils.dpiToDp(targetDpi, active.shortPx)
-                _uiState.value = state.copy(
-                    currentDensity = targetDpi,
-                    currentDp = currentDp,
-                    successMessage = "Внешний экран: уже ${state.outerDp} dp (без изменений)",
-                    isLoading = false
-                )
-                return@launch
-            }
-            
-            _uiState.value = state.copy(isLoading = true, errorMessage = null, successMessage = null)
-            val result = ShizukuManager.setDensity(targetDpi)
-            
-            result.fold(
-                onSuccess = { 
-                    _uiState.value = _uiState.value.copy(
-                        currentDensity = targetDpi,
-                        currentDp = state.outerDp,
-                        successMessage = "Внешний экран: ${state.outerDp} dp",
-                        isLoading = false
-                    ) 
-                },
-                onFailure = { _uiState.value = _uiState.value.copy(errorMessage = it.message, isLoading = false) }
+            applyDensity(
+                targetDp = _uiState.value.outerDp,
+                isInner = false,
+                successMessage = { "Внешний экран: ${it} dp" },
+                bypassMessage = { "Внешний экран: уже ${it} dp (без изменений)" },
+                wrongScreenMessage = "Для применения настроек внешнего экрана закройте телефон"
             )
         }
     }
-    
+
+    /**
+     * Общая логика применения DPI. Устраняет дублирование между applyInner/applyOuter.
+     */
+    private suspend fun applyDensity(
+        targetDp: Int,
+        isInner: Boolean,
+        successMessage: (Int) -> String,
+        bypassMessage: (Int) -> String,
+        wrongScreenMessage: String
+    ) {
+        val state = _uiState.value
+        val context = getApplication<Application>().applicationContext
+        val active = DisplayUtils.getActiveDisplay(context)
+
+        if (active == null) {
+            _uiState.value = state.copy(errorMessage = "Не удалось определить активный экран")
+            return
+        }
+        if (active.isExternal == isInner) {
+            _uiState.value = state.copy(errorMessage = wrongScreenMessage)
+            return
+        }
+
+        val targetDpi = DisplayUtils.dpToDpi(targetDp, active.shortPx)
+        if (targetDpi == null) {
+            _uiState.value = state.copy(errorMessage = "Некорректные параметры для расчёта DPI")
+            return
+        }
+
+        val freshDpi = ShizukuManager.getCurrentDensity().getOrNull()
+        if (freshDpi != null && freshDpi == targetDpi) {
+            _uiState.value = state.copy(
+                currentDensity = targetDpi,
+                currentDp = DisplayUtils.dpiToDp(targetDpi, active.shortPx),
+                successMessage = bypassMessage(targetDp),
+                isLoading = false
+            )
+            return
+        }
+
+        _uiState.value = state.copy(isLoading = true, errorMessage = null, successMessage = null)
+        val result = ShizukuManager.setDensity(targetDpi)
+
+        result.fold(
+            onSuccess = {
+                _uiState.value = _uiState.value.copy(
+                    currentDensity = targetDpi,
+                    currentDp = targetDp,
+                    successMessage = successMessage(targetDp),
+                    isLoading = false
+                )
+            },
+            onFailure = { _uiState.value = _uiState.value.copy(errorMessage = it.message, isLoading = false) }
+        )
+    }
+
     fun requestShizukuPermission() {
         try {
             if (rikka.shizuku.Shizuku.getUid() != -1) {
