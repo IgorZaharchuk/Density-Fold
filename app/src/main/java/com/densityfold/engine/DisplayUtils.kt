@@ -26,7 +26,7 @@ object DisplayUtils {
                 height = metrics.heightPixels,
                 density = metrics.densityDpi,
                 isDefault = display.displayId == android.view.Display.DEFAULT_DISPLAY,
-                isExternal = isExternalScreen(metrics.widthPixels)
+                isExternal = isExternalScreen(metrics.widthPixels, metrics.heightPixels)
             )
         }
     }
@@ -39,18 +39,21 @@ object DisplayUtils {
         
         return DisplayInfo(
             displayId = currentDisplay.displayId,
-            name = if (isExternalScreen(metrics.widthPixels)) "Внешний экран" else "Внутренний экран",
+            name = if (isExternalScreen(metrics.widthPixels, metrics.heightPixels)) "Внешний экран" else "Внутренний экран",
             width = metrics.widthPixels,
             height = metrics.heightPixels,
             density = metrics.densityDpi,
             isDefault = true,
-            isExternal = isExternalScreen(metrics.widthPixels)
+            isExternal = isExternalScreen(metrics.widthPixels, metrics.heightPixels)
         )
     }
 
-    // Для Fold 7: внешний экран 1080px шириной, внутренний 1968px
-    private fun isExternalScreen(width: Int): Boolean {
-        return width < 1200
+    // Для Fold 7: используем МИНИМАЛЬНУЮ сторону, чтобы поворот не влиял
+    // Внешний: min(1080, 2520) = 1080
+    // Внутренний: min(1968, 2184) = 1968
+    private fun isExternalScreen(width: Int, height: Int): Boolean {
+        val minSide = minOf(width, height)
+        return minSide < 1200
     }
 
     fun getInnerDisplay(context: Context): DisplayInfo? {
@@ -71,12 +74,14 @@ object DisplayUtils {
         sb.append("Active Display ID: ${active?.displayId}\n")
         sb.append("Active is External: ${active?.isExternal}\n")
         sb.append("Active Resolution: ${active?.width}x${active?.height}\n")
+        sb.append("Active min side: ${if (active != null) minOf(active.width, active.height) else "?"}\n")
         sb.append("Identified Inner: ID ${inner?.displayId} (${inner?.width}x${inner?.height})\n")
         sb.append("Identified Outer: ID ${outer?.displayId} (${outer?.width}x${outer?.height})\n\n")
         
         displays.forEach {
             sb.append("ID: ${it.displayId} | Name: ${it.name}\n")
-            sb.append("Res: ${it.width}x${it.height} | DPI: ${it.density} | External: ${it.isExternal}\n\n")
+            sb.append("Res: ${it.width}x${it.height} | DPI: ${it.density} | External: ${it.isExternal}\n")
+            sb.append("  min side: ${minOf(it.width, it.height)}\n\n")
         }
         return sb.toString()
     }
