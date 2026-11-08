@@ -56,7 +56,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             
             val currentDpi = ShizukuManager.getCurrentDensity().getOrNull() ?: 0
             
-            val newState = _uiState.value.copy(
+            // Создаем базовое состояние
+            var newState = _uiState.value.copy(
                 activeDisplay = active,
                 allDisplays = all,
                 currentDensity = currentDpi,
@@ -65,17 +66,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 errorMessage = null
             )
             
-            // Только при первом запуске подставляем текущий DPI
-            if (_uiState.value.isFirstLaunch && currentDpi > 0) {
+            // Только при первом запуске подставляем текущий системный DPI в настройки
+            if (newState.isFirstLaunch && currentDpi > 0) {
                 if (active?.isExternal == false) {
                     preferences.setInnerDpi(currentDpi)
-                    newState.copy(innerDpi = currentDpi, isFirstLaunch = false)
+                    newState = newState.copy(innerDpi = currentDpi, isFirstLaunch = false)
                 } else if (active?.isExternal == true) {
                     preferences.setOuterDpi(currentDpi)
-                    newState.copy(outerDpi = currentDpi, isFirstLaunch = false)
+                    newState = newState.copy(outerDpi = currentDpi, isFirstLaunch = false)
+                } else {
+                    // Если не удалось определить тип экрана, просто снимаем флаг первого запуска
+                    newState = newState.copy(isFirstLaunch = false)
                 }
             }
             
+            // Применяем обновленное состояние
             _uiState.value = newState
         }
     }
