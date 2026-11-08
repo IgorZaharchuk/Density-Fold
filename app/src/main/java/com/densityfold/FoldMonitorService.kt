@@ -3,9 +3,9 @@ package com.densityfold
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
-import android.app.ServiceInfo
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.IBinder
@@ -39,6 +39,7 @@ class FoldMonitorService : Service() {
         override fun onDisplayChanged(displayId: Int) {
             if (displayId != Display.DEFAULT_DISPLAY) return
             Log.d(TAG, "Обнаружено изменение дисплея (ID: $displayId)")
+            pendingRecheck = true
             scheduleDensityCheck()
         }
     }
@@ -54,16 +55,10 @@ class FoldMonitorService : Service() {
         displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         displayManager?.registerDisplayListener(displayListener, null)
         Shizuku.addBinderReceivedListenerSticky(shizukuListener)
-        startForegroundServiceNotification()
+        startForegroundSafely()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "Сервис запущен (startId: $startId)")
-        scheduleDensityCheck()
-        return START_STICKY
-    }
-
-    private fun startForegroundServiceNotification() {
+    private fun startForegroundSafely() {
         val channelId = "fold_monitor_channel"
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         
@@ -86,14 +81,22 @@ class FoldMonitorService : Service() {
             } else {
                 startForeground(1, notification)
             }
-            Log.d(TAG, "Foreground уведомление установлено")
+            Log.d(TAG, "Foreground уведомление успешно установлено")
         } catch (e: Exception) {
-            Log.e(TAG, "Ошибка запуска Foreground сервиса: ${e.message}")
+            Log.e(TAG, "Критическая ошибка запуска Foreground сервиса: ${e.message}. Сервис будет остановлен.")
+            stopSelf()
         }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "Сервис запущен (startId: $startId)")
+        scheduleDensityCheck()
+        return START_STICKY
     }
 
     private fun scheduleDensityCheck() {
         scope.launch {
+            // Коалесцирование: если Mutex уже захвачен, просто помечаем, что нужна повторная проверка
             if (dpiMutex.isLocked) {
                 pendingRecheck = true
                 Log.d(TAG, "Операция DPI уже выполняется, запланирована повторная проверка")
@@ -102,20 +105,22 @@ class FoldMonitorService : Service() {
 
             dpiMutex.withLock {
                 do {
+                    // Сбрасываем флаг в начале итерации. Если придёт новое событие во время выполнения,
+                    // цикл выполнится ещё раз с самыми актуальными данными дисплея.
                     pendingRecheck = false
                     Log.d(TAG, "Начало проверки и применения DPI")
 
                     val active = DisplayUtils.getActiveDisplay(applicationContext)
                     if (active == null) {
-                        Log.e(TAG, "Не удалось определить активный дисплей")
+                        Log.e(TAG, "Не удалось определить активный дисплей. Повторная попытка при следующем событии.")
                         break
                     }
 
                     val isExternal = active.isExternal
 
                     if (!ShizukuManager.isShizukuAvailable()) {
-                        Log.w(TAG, "Shizuku недоступен, применение DPI отложено до восстановления")
-                        break // lastWasExternal НЕ обновляется, гарантируя повторную попытку
+                        Log.w(TAG, "Shizuku недоступен. Состояние НЕ зафиксировано, ожидание восстановления.")
+                        break // lastWasExternal не обновляется
                     }
 
                     val prefs = DensityPreferences(applicationContext)
@@ -123,7 +128,7 @@ class FoldMonitorService : Service() {
                     val targetDpi = DisplayUtils.dpToDpi(targetDp, active.shortPx)
                     
                     if (targetDpi == null) {
-                        Log.e(TAG, "Некорректные параметры для расчёта DPI (dp=$targetDp, shortPx=${active.shortPx})")
+                        Log.e(TAG, "Некорректные параметры для расчёта DPI. Повторная попытка при следующем событии.")
                         break
                     }
 
@@ -139,13 +144,13 @@ class FoldMonitorService : Service() {
                     val result = ShizukuManager.setDensity(targetDpi)
                     
                     result.fold(
-                        onSuccess = {
+                        onSuccess = { 
                             lastWasExternal = isExternal
                             Log.d(TAG, "DPI успешно применён. Состояние зафиксировано.")
                         },
-                        onFailure = {
+                        onFailure = { 
                             Log.e(TAG, "Ошибка применения DPI: ${it.message}. Состояние НЕ зафиксировано, будет повторная попытка.")
-                            // lastWasExternal НЕ обновляется
+                            // lastWasExternal не обновляется
                         }
                     )
                 } while (pendingRecheck)
