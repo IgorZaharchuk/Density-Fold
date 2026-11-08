@@ -23,14 +23,23 @@ object ShizukuCommandRunner {
     suspend fun execute(command: String): Result<String> {
         return try {
             ensureBound()
-            val result = service?.executeCommand(command)
-            if (result != null) {
-                Result.success(result)
-            } else {
+            val rawResult = service?.executeCommand(command)
+            if (rawResult == null) {
                 Result.failure(IllegalStateException("Service returned null"))
+            } else {
+                parseServiceResult(rawResult)
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    private fun parseServiceResult(rawResult: String): Result<String> {
+        return when {
+            rawResult.startsWith("SUCCESS: ") -> Result.success(rawResult.substring(9))
+            rawResult.startsWith("ERROR: ") -> Result.failure(Exception(rawResult.substring(7)))
+            rawResult.startsWith("EXCEPTION: ") -> Result.failure(Exception(rawResult.substring(11)))
+            else -> Result.failure(Exception("Неизвестный формат ответа сервиса: $rawResult"))
         }
     }
 
@@ -42,12 +51,18 @@ object ShizukuCommandRunner {
 
             val serviceConnection = object : ServiceConnection {
                 override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-                    // ЖЕСТКАЯ ЗАЩИТА от двойного resume
-                    if (!resumed && binder != null) {
-                        resumed = true
-                        service = IShizukuService.Stub.asInterface(binder)
-                        isBound = true
-                        cont.resume(Unit)
+                    if (!resumed) {
+                        // Удаляем слушатель сразу после успешного или ошибочного подключения
+                        Shizuku.removeBinderReceivedListener(binderReceivedListener)
+                        if (binder != null) {
+                            resumed = true
+                            service = IShizukuService.Stub.asInterface(binder)
+                            isBound = true
+                            cont.resume(Unit)
+                        } else {
+                            resumed = true
+                            cont.resumeWithException(IllegalStateException("Binder is null"))
+                        }
                     }
                 }
 
@@ -58,12 +73,21 @@ object ShizukuCommandRunner {
             }
 
             val binderReceivedListener = Shizuku.OnBinderReceivedListener {
-                if (!isBound) {
-                    Shizuku.bindUserService(userServiceArgs, serviceConnection)
-                } else if (!resumed) {
-                    // Уже привязан, но корутина ещё не возобновлена (например, отменена и вызвана снова)
-                    resumed = true
-                    cont.resume(Unit)
+                try {
+                    if (!isBound) {
+                        Shizuku.bindUserService(userServiceArgs, serviceConnection)
+                    } else if (!resumed) {
+                        resumed = true
+                        Shizuku.removeBinderReceivedListener(this)
+                        cont.resume(Unit)
+                    }
+                } catch (e: Exception) {
+                    // Защита от зависания корутины при ошибке bindUserService
+                    if (!resumed) {
+                        resumed = true
+                        Shizuku.removeBinderReceivedListener(this)
+                        cont.resumeWithException(e)
+                    }
                 }
             }
 
@@ -73,9 +97,11 @@ object ShizukuCommandRunner {
             // Дополнительная страховка: если сервис уже был привязан до создания корутины
             if (isBound && service != null && !resumed) {
                 resumed = true
+                Shizuku.removeBinderReceivedListener(binderReceivedListener)
                 cont.resume(Unit)
             }
 
+            // Очистка при отмене корутины
             cont.invokeOnCancellation {
                 Shizuku.removeBinderReceivedListener(binderReceivedListener)
             }
