@@ -7,6 +7,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import rikka.shizuku.Shizuku
 import rikka.shizuku.Shizuku.UserServiceArgs
 import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 object ShizukuCommandRunner {
     private var service: IShizukuService? = null
@@ -36,9 +37,10 @@ object ShizukuCommandRunner {
 
     private fun parseServiceResult(rawResult: String): Result<String> {
         return when {
-            rawResult.startsWith("SUCCESS: ") -> Result.success(rawResult.substring(9))
-            rawResult.startsWith("ERROR: ") -> Result.failure(Exception(rawResult.substring(7)))
-            rawResult.startsWith("EXCEPTION: ") -> Result.failure(Exception(rawResult.substring(11)))
+            // substringAfter корректно работает как с "SUCCESS:", так и с "SUCCESS: "
+            rawResult.startsWith("SUCCESS:") -> Result.success(rawResult.substringAfter("SUCCESS:").trim())
+            rawResult.startsWith("ERROR:") -> Result.failure(Exception(rawResult.substringAfter("ERROR:").trim()))
+            rawResult.startsWith("EXCEPTION:") -> Result.failure(Exception(rawResult.substringAfter("EXCEPTION:").trim()))
             else -> Result.failure(Exception("Неизвестный формат ответа сервиса: $rawResult"))
         }
     }
@@ -49,29 +51,7 @@ object ShizukuCommandRunner {
         suspendCancellableCoroutine { cont ->
             var resumed = false
 
-            val serviceConnection = object : ServiceConnection {
-                override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-                    if (!resumed) {
-                        // Удаляем слушатель сразу после успешного или ошибочного подключения
-                        Shizuku.removeBinderReceivedListener(binderReceivedListener)
-                        if (binder != null) {
-                            resumed = true
-                            service = IShizukuService.Stub.asInterface(binder)
-                            isBound = true
-                            cont.resume(Unit)
-                        } else {
-                            resumed = true
-                            cont.resumeWithException(IllegalStateException("Binder is null"))
-                        }
-                    }
-                }
-
-                override fun onServiceDisconnected(name: ComponentName?) {
-                    service = null
-                    isBound = false
-                }
-            }
-
+            // 1. Сначала объявляем listener, чтобы он был виден в ServiceConnection ниже
             val binderReceivedListener = Shizuku.OnBinderReceivedListener {
                 try {
                     if (!isBound) {
@@ -91,17 +71,41 @@ object ShizukuCommandRunner {
                 }
             }
 
-            // Sticky listener гарантирует немедленный вызов, если биндер уже получен
+            // 2. Затем создаем ServiceConnection, который использует этот listener
+            val serviceConnection = object : ServiceConnection {
+                override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+                    if (!resumed) {
+                        // Удаляем слушатель сразу после подключения
+                        Shizuku.removeBinderReceivedListener(binderReceivedListener)
+                        if (binder != null) {
+                            resumed = true
+                            service = IShizukuService.Stub.asInterface(binder)
+                            isBound = true
+                            cont.resume(Unit)
+                        } else {
+                            resumed = true
+                            cont.resumeWithException(IllegalStateException("Binder is null"))
+                        }
+                    }
+                }
+
+                override fun onServiceDisconnected(name: ComponentName?) {
+                    service = null
+                    isBound = false
+                }
+            }
+
+            // 3. Регистрируем sticky listener
             Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
 
-            // Дополнительная страховка: если сервис уже был привязан до создания корутины
+            // 4. Дополнительная страховка: если сервис уже был привязан до создания корутины
             if (isBound && service != null && !resumed) {
                 resumed = true
                 Shizuku.removeBinderReceivedListener(binderReceivedListener)
                 cont.resume(Unit)
             }
 
-            // Очистка при отмене корутины
+            // 5. Очистка при отмене корутины
             cont.invokeOnCancellation {
                 Shizuku.removeBinderReceivedListener(binderReceivedListener)
             }
