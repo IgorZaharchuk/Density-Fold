@@ -8,6 +8,7 @@ import com.densityfold.data.DensityPreferences
 import com.densityfold.engine.DisplayInfo
 import com.densityfold.engine.DisplayUtils
 import com.densityfold.engine.ShizukuManager
+import com.densityfold.FoldMonitorService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
