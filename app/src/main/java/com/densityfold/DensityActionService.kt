@@ -1,9 +1,13 @@
 package com.densityfold
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.IBinder
+import androidx.core.app.NotificationCompat
 import com.densityfold.data.DensityPreferences
 import com.densityfold.engine.ShizukuManager
 import kotlinx.coroutines.CoroutineScope
@@ -24,6 +28,7 @@ class DensityActionService : Service() {
         }
 
         val isClosed = action == ACTION_CLOSED
+        val screenName = if (isClosed) "Внешний" else "Внутренний"
 
         scope.launch {
             try {
@@ -33,14 +38,37 @@ class DensityActionService : Service() {
                 val targetDpi = if (isClosed) prefs.getOuterDpi() else prefs.getInnerDpi()
 
                 ShizukuManager.setDensity(targetDpi)
+                
+                // Отправляем уведомление в статус-бар
+                showNotification(applicationContext, screenName, targetDpi)
             } catch (_: Exception) {
-                // Тихо игнорируем ошибки в фоне
+                // Тихо игнорируем
             } finally {
                 stopSelf(startId)
             }
         }
 
         return START_NOT_STICKY
+    }
+
+    private fun showNotification(context: Context, screenName: String, dpi: Int) {
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channelId = "density_actions_channel"
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(channelId, "Действия Density Fold", NotificationManager.IMPORTANCE_LOW)
+            notificationManager.createNotificationChannel(channel)
+        }
+        
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(android.R.drawable.ic_menu_manage)
+            .setContentTitle("Density Fold")
+            .setContentText("$screenName экран: установлено $dpi dpi")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setAutoCancel(true)
+            .build()
+            
+        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
     }
 
     override fun onDestroy() {
@@ -53,16 +81,12 @@ class DensityActionService : Service() {
         const val ACTION_CLOSED = "com.densityfold.ACTION_CLOSED"
 
         fun startOpen(context: Context) {
-            val intent = Intent(context, DensityActionService::class.java).apply {
-                action = ACTION_OPEN
-            }
+            val intent = Intent(context, DensityActionService::class.java).apply { action = ACTION_OPEN }
             context.startService(intent)
         }
 
         fun startClosed(context: Context) {
-            val intent = Intent(context, DensityActionService::class.java).apply {
-                action = ACTION_CLOSED
-            }
+            val intent = Intent(context, DensityActionService::class.java).apply { action = ACTION_CLOSED }
             context.startService(intent)
         }
     }

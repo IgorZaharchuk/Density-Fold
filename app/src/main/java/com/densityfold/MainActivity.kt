@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -66,7 +67,7 @@ fun MainScreen(viewModel: MainViewModel) {
             TopAppBar(
                 title = { 
                     Column {
-                        Text("Плотность Fold", fontWeight = FontWeight.Bold)
+                        Text("Density Fold", fontWeight = FontWeight.Bold) // ИЗМЕНЕНО
                         Text("Galaxy Z Fold 7", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
@@ -82,83 +83,90 @@ fun MainScreen(viewModel: MainViewModel) {
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Карточка статуса
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     val displayName = if (uiState.activeDisplay?.isExternal == true) "Внешний экран" else "Внутренний экран"
                     Text(displayName, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("Дисплей ${uiState.activeDisplay?.displayId ?: "?"} · ${uiState.activeDisplay?.width ?: 0}×${uiState.activeDisplay?.height ?: 0} px")
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Разрешение: ${uiState.activeDisplay?.width ?: 0} × ${uiState.activeDisplay?.height ?: 0} px")
+                    Text("Текущий DPI: ${uiState.currentDensity}")
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         "Доступ: ${if (uiState.isShizukuAvailable) "Shizuku подключен" else "Shizuku не подключен"}",
                         color = if (uiState.isShizukuAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                     )
                     if (!uiState.isShizukuAvailable) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { 
-                            // Прямой запрос из Activity context — диалог Shizuku откроется корректно
-                            try {
-                                if (Shizuku.getUid() != -1) {
-                                    Shizuku.requestPermission(1001)
-                                }
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
-                        }) {
+                        Button(onClick = { viewModel.requestShizukuPermission() }) {
                             Text("Запросить разрешение Shizuku")
                         }
                     }
                 }
             }
 
+            // Настройки с кнопками применения
             Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Плотность экранов", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("Настройка плотности", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     
-                    OutlinedTextField(
-                        value = innerDpiText,
-                        onValueChange = { newText ->
-                            innerDpiText = newText
-                            newText.toIntOrNull()?.let { dpi ->
-                                if (dpi in 100..1000) viewModel.setInnerDpi(dpi)
-                            }
-                        },
-                        label = { Text("Внутренний экран, dpi") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                    // Внутренний экран
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = innerDpiText,
+                            onValueChange = { newText ->
+                                innerDpiText = newText
+                                newText.toIntOrNull()?.let { dpi ->
+                                    if (dpi in 100..1000) viewModel.setInnerDpi(dpi)
+                                }
+                            },
+                            label = { Text("Внутренний, dpi") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = { viewModel.applyInnerDensity() },
+                            enabled = uiState.isShizukuAvailable && !uiState.isLoading
+                        ) {
+                            Text("Применить")
+                        }
+                    }
                     
-                    OutlinedTextField(
-                        value = outerDpiText,
-                        onValueChange = { newText ->
-                            outerDpiText = newText
-                            newText.toIntOrNull()?.let { dpi ->
-                                if (dpi in 100..1000) viewModel.setOuterDpi(dpi)
-                            }
-                        },
-                        label = { Text("Внешний экран, dpi") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                    // Внешний экран
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = outerDpiText,
+                            onValueChange = { newText ->
+                                outerDpiText = newText
+                                newText.toIntOrNull()?.let { dpi ->
+                                    if (dpi in 100..1000) viewModel.setOuterDpi(dpi)
+                                }
+                            },
+                            label = { Text("Внешний, dpi") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = { viewModel.applyOuterDensity() },
+                            enabled = uiState.isShizukuAvailable && !uiState.isLoading
+                        ) {
+                            Text("Применить")
+                        }
+                    }
                 }
             }
 
-            Button(
-                onClick = { viewModel.applyCurrentScreenDensity() },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                enabled = uiState.isShizukuAvailable && !uiState.isLoading
-            ) {
-                Text(if (uiState.isLoading) "Применение..." else "Применить к текущему экрану", fontSize = 16.sp)
-            }
-
+            // Сообщения об ошибках/успехе
             uiState.errorMessage?.let { 
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                     Text(it, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onErrorContainer)
                 }
             }
             uiState.successMessage?.let { 
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary)) {
-                    Text(it, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onPrimary)
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                    Text(it, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
             }
         }
@@ -167,7 +175,7 @@ fun MainScreen(viewModel: MainViewModel) {
     if (showDiagnostics) {
         AlertDialog(
             onDismissRequest = { showDiagnostics = false },
-            title = { Text("Диагностика дисплеев") },
+            title = { Text("Диагностика") },
             text = { Text(uiState.diagnosticInfo) },
             confirmButton = { TextButton(onClick = { showDiagnostics = false }) { Text("OK") } }
         )

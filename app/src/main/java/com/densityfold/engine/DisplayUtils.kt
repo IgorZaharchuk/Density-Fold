@@ -17,27 +17,17 @@ data class DisplayInfo(
 )
 
 object DisplayUtils {
-
-    /**
-     * Определение экрана как в оригинальном ScreenSnap:
-     * shortPx = min(width, height)
-     * inner = shortPx >= 1400
-     */
     fun getActiveDisplay(context: Context): DisplayInfo? {
-        val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
-            ?: return null
-
-        // Берём display 0 (DEFAULT_DISPLAY) — как в оригинале, это текущий активный экран
+        val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager ?: return null
         val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY) ?: return null
 
         val size = Point()
         display.getRealSize(size)
-
         val metrics = DisplayMetrics()
         display.getRealMetrics(metrics)
 
         val shortPx = minOf(size.x, size.y)
-        val isInner = shortPx >= 1400          // оригинальный надёжный порог
+        val isInner = shortPx >= 1400
 
         return DisplayInfo(
             displayId = display.displayId,
@@ -51,16 +41,12 @@ object DisplayUtils {
     }
 
     fun getAllDisplays(context: Context): List<DisplayInfo> {
-        val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
-            ?: return emptyList()
-
+        val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager ?: return emptyList()
         return displayManager.displays.map { display ->
             val size = Point()
             display.getRealSize(size)
-
             val metrics = DisplayMetrics()
             display.getRealMetrics(metrics)
-
             val shortPx = minOf(size.x, size.y)
             val isInner = shortPx >= 1400
 
@@ -77,26 +63,14 @@ object DisplayUtils {
     }
 
     fun getDiagnosticString(context: Context): String {
-        val displays = getAllDisplays(context)
         val active = getActiveDisplay(context)
-
-        val sb = StringBuilder("=== DIAGNOSTICS (ScreenSnap logic) ===\n")
-        sb.append("Active Display ID: ${active?.displayId}\n")
-        sb.append("Active is External: ${active?.isExternal}\n")
-        sb.append("Active Resolution: ${active?.width}x${active?.height}\n")
-        sb.append("Active shortPx: ${if (active != null) minOf(active.width, active.height) else "?"}\n")
-        sb.append("Threshold: shortPx >= 1400 → Внутренний\n\n")
-
-        displays.forEach {
-            val shortPx = minOf(it.width, it.height)
-            sb.append("ID: ${it.displayId} | ${it.name}\n")
-            sb.append("Res: ${it.width}x${it.height} | DPI: ${it.density}\n")
-            sb.append("shortPx: $shortPx | External: ${it.isExternal}\n\n")
-        }
-
-        sb.append("=== WM DENSITY RAW OUTPUT ===\n")
-        sb.append(ShizukuManager.lastRawOutput.ifEmpty { "(ещё не запрашивался)" })
-
+        val sb = StringBuilder("=== Текущий экран ===\n")
+        sb.append("Тип: ${active?.name}\n")
+        sb.append("Разрешение: ${active?.width} x ${active?.height}\n")
+        sb.append("shortPx: ${if (active != null) minOf(active.width, active.height) else "?"} (порог: 1400)\n\n")
+        
+        sb.append("=== Вывод wm density ===\n")
+        sb.append(ShizukuManager.lastRawOutput.ifEmpty { "(не запрашивался)" })
         return sb.toString()
     }
 }
