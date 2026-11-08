@@ -57,10 +57,9 @@ class ClosedActionActivity : Activity() {
         timeoutHandler.removeCallbacks(timeoutRunnable)
         try { unregisterReceiver(completionReceiver) } catch (_: Exception) {}
         
-        // ЭКСПЕРИМЕНТ: убираем moveTaskToBack(true).
-        Log.d(TAG, "Calling finish() without moveTaskToBack to test native task stack restoration")
-        finish()
-        overridePendingTransition(0, 0)
+        // АГРЕССИВНЫЙ МЕТОД: полностью удаляем задачу из стека
+        Log.d(TAG, "Calling finishAndRemoveTask() to force restore previous app")
+        finishAndRemoveTask()
     }
 
     override fun onDestroy() {
