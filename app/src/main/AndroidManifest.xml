@@ -22,23 +22,33 @@
             </intent-filter>
         </activity>
         
-        <!-- BroadcastReceiver для действия "Открыто" (внутренний экран) -->
-        <receiver
-            android:name=".OpenActionReceiver"
-            android:exported="true">
+        <!-- Activity для действия "Открыто" (внутренний экран) -->
+        <activity
+            android:name=".OpenActionActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:label="Открыто">
             <intent-filter>
                 <action android:name="com.densityfold.action.OPEN" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-        </receiver>
+        </activity>
         
-        <!-- BroadcastReceiver для действия "Закрыто" (внешний экран) -->
-        <receiver
-            android:name=".ClosedActionReceiver"
-            android:exported="true">
+        <!-- Activity для действия "Закрыто" (внешний экран) -->
+        <activity
+            android:name=".ClosedActionActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:label="Закрыто">
             <intent-filter>
                 <action android:name="com.densityfold.action.CLOSED" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-        </receiver>
+        </activity>
         
         <service
             android:name=".engine.ShizukuUserService"

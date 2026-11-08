@@ -1,8 +1,7 @@
 package com.densityfold
 
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
+import android.app.Activity
+import android.os.Bundle
 import android.widget.Toast
 import com.densityfold.data.DensityPreferences
 import com.densityfold.engine.ShizukuManager
@@ -11,26 +10,30 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class ClosedActionReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
+class OpenActionActivity : Activity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         if (!ShizukuManager.isShizukuAvailable()) {
-            Toast.makeText(context, "Shizuku не активен", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Shizuku не активен", Toast.LENGTH_SHORT).show()
+            finish()
             return
         }
         
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val prefs = DensityPreferences(context)
-                val targetDpi = prefs.getOuterDpi()
+                val prefs = DensityPreferences(applicationContext)
+                val targetDpi = prefs.getInnerDpi()
                 val result = ShizukuManager.setDensity(targetDpi)
                 withContext(Dispatchers.Main) {
-                    val message = if (result.isSuccess) "Внешний экран: $targetDpi dpi" 
+                    val message = if (result.isSuccess) "Внутренний экран: $targetDpi dpi" 
                                   else "Ошибка: ${result.exceptionOrNull()?.message}"
-                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(applicationContext, message, Toast.LENGTH_SHORT).show()
+                    finish()
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) { 
-                    Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show() 
+                    Toast.makeText(applicationContext, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
+                    finish()
                 }
             }
         }

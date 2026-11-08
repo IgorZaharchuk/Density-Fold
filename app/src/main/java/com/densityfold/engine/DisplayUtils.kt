@@ -19,14 +19,15 @@ object DisplayUtils {
         return displayManager.displays.map { display ->
             val metrics = android.util.DisplayMetrics()
             display.getRealMetrics(metrics)
+            val isExternal = isExternalScreen(metrics.widthPixels, metrics.heightPixels)
             DisplayInfo(
                 displayId = display.displayId,
-                name = display.name ?: "Unknown",
+                name = if (isExternal) "Внешний экран" else "Внутренний экран",
                 width = metrics.widthPixels,
                 height = metrics.heightPixels,
                 density = metrics.densityDpi,
                 isDefault = display.displayId == android.view.Display.DEFAULT_DISPLAY,
-                isExternal = isExternalScreen(metrics.widthPixels, metrics.heightPixels)
+                isExternal = isExternal
             )
         }
     }
@@ -36,15 +37,16 @@ object DisplayUtils {
         val currentDisplay = windowManager.defaultDisplay
         val metrics = android.util.DisplayMetrics()
         currentDisplay.getRealMetrics(metrics)
+        val isExternal = isExternalScreen(metrics.widthPixels, metrics.heightPixels)
         
         return DisplayInfo(
             displayId = currentDisplay.displayId,
-            name = if (isExternalScreen(metrics.widthPixels, metrics.heightPixels)) "Внешний экран" else "Внутренний экран",
+            name = if (isExternal) "Внешний экран" else "Внутренний экран",
             width = metrics.widthPixels,
             height = metrics.heightPixels,
             density = metrics.densityDpi,
             isDefault = true,
-            isExternal = isExternalScreen(metrics.widthPixels, metrics.heightPixels)
+            isExternal = isExternal
         )
     }
 
