@@ -50,32 +50,32 @@ object ShizukuCommandRunner {
         suspendCancellableCoroutine { cont ->
             var resumed = false
 
-            // 1. Объявляем lateinit ПЕРЕД созданием listener'а
+            // 1. Объявляем lateinit ПЕРЕД использованием
             lateinit var serviceConnection: ServiceConnection
+            lateinit var binderReceivedListener: Shizuku.OnBinderReceivedListener
 
-            // 2. Создаем listener, используя явную ссылку на себя для удаления
-            val binderReceivedListener = Shizuku.OnBinderReceivedListener {
+            // 2. Присваиваем реализацию
+            binderReceivedListener = Shizuku.OnBinderReceivedListener {
                 try {
                     if (!isBound) {
                         Shizuku.bindUserService(userServiceArgs, serviceConnection)
                     } else if (!resumed) {
                         resumed = true
-                        // 3. Явная ссылка вместо 'this'
+                        // 3. Используем явную ссылку на переменную
                         Shizuku.removeBinderReceivedListener(binderReceivedListener)
                         cont.resume(Unit)
                     }
                 } catch (e: Exception) {
-                    // Защита от зависания корутины при ошибке bindUserService
                     if (!resumed) {
                         resumed = true
-                        // 3. Явная ссылка вместо 'this'
+                        // 3. Используем явную ссылку на переменную
                         Shizuku.removeBinderReceivedListener(binderReceivedListener)
                         cont.resumeWithException(e)
                     }
                 }
             }
 
-            // 4. Теперь безопасно присваиваем реализацию, так как listener уже создан
+            // 4. Теперь безопасно присваиваем реализацию serviceConnection
             serviceConnection = object : ServiceConnection {
                 override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
                     if (!resumed) {
