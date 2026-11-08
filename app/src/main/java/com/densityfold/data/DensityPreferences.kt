@@ -14,35 +14,34 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "de
 
 class DensityPreferences(private val context: Context) {
     companion object {
-        val INNER_DPI = intPreferencesKey("inner_dpi")
-        val OUTER_DPI = intPreferencesKey("outer_dpi")
-        const val DEFAULT_INNER_DPI = 360
-        const val DEFAULT_OUTER_DPI = 411
+        val INNER_DP = intPreferencesKey("inner_dp")  // Теперь храним dp, не dpi!
+        val OUTER_DP = intPreferencesKey("outer_dp")
+        const val DEFAULT_INNER_DP = 411  // Стандартное значение для Fold
+        const val DEFAULT_OUTER_DP = 411
     }
 
-    // Проверяем, существует ли ключ inner_dpi
-    suspend fun hasInnerDpi(): Boolean {
-        return context.dataStore.data.first().contains(INNER_DPI)
-    }
+    suspend fun hasInnerDp(): Boolean = context.dataStore.data.first().contains(INNER_DP)
+    suspend fun hasOuterDp(): Boolean = context.dataStore.data.first().contains(OUTER_DP)
 
-    // Проверяем, существует ли ключ outer_dpi
-    suspend fun hasOuterDpi(): Boolean {
-        return context.dataStore.data.first().contains(OUTER_DPI)
-    }
-
-    suspend fun getInnerDpi(): Int = context.dataStore.data.map { 
-        it[INNER_DPI] ?: DEFAULT_INNER_DPI 
+    suspend fun getInnerDp(): Int = context.dataStore.data.map { 
+        it[INNER_DP] ?: DEFAULT_INNER_DP 
     }.first()
     
-    suspend fun getOuterDpi(): Int = context.dataStore.data.map { 
-        it[OUTER_DPI] ?: DEFAULT_OUTER_DPI 
+    suspend fun getOuterDp(): Int = context.dataStore.data.map { 
+        it[OUTER_DP] ?: DEFAULT_OUTER_DP 
     }.first()
     
-    suspend fun setInnerDpi(dpi: Int) { 
-        context.dataStore.edit { it[INNER_DPI] = dpi } 
+    suspend fun setInnerDp(dp: Int) { 
+        context.dataStore.edit { it[INNER_DP] = dp } 
     }
     
-    suspend fun setOuterDpi(dpi: Int) { 
-        context.dataStore.edit { it[OUTER_DPI] = dpi } 
+    suspend fun setOuterDp(dp: Int) { 
+        context.dataStore.edit { it[OUTER_DP] = dp } 
     }
+    
+    // Для обратной совместимости (если вдруг есть старые dpi значения)
+    suspend fun getInnerDpi(): Int = getInnerDp()
+    suspend fun getOuterDpi(): Int = getOuterDp()
+    suspend fun setInnerDpi(dpi: Int) { setInnerDp(dpi) }
+    suspend fun setOuterDpi(dpi: Int) { setOuterDp(dpi) }
 }

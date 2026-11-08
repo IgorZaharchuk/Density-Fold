@@ -67,9 +67,23 @@ object DisplayUtils {
         val sb = StringBuilder("=== Текущий экран ===\n")
         sb.append("Тип: ${active?.name}\n")
         sb.append("Разрешение: ${active?.width} x ${active?.height}\n")
-        sb.append("shortPx: ${if (active != null) minOf(active.width, active.height) else "?"} (порог: 1400)\n\n")
         
-        sb.append("=== Вывод wm density ===\n")
+        val shortPx = active?.let { minOf(it.width, it.height) } ?: 0
+        val currentDpi = ShizukuManager.lastRawOutput
+            .substringAfter("Physical density: ")
+            .substringBefore("\n")
+            .trim()
+        
+        val currentDp = if (currentDpi.toIntOrNull() != null && shortPx > 0) {
+            (shortPx * 160f / currentDpi.toInt()).toInt()
+        } else {
+            0
+        }
+        
+        sb.append("Текущий DPI: $currentDpi\n")
+        sb.append("Логическая ширина: $currentDp dp\n\n")
+        
+        sb.append("=== WM DENSITY RAW OUTPUT ===\n")
         sb.append(ShizukuManager.lastRawOutput.ifEmpty { "(не запрашивался)" })
         return sb.toString()
     }

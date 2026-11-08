@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,21 +30,14 @@ import rikka.shizuku.Shizuku
 class MainActivity : ComponentActivity() {
     private lateinit var mainViewModel: MainViewModel
     private val shizukuPermissionListener = Shizuku.OnRequestPermissionResultListener { _, _ -> }
-    
-    private val requestNotificationPermission = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { _ -> }
+    private val requestNotificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // Запрос разрешения на уведомления для Android 13+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && 
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-
         mainViewModel = ViewModelProvider(this)[MainViewModel::class.java]
         Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
         setContent { DensityFoldTheme { MainScreen(viewModel = mainViewModel) } }
@@ -70,12 +64,13 @@ class MainActivity : ComponentActivity() {
 fun MainScreen(viewModel: MainViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     var showDiagnostics by remember { mutableStateOf(false) }
+    var showCalculator by remember { mutableStateOf(false) }
     
-    var innerDpiText by remember { mutableStateOf(uiState.innerDpi.toString()) }
-    var outerDpiText by remember { mutableStateOf(uiState.outerDpi.toString()) }
+    var innerDpText by remember { mutableStateOf(uiState.innerDp.toString()) }
+    var outerDpText by remember { mutableStateOf(uiState.outerDp.toString()) }
 
-    LaunchedEffect(uiState.innerDpi) { innerDpiText = uiState.innerDpi.toString() }
-    LaunchedEffect(uiState.outerDpi) { outerDpiText = uiState.outerDpi.toString() }
+    LaunchedEffect(uiState.innerDp) { innerDpText = uiState.innerDp.toString() }
+    LaunchedEffect(uiState.outerDp) { outerDpText = uiState.outerDp.toString() }
 
     Scaffold(
         topBar = {
@@ -87,6 +82,9 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showCalculator = true }) {
+                        Icon(Icons.Default.Calculate, "Калькулятор")
+                    }
                     IconButton(onClick = { showDiagnostics = true }) {
                         Icon(Icons.Default.Info, "Диагностика")
                     }
@@ -105,6 +103,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("Разрешение: ${uiState.activeDisplay?.width ?: 0} × ${uiState.activeDisplay?.height ?: 0} px")
                     Text("Текущий DPI: ${uiState.currentDensity}")
+                    Text("Логическая ширина: ${uiState.currentDp} dp")
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         "Доступ: ${if (uiState.isShizukuAvailable) "Shizuku подключен" else "Shizuku не подключен"}",
@@ -121,18 +120,18 @@ fun MainScreen(viewModel: MainViewModel) {
 
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("Настройка плотности", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("Настройка плотности (dp)", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
-                            value = innerDpiText,
+                            value = innerDpText,
                             onValueChange = { newText ->
-                                innerDpiText = newText
-                                newText.toIntOrNull()?.let { dpi ->
-                                    if (dpi in 100..1000) viewModel.setInnerDpi(dpi)
+                                innerDpText = newText
+                                newText.toIntOrNull()?.let { dp ->
+                                    if (dp in 200..800) viewModel.setInnerDp(dp)
                                 }
                             },
-                            label = { Text("Внутренний, dpi") },
+                            label = { Text("Внутренний, dp") },
                             modifier = Modifier.weight(1f),
                             singleLine = true
                         )
@@ -145,14 +144,14 @@ fun MainScreen(viewModel: MainViewModel) {
                     
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
-                            value = outerDpiText,
+                            value = outerDpText,
                             onValueChange = { newText ->
-                                outerDpiText = newText
-                                newText.toIntOrNull()?.let { dpi ->
-                                    if (dpi in 100..1000) viewModel.setOuterDpi(dpi)
+                                outerDpText = newText
+                                newText.toIntOrNull()?.let { dp ->
+                                    if (dp in 200..800) viewModel.setOuterDp(dp)
                                 }
                             },
-                            label = { Text("Внешний, dpi") },
+                            label = { Text("Внешний, dp") },
                             modifier = Modifier.weight(1f),
                             singleLine = true
                         )
@@ -176,6 +175,15 @@ fun MainScreen(viewModel: MainViewModel) {
                 }
             }
         }
+    }
+
+    if (showCalculator) {
+        AlertDialog(
+            onDismissRequest = { showCalculator = false },
+            title = { Text("Информация") },
+            text = { Text("Теперь приложение работает с dp значениями (как в меню разработчика).\n\nВы вводите dp, а программа сама рассчитывает нужный dpi для команды wm density.\n\nФормула:\ndpi = px × 160 / dp") },
+            confirmButton = { TextButton(onClick = { showCalculator = false }) { Text("OK") } }
+        )
     }
 
     if (showDiagnostics) {
