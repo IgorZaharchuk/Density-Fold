@@ -25,43 +25,25 @@ object ShizukuManager {
         }
     }
 
-    suspend fun setDensity(displayId: Int, dpi: Int): Result<String> {
-        val command = "wm density $dpi -d $displayId"
+    suspend fun setDensity(dpi: Int): Result<String> {
+        // Применяем глобально (флаг -d не работает адресно на Fold 7)
+        val command = "wm density $dpi"
         return ShizukuCommandRunner.execute(command).map { "DPI изменён на $dpi" }
     }
     
-    suspend fun getCurrentDensity(displayId: Int): Result<Int> {
-        val command = "wm density -d $displayId"
+    suspend fun getCurrentDensity(): Result<Int> {
+        val command = "wm density"
         return ShizukuCommandRunner.execute(command).mapCatching { rawOutput ->
             lastRawOutput = rawOutput
             
-            // Пробуем несколько форматов вывода
-            // Формат 1: "Physical density: 420; override density: 360"
-            val overrideRegex = Regex("override density: (\\d+)")
+            // Формат: "Physical density: 420\nOverride density: 360"
+            val overrideRegex = Regex("[Oo]verride density: (\\d+)")
             val overrideMatch = overrideRegex.find(rawOutput)
             if (overrideMatch != null) {
                 return@mapCatching overrideMatch.groupValues[1].toInt()
             }
             
-            // Формат 2: "Override density: 360" (с большой буквы)
-            val overrideRegex2 = Regex("Override density: (\\d+)")
-            val overrideMatch2 = overrideRegex2.find(rawOutput)
-            if (overrideMatch2 != null) {
-                return@mapCatching overrideMatch2.groupValues[1].toInt()
-            }
-            
-            // Формат 3: просто число в выводе (некоторые версии wm)
-            val numberRegex = Regex("(\\d+)")
-            val numbers = numberRegex.findAll(rawOutput).map { it.groupValues[1].toInt() }.toList()
-            if (numbers.size >= 2) {
-                // Если два числа — второе обычно override
-                return@mapCatching numbers[1]
-            }
-            if (numbers.size == 1) {
-                return@mapCatching numbers[0]
-            }
-            
-            // Формат 4: "Physical density: 420" — берём физическую
+            // Если нет override, берём физическую плотность
             val physicalRegex = Regex("Physical density: (\\d+)")
             val physicalMatch = physicalRegex.find(rawOutput)
             if (physicalMatch != null) {

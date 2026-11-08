@@ -48,35 +48,20 @@ object DisplayUtils {
         )
     }
 
-    // Для Fold 7: используем МИНИМАЛЬНУЮ сторону, чтобы поворот не влиял
-    // Внешний: min(1080, 2520) = 1080
-    // Внутренний: min(1968, 2184) = 1968
     private fun isExternalScreen(width: Int, height: Int): Boolean {
         val minSide = minOf(width, height)
         return minSide < 1200
     }
 
-    fun getInnerDisplay(context: Context): DisplayInfo? {
-        return getAllDisplays(context).firstOrNull { !it.isExternal }
-    }
-
-    fun getOuterDisplay(context: Context): DisplayInfo? {
-        return getAllDisplays(context).firstOrNull { it.isExternal }
-    }
-
     fun getDiagnosticString(context: Context): String {
         val displays = getAllDisplays(context)
         val active = getActiveDisplay(context)
-        val inner = getInnerDisplay(context)
-        val outer = getOuterDisplay(context)
         
         val sb = StringBuilder("=== DIAGNOSTICS ===\n")
         sb.append("Active Display ID: ${active?.displayId}\n")
         sb.append("Active is External: ${active?.isExternal}\n")
         sb.append("Active Resolution: ${active?.width}x${active?.height}\n")
-        sb.append("Active min side: ${if (active != null) minOf(active.width, active.height) else "?"}\n")
-        sb.append("Identified Inner: ID ${inner?.displayId} (${inner?.width}x${inner?.height})\n")
-        sb.append("Identified Outer: ID ${outer?.displayId} (${outer?.width}x${outer?.height})\n\n")
+        sb.append("Active min side: ${if (active != null) minOf(active.width, active.height) else "?"}\n\n")
         
         displays.forEach {
             sb.append("ID: ${it.displayId} | Name: ${it.name}\n")
@@ -84,7 +69,6 @@ object DisplayUtils {
             sb.append("  min side: ${minOf(it.width, it.height)}\n\n")
         }
         
-        // Показываем сырой вывод wm density для отладки
         sb.append("=== WM DENSITY RAW OUTPUT ===\n")
         sb.append(ShizukuManager.lastRawOutput.ifEmpty { "(ещё не запрашивался)" })
         

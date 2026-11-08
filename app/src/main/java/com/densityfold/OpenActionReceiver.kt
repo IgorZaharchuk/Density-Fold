@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import com.densityfold.data.DensityPreferences
-import com.densityfold.engine.DisplayUtils
 import com.densityfold.engine.ShizukuManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,16 +22,7 @@ class OpenActionReceiver : BroadcastReceiver() {
             try {
                 val prefs = DensityPreferences(context)
                 val targetDpi = prefs.getInnerDpi()
-                val display = DisplayUtils.getActiveDisplay(context)
-                
-                if (display == null) {
-                    withContext(Dispatchers.Main) { 
-                        Toast.makeText(context, "Дисплей не найден", Toast.LENGTH_SHORT).show() 
-                    }
-                    return@launch
-                }
-                
-                val result = ShizukuManager.setDensity(display.displayId, targetDpi)
+                val result = ShizukuManager.setDensity(targetDpi)
                 withContext(Dispatchers.Main) {
                     val message = if (result.isSuccess) "Внутренний экран: $targetDpi dpi" 
                                   else "Ошибка: ${result.exceptionOrNull()?.message}"
