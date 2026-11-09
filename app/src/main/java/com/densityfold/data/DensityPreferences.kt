@@ -16,6 +16,7 @@ class DensityPreferences(private val context: Context) {
         val INNER_DP = intPreferencesKey("inner_dp")
         val OUTER_DP = intPreferencesKey("outer_dp")
         val FOLD_MONITOR_ENABLED = booleanPreferencesKey("fold_monitor_enabled")
+        val AUTO_START_ENABLED = booleanPreferencesKey("auto_start_enabled")
         
         val INNER_DPI_LEGACY = intPreferencesKey("inner_dpi")
         val OUTER_DPI_LEGACY = intPreferencesKey("outer_dpi")
@@ -23,6 +24,7 @@ class DensityPreferences(private val context: Context) {
         const val DEFAULT_INNER_DP = 900
         const val DEFAULT_OUTER_DP = 411
         const val DEFAULT_MONITOR_ENABLED = false
+        const val DEFAULT_AUTO_START_ENABLED = false
         
         const val MIN_DP = 200
         const val MAX_DP = 1200
@@ -31,10 +33,12 @@ class DensityPreferences(private val context: Context) {
     suspend fun getInnerDp(): Int = context.dataStore.data.first()[INNER_DP] ?: DEFAULT_INNER_DP
     suspend fun getOuterDp(): Int = context.dataStore.data.first()[OUTER_DP] ?: DEFAULT_OUTER_DP
     suspend fun isFoldMonitorEnabled(): Boolean = context.dataStore.data.first()[FOLD_MONITOR_ENABLED] ?: DEFAULT_MONITOR_ENABLED
+    suspend fun isAutoStartEnabled(): Boolean = context.dataStore.data.first()[AUTO_START_ENABLED] ?: DEFAULT_AUTO_START_ENABLED
     
     suspend fun setInnerDp(dp: Int) { context.dataStore.edit { it[INNER_DP] = dp.coerceIn(MIN_DP, MAX_DP) } }
     suspend fun setOuterDp(dp: Int) { context.dataStore.edit { it[OUTER_DP] = dp.coerceIn(MIN_DP, MAX_DP) } }
     suspend fun setFoldMonitorEnabled(enabled: Boolean) { context.dataStore.edit { it[FOLD_MONITOR_ENABLED] = enabled } }
+    suspend fun setAutoStartEnabled(enabled: Boolean) { context.dataStore.edit { it[AUTO_START_ENABLED] = enabled } }
     
     suspend fun migrateLegacyDpiToDp(innerShortPx: Int, outerShortPx: Int) {
         val prefs = context.dataStore.data.first()

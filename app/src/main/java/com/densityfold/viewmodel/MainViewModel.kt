@@ -21,6 +21,7 @@ data class UiState(
     val innerDp: Int = 900,
     val outerDp: Int = 411,
     val isFoldMonitorEnabled: Boolean = false,
+    val isAutoStartEnabled: Boolean = false,
     val isShizukuAvailable: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
@@ -49,6 +50,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             innerDp = preferences.getInnerDp(),
             outerDp = preferences.getOuterDp(),
             isFoldMonitorEnabled = preferences.isFoldMonitorEnabled(),
+            isAutoStartEnabled = preferences.isAutoStartEnabled(),
             isShizukuAvailable = ShizukuManager.isShizukuAvailable()
         )
 
@@ -66,6 +68,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             preferences.setFoldMonitorEnabled(enabled)
             _uiState.value = _uiState.value.copy(isFoldMonitorEnabled = enabled)
             updateFoldMonitorService(enabled)
+        }
+    }
+
+    fun setAutoStartEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.setAutoStartEnabled(enabled)
+            _uiState.value = _uiState.value.copy(isAutoStartEnabled = enabled)
         }
     }
 
@@ -125,9 +134,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * Общая логика применения DPI. Устраняет дублирование между applyInner/applyOuter.
-     */
     private suspend fun applyDensity(
         targetDp: Int,
         isInner: Boolean,
