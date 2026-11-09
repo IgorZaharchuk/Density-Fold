@@ -19,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import rikka.shizuku.Shizuku
@@ -67,6 +68,28 @@ class FoldMonitorService : Service() {
                     performDensityCheck()
                 } catch (e: Exception) {
                     Log.e(TAG, "Исключение при обработке события DPI: ${e.message}", e)
+                }
+            }
+        }
+
+        // Резервная проверка Shizuku: обнаруживает восстановление Binder
+        // даже если OnBinderReceivedListener не обновил уведомление.
+        scope.launch {
+            var wasAvailable = ShizukuManager.isShizukuAvailable()
+            while (true) {
+                delay(3000)
+                val isAvailable = ShizukuManager.isShizukuAvailable()
+
+                if (isAvailable != wasAvailable) {
+                    Log.i(TAG, "Доступность Shizuku изменилась: $wasAvailable -> $isAvailable")
+                    wasAvailable = isAvailable
+
+                    if (isAvailable) {
+                        updateMonitorNotification("Мониторинг складывания активен")
+                        scheduleDensityCheck()
+                    } else {
+                        updateMonitorNotification("Shizuku недоступен")
+                    }
                 }
             }
         }
