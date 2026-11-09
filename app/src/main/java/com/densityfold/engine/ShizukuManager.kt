@@ -9,7 +9,8 @@ object ShizukuManager {
 
     fun isShizukuAvailable(): Boolean {
         return try {
-            Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+            Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED &&
+                Shizuku.pingBinder()
         } catch (e: Exception) {
             false
         }

@@ -56,8 +56,21 @@ class DensityActionService : Service() {
                     return@launch
                 }
 
-                val currentDpi = ShizukuManager.getCurrentDensity().getOrNull()
-                if (currentDpi != null && currentDpi == targetDpi) {
+                val currentDpiResult = ShizukuManager.getCurrentDensity()
+                if (currentDpiResult.isFailure) {
+                    val error = currentDpiResult.exceptionOrNull()
+                    Log.w(TAG, "Cannot read current DPI: ${error?.message}")
+                    showNotification(
+                        applicationContext,
+                        screenName,
+                        targetDp,
+                        false,
+                        error?.message ?: "Не удалось проверить подключение Shizuku"
+                    )
+                    return@launch
+                }
+                val currentDpi = currentDpiResult.getOrNull()
+                if (currentDpi == targetDpi) {
                     Log.d(TAG, "Bypass: currentDpi ($currentDpi) == targetDpi ($targetDpi)")
                     return@launch
                 }

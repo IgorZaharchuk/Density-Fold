@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import rikka.shizuku.Shizuku
 
 data class UiState(
     val activeDisplay: DisplayInfo? = null,
@@ -34,7 +35,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
+    private val shizukuBinderReceivedListener = Shizuku.OnBinderReceivedListener {
+        _uiState.value = _uiState.value.copy(
+            isShizukuAvailable = ShizukuManager.isShizukuAvailable(),
+            errorMessage = null
+        )
+        viewModelScope.launch { refreshDisplaysInternal() }
+    }
+
+    private val shizukuBinderDeadListener = Shizuku.OnBinderDeadListener {
+        _uiState.value = _uiState.value.copy(
+            isShizukuAvailable = false,
+            currentDensity = 0,
+            currentDp = 0,
+            isLoading = false,
+            errorMessage = "Shizuku отключён. Автоприменение приостановлено."
+        )
+    }
+
     init {
+        Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener)
+        Shizuku.addBinderDeadListener(shizukuBinderDeadListener)
         viewModelScope.launch {
             loadSettingsInternal()
             refreshDisplaysInternal()
@@ -160,7 +181,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        val freshDpi = ShizukuManager.getCurrentDensity().getOrNull()
+        val freshDpiResult = ShizukuManager.getCurrentDensity()
+        if (freshDpiResult.isFailure) {
+            val error = freshDpiResult.exceptionOrNull()
+            _uiState.value = state.copy(
+                isShizukuAvailable = ShizukuManager.isShizukuAvailable(),
+                errorMessage = error?.message ?: "Не удалось связаться с Shizuku",
+                isLoading = false
+            )
+            return
+        }
+        val freshDpi = freshDpiResult.getOrNull()
         if (freshDpi != null && freshDpi == targetDpi) {
             _uiState.value = state.copy(
                 currentDensity = targetDpi,
@@ -185,6 +216,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             },
             onFailure = { _uiState.value = _uiState.value.copy(errorMessage = it.message, isLoading = false) }
         )
+    }
+
+    override fun onCleared() {
+        Shizuku.removeBinderReceivedListener(shizukuBinderReceivedListener)
+        Shizuku.removeBinderDeadListener(shizukuBinderDeadListener)
+        super.onCleared()
     }
 
     fun requestShizukuPermission() {
