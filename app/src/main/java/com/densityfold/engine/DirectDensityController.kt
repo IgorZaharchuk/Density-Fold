@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Process
+import android.provider.Settings
 import java.lang.reflect.InvocationTargetException
 
 /**
@@ -12,6 +13,50 @@ import java.lang.reflect.InvocationTargetException
  * Пока не подключён к основному механизму применения DPI.
  */
 object DirectDensityController {
+
+    fun inspectSecureDensity(context: Context): Result<String> {
+        if (context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            return Result.failure(SecurityException("Нет WRITE_SECURE_SETTINGS"))
+        }
+
+        return try {
+            val key = "display_density_forced"
+            val stored = Settings.Secure.getString(context.contentResolver, key)
+            val active = DisplayUtils.getActiveDisplay(context)
+                ?: error("Не удалось определить активный экран")
+
+            val global = Class.forName("android.view.WindowManagerGlobal")
+            val getter = global.getDeclaredMethod("getWindowManagerService")
+            getter.isAccessible = true
+            val service = getter.invoke(null) ?: error("WindowManagerService вернул null")
+
+            fun readMethod(name: String): String = try {
+                val method = service.javaClass.getMethod(name, Int::class.javaPrimitiveType)
+                method.invoke(service, active.displayId)?.toString() ?: "null"
+            } catch (e: Exception) {
+                "недоступен: ${e.javaClass.simpleName}: ${e.message}"
+            }
+
+            Result.success(
+                "Режим: только чтение\n" +
+                "Экран: ${active.name}, ID=${active.displayId}\n" +
+                "Фактический DPI (DisplayMetrics): ${active.density}\n" +
+                "Settings.Secure[$key]: ${stored ?: "(пусто)"}\n" +
+                "WindowManager getBaseDisplayDensity: ${readMethod("getBaseDisplayDensity")}\n" +
+                "WindowManager getInitialDisplayDensity: ${readMethod("getInitialDisplayDensity")}\n\n" +
+                "Настройки не изменялись."
+            )
+        } catch (e: Exception) {
+            Result.failure(IllegalStateException(
+                "Ошибка чтения системных параметров: ${e.message}", e
+            ))
+        } catch (e: LinkageError) {
+            Result.failure(IllegalStateException("Ошибка системного API: ${e.message}", e))
+        }
+    }
+
 
     fun inspectRuntimeApi(context: Context): Result<String> {
         if (context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS)

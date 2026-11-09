@@ -164,20 +164,15 @@ fun MainScreen(viewModel: MainViewModel) {
                         ) { Text("Выдать разрешение через Shizuku") }
                     }
                     Button(
-                        onClick = { viewModel.inspectDirectApi() },
+                        onClick = { viewModel.inspectSecureSettings() },
                         enabled = uiState.directPermissionGranted && !uiState.isLoading,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Исследовать методы WindowManagerService") }
-                    Button(
-                        onClick = { viewModel.testDirectDensity() },
-                        enabled = uiState.directPermissionGranted && !uiState.isLoading,
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Проверить прямое изменение DPI") }
+                    ) { Text("Прочитать системные параметры DPI") }
                     if (uiState.directTestResult.isNotBlank()) {
                         Text(uiState.directTestResult, style = MaterialTheme.typography.bodySmall)
                     }
                     Text(
-                        "Тест временно меняет DPI на 1 пункт и затем восстанавливает исходное состояние. Основные кнопки и автоприменение остаются на Shizuku.",
+                        "Диагностика только читает системные настройки и параметры WindowManager. DPI не изменяется. Основные функции остаются на Shizuku.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

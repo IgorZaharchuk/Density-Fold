@@ -264,17 +264,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
 
-    fun inspectDirectApi() {
+
+    fun inspectSecureSettings() {
         viewModelScope.launch {
             val context = getApplication<Application>().applicationContext
             _uiState.value = _uiState.value.copy(
                 isLoading = true,
                 errorMessage = null,
-                directTestResult = "Исследую runtime-класс WindowManagerService..."
+                directTestResult = "Читаю системные параметры плотности..."
             )
 
             val result = withContext(Dispatchers.IO) {
-                DirectDensityController.inspectRuntimeApi(context)
+                DirectDensityController.inspectSecureDensity(context)
             }
 
             _uiState.value = _uiState.value.copy(
