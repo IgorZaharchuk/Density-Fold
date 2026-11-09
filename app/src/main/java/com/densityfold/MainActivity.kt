@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
 fun MainScreen(viewModel: MainViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     var showDiagnostics by remember { mutableStateOf(false) }
+    var showDirectGrantConfirm by remember { mutableStateOf(false) }
     
     var innerDpText by remember { mutableStateOf(uiState.innerDp.toString()) }
     var outerDpText by remember { mutableStateOf(uiState.outerDp.toString()) }
@@ -146,6 +147,39 @@ fun MainScreen(viewModel: MainViewModel) {
             }
 
             Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Эксперимент: прямое управление DPI", fontWeight = FontWeight.Bold)
+                    Text(
+                        if (uiState.directPermissionGranted)
+                            "WRITE_SECURE_SETTINGS: разрешение выдано"
+                        else
+                            "WRITE_SECURE_SETTINGS: разрешение не выдано",
+                        color = if (uiState.directPermissionGranted)
+                            MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                    )
+                    if (!uiState.directPermissionGranted) {
+                        Button(
+                            onClick = { showDirectGrantConfirm = true },
+                            enabled = uiState.isShizukuAvailable && !uiState.isLoading
+                        ) { Text("Выдать разрешение через Shizuku") }
+                    }
+                    Button(
+                        onClick = { viewModel.testDirectDensity() },
+                        enabled = uiState.directPermissionGranted && !uiState.isLoading,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Проверить прямое изменение DPI") }
+                    if (uiState.directTestResult.isNotBlank()) {
+                        Text(uiState.directTestResult, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text(
+                        "Тест временно меняет DPI на 1 пункт и затем восстанавливает исходное состояние. Основные кнопки и автоприменение остаются на Shizuku.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("Настройка плотности (dp)", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Text("Допустимый диапазон: 200–1200 dp", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -203,6 +237,29 @@ fun MainScreen(viewModel: MainViewModel) {
                 }
             }
         }
+    }
+
+    if (showDirectGrantConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDirectGrantConfirm = false },
+            title = { Text("Выдать системное разрешение?") },
+            text = {
+                Text(
+                    "Density Fold выполнит через Shizuku команду pm grant для WRITE_SECURE_SETTINGS. " +
+                    "Это позволит приложению отдельно проверять прямой вызов системного управления DPI. " +
+                    "Основные функции пока останутся на Shizuku."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDirectGrantConfirm = false
+                    viewModel.grantDirectPermission()
+                }) { Text("Выдать") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDirectGrantConfirm = false }) { Text("Отмена") }
+            }
+        )
     }
 
     if (showDiagnostics) {

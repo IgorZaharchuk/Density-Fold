@@ -92,4 +92,41 @@ object DirectDensityController {
             )
         }
     }
+    fun resetDensity(context: Context, displayId: Int): Result<String> {
+        if (displayId < 0) {
+            return Result.failure(IllegalArgumentException("Некорректный displayId: $displayId"))
+        }
+        if (context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            return Result.failure(SecurityException("Нет WRITE_SECURE_SETTINGS"))
+        }
+
+        return try {
+            val global = Class.forName("android.view.WindowManagerGlobal")
+            val getService = global.getDeclaredMethod("getWindowManagerService")
+            getService.isAccessible = true
+            val service = getService.invoke(null) ?: error("WindowManagerService вернул null")
+            val iface = Class.forName("android.view.IWindowManager")
+            val method = iface.getMethod(
+                "clearForcedDisplayDensityForUser",
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType
+            )
+            val userId = Process.myUid() / 100000
+            method.invoke(service, displayId, userId)
+            Result.success("Сброшено переопределение DPI: displayId=$displayId")
+        } catch (e: InvocationTargetException) {
+            val cause = e.targetException ?: e
+            Result.failure(IllegalStateException(
+                "IWindowManager не сбросил DPI: ${cause.message ?: cause.javaClass.simpleName}", cause
+            ))
+        } catch (e: Exception) {
+            Result.failure(IllegalStateException(
+                "Не удалось сбросить DPI: ${e.message ?: e.javaClass.simpleName}", e
+            ))
+        } catch (e: LinkageError) {
+            Result.failure(IllegalStateException("Ошибка системного API: ${e.message}", e))
+        }
+    }
 }
