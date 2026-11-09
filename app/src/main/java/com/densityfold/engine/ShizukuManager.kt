@@ -32,44 +32,44 @@ object ShizukuManager {
         val command = "wm density $dpi"
         return ShizukuCommandRunner.execute(command).map { "DPI изменён на $dpi" }
     }
-    
-    /**
-     * Единый метод парсинга действующей плотности из сырого вывода wm density.
-     * Приоритет:
-     * 1. Override density (фактически действующее значение).
-     * 2. Physical density (заводская плотность, если override не задан).
-     * Возвращает 0, если ни одно значение не найдено или некорректно.
-     */
+
     fun parseDensity(rawOutput: String): Int {
         if (rawOutput.isBlank()) return 0
-        
+
         val overrideRegex = Regex("Override density:\\s*(\\d+)")
         val overrideMatch = overrideRegex.find(rawOutput)
         if (overrideMatch != null) {
             val value = overrideMatch.groupValues[1].toIntOrNull()
             if (value != null && value > 0) return value
         }
-        
+
         val physicalRegex = Regex("Physical density:\\s*(\\d+)")
         val physicalMatch = physicalRegex.find(rawOutput)
         if (physicalMatch != null) {
             val value = physicalMatch.groupValues[1].toIntOrNull()
             if (value != null && value > 0) return value
         }
-        
+
         return 0
     }
 
     suspend fun getCurrentDensity(): Result<Int> {
         val command = "wm density"
-        return ShizukuCommandRunner.execute(command).mapCatching { rawOutput ->
-            lastRawOutput = rawOutput
-            val density = parseDensity(rawOutput)
-            if (density > 0) {
-                density
-            } else {
-                throw Exception("Не удалось определить плотность. Вывод: $rawOutput")
+        return ShizukuCommandRunner.execute(command).fold(
+            onSuccess = { rawOutput ->
+                lastRawOutput = rawOutput
+                val density = parseDensity(rawOutput)
+                if (density > 0) {
+                    Result.success(density)
+                } else {
+                    Result.failure(Exception("Не удалось определить плотность. Вывод: $rawOutput"))
+                }
+            },
+            onFailure = { error ->
+                // Сохраняем текст ошибки в lastRawOutput для диагностики
+                lastRawOutput = "ОШИБКА: ${error.message ?: error::class.simpleName}"
+                Result.failure(error)
             }
-        }
+        )
     }
 }

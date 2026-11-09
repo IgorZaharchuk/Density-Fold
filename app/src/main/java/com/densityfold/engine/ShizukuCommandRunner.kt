@@ -3,6 +3,8 @@ package com.densityfold.engine
 import android.content.ComponentName
 import android.content.ServiceConnection
 import android.os.IBinder
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.suspendCancellableCoroutine
 import rikka.shizuku.Shizuku
 import rikka.shizuku.Shizuku.UserServiceArgs
@@ -11,7 +13,7 @@ import kotlin.coroutines.resumeWithException
 
 object ShizukuCommandRunner {
     private var service: IShizukuService? = null
-    private var isBound = false
+    private val bindMutex = Mutex()
 
     private val userServiceArgs = UserServiceArgs(
         ComponentName("com.densityfold", "com.densityfold.engine.ShizukuUserService")
@@ -24,7 +26,9 @@ object ShizukuCommandRunner {
     suspend fun execute(command: String): Result<String> {
         return try {
             ensureBound()
-            val rawResult = service?.executeCommand(command)
+            val currentService = service
+                ?: return Result.failure(IllegalStateException("Service is null after binding"))
+            val rawResult = currentService.executeCommand(command)
             if (rawResult == null) {
                 Result.failure(IllegalStateException("Service returned null"))
             } else {
@@ -45,72 +49,45 @@ object ShizukuCommandRunner {
     }
 
     private suspend fun ensureBound() {
-        if (isBound && service != null) return
-
-        suspendCancellableCoroutine { cont ->
-            var resumed = false
-
-            // 1. Объявляем lateinit ПЕРЕД использованием
-            lateinit var serviceConnection: ServiceConnection
-            lateinit var binderReceivedListener: Shizuku.OnBinderReceivedListener
-
-            // 2. Присваиваем реализацию
-            binderReceivedListener = Shizuku.OnBinderReceivedListener {
-                try {
-                    if (!isBound) {
-                        Shizuku.bindUserService(userServiceArgs, serviceConnection)
-                    } else if (!resumed) {
-                        resumed = true
-                        // 3. Используем явную ссылку на переменную
-                        Shizuku.removeBinderReceivedListener(binderReceivedListener)
-                        cont.resume(Unit)
-                    }
-                } catch (e: Exception) {
-                    if (!resumed) {
-                        resumed = true
-                        // 3. Используем явную ссылку на переменную
-                        Shizuku.removeBinderReceivedListener(binderReceivedListener)
-                        cont.resumeWithException(e)
-                    }
-                }
+        bindMutex.withLock {
+            // Проверяем, что Shizuku вообще жив
+            if (!Shizuku.pingBinder()) {
+                service = null
+                throw IllegalStateException("Shizuku binder is not alive")
             }
 
-            // 4. Теперь безопасно присваиваем реализацию serviceConnection
-            serviceConnection = object : ServiceConnection {
-                override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-                    if (!resumed) {
-                        Shizuku.removeBinderReceivedListener(binderReceivedListener)
-                        if (binder != null) {
+            // Если сервис уже привязан — выходим
+            if (service != null) {
+                return
+            }
+
+            // Привязываем сервис через suspendCancellableCoroutine
+            suspendCancellableCoroutine<Unit> { cont ->
+                var resumed = false
+
+                val connection = object : ServiceConnection {
+                    override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+                        if (!resumed) {
                             resumed = true
-                            service = IShizukuService.Stub.asInterface(binder)
-                            isBound = true
-                            cont.resume(Unit)
-                        } else {
-                            resumed = true
-                            cont.resumeWithException(IllegalStateException("Binder is null"))
+                            if (binder != null) {
+                                service = IShizukuService.Stub.asInterface(binder)
+                                cont.resume(Unit)
+                            } else {
+                                cont.resumeWithException(IllegalStateException("Binder is null"))
+                            }
                         }
                     }
+
+                    override fun onServiceDisconnected(name: ComponentName?) {
+                        service = null
+                    }
                 }
 
-                override fun onServiceDisconnected(name: ComponentName?) {
-                    service = null
-                    isBound = false
+                Shizuku.bindUserService(userServiceArgs, connection)
+
+                cont.invokeOnCancellation {
+                    // Shizuku сам управляет жизненным циклом сервиса
                 }
-            }
-
-            // 5. Регистрируем sticky listener
-            Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
-
-            // 6. Дополнительная страховка: если сервис уже был привязан до создания корутины
-            if (isBound && service != null && !resumed) {
-                resumed = true
-                Shizuku.removeBinderReceivedListener(binderReceivedListener)
-                cont.resume(Unit)
-            }
-
-            // 7. Очистка при отмене корутины
-            cont.invokeOnCancellation {
-                Shizuku.removeBinderReceivedListener(binderReceivedListener)
             }
         }
     }

@@ -20,7 +20,7 @@ data class DisplayInfo(
 
 object DisplayUtils {
     const val INNER_THRESHOLD_PX = 1400
-    
+
     fun getActiveDisplay(context: Context): DisplayInfo? {
         val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager ?: return null
         val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY) ?: return null
@@ -65,50 +65,64 @@ object DisplayUtils {
             )
         }
     }
-    
+
     fun getInnerShortPx(context: Context): Int {
         val active = getActiveDisplay(context)
         return if (active != null && !active.isExternal) active.shortPx else 1968
     }
-    
+
     fun getOuterShortPx(context: Context): Int {
         val active = getActiveDisplay(context)
         return if (active != null && active.isExternal) active.shortPx else 1080
     }
-    
+
     fun dpToDpi(dp: Int, shortPx: Int): Int? {
         if (dp <= 0 || shortPx <= 0) return null
         return (shortPx * 160f / dp).toInt().coerceIn(72, 2000)
     }
-    
+
     fun dpiToDp(dpi: Int, shortPx: Int): Int {
         if (dpi <= 0 || shortPx <= 0) return 0
         return (shortPx * 160f / dpi).toInt()
     }
 
     fun getDiagnosticString(context: Context): String {
+        val sb = StringBuilder()
+        sb.appendLine("=== Текущий экран ===")
+
         val active = getActiveDisplay(context)
-        val sb = StringBuilder("=== Текущий экран ===\n")
-        sb.append("Тип: ${active?.name ?: "не определён"}\n")
-        sb.append("Разрешение: ${active?.width ?: 0} x ${active?.height ?: 0}\n")
-        
-        val shortPx = active?.shortPx ?: 0
-        sb.append("Физический shortPx: $shortPx (порог внутреннего: $INNER_THRESHOLD_PX)\n")
-        
-        val rawOutput = ShizukuManager.lastRawOutput
-        // ИСПОЛЬЗУЕМ ЕДИНЫЙ МЕТОД ПАРСИНГА
-        val currentDpi = ShizukuManager.parseDensity(rawOutput)
-        sb.append("Текущий DPI (действующий): $currentDpi\n")
-        
-        if (currentDpi > 0 && shortPx > 0) {
-            val currentDp = dpiToDp(currentDpi, shortPx)
-            sb.append("Логическая ширина (расчётная): $currentDp dp\n")
+        if (active == null) {
+            sb.appendLine("Активный дисплей: не определён")
         } else {
-            sb.append("Логическая ширина: — (невозможно рассчитать)\n")
+            sb.appendLine("Тип: ${active.name}")
+            sb.appendLine("Разрешение: ${active.width} × ${active.height} px")
+            sb.appendLine("Физический shortPx: ${active.shortPx} (порог внутреннего: $INNER_THRESHOLD_PX)")
+            sb.appendLine("Системный DPI: ${active.density}")
         }
-        
-        sb.append("\n=== WM DENSITY RAW OUTPUT ===\n")
-        sb.append(rawOutput.ifEmpty { "(не запрашивался)" })
+
+        sb.appendLine()
+        sb.appendLine("=== Плотность через Shizuku ===")
+
+        val rawOutput = ShizukuManager.lastRawOutput
+        if (rawOutput.isBlank()) {
+            sb.appendLine("Данные ещё не запрашивались")
+        } else if (rawOutput.startsWith("ОШИБКА:")) {
+            sb.appendLine(rawOutput)
+            sb.appendLine("Попробуйте открыть приложение и дождаться подключения Shizuku")
+        } else {
+            val currentDpi = ShizukuManager.parseDensity(rawOutput)
+            sb.appendLine("Текущий DPI: $currentDpi")
+
+            if (active != null && currentDpi > 0) {
+                val currentDp = dpiToDp(currentDpi, active.shortPx)
+                sb.appendLine("Логическая ширина: $currentDp dp")
+            }
+
+            sb.appendLine()
+            sb.appendLine("=== WM DENSITY RAW OUTPUT ===")
+            sb.appendLine(rawOutput)
+        }
+
         return sb.toString()
     }
 }
