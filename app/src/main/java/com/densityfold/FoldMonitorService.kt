@@ -115,17 +115,15 @@ class FoldMonitorService : Service() {
             notificationManager.createNotificationChannel(channel)
         }
         
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Density Fold")
-            .setContentText(
-                if (ShizukuManager.isShizukuAvailable()) "Мониторинг складывания активен"
-                else "Shizuku недоступен"
-            )
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true)
-            .setContentIntent(createOpenAppPendingIntent())
-            .build()
+        val active = DisplayUtils.getActiveDisplay(applicationContext)
+        val initialMessage = if (active != null && active.density > 0) {
+            formatDisplayStatus(active.isExternal, active.shortPx, active.density)
+        } else if (ShizukuManager.isShizukuAvailable()) {
+            "Мониторинг складывания активен"
+        } else {
+            "Shizuku недоступен"
+        }
+        val notification = buildMonitorNotification(initialMessage)
             
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -140,8 +138,8 @@ class FoldMonitorService : Service() {
         }
     }
 
-    private fun updateMonitorNotification(message: String) {
-        val notification = NotificationCompat.Builder(this, "fold_monitor_channel")
+    private fun buildMonitorNotification(message: String): android.app.Notification {
+        return NotificationCompat.Builder(this, "fold_monitor_channel")
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Density Fold")
             .setContentText(message)
@@ -149,9 +147,17 @@ class FoldMonitorService : Service() {
             .setOngoing(true)
             .setContentIntent(createOpenAppPendingIntent())
             .build()
+    }
 
+    private fun formatDisplayStatus(isExternal: Boolean, shortPx: Int, dpi: Int): String {
+        val logicalWidthDp = DisplayUtils.dpiToDp(dpi, shortPx)
+        val screenName = if (isExternal) "Внешний" else "Внутренний"
+        return "$screenName экран · $dpi DPI · $logicalWidthDp dp"
+    }
+
+    private fun updateMonitorNotification(message: String) {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(1, notification)
+        manager.notify(1, buildMonitorNotification(message))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -202,7 +208,7 @@ class FoldMonitorService : Service() {
 
         if (currentDpi == targetDpi) {
             updateMonitorNotification(
-                "${if (isExternal) "Внешний" else "Внутренний"} экран · $targetDpi DPI"
+                formatDisplayStatus(isExternal, active.shortPx, currentDpi)
             )
             // DPI уже правильный — но нужно подтвердить, что дисплей не сменился
             val currentActive = DisplayUtils.getActiveDisplay(applicationContext)
@@ -241,7 +247,7 @@ class FoldMonitorService : Service() {
                     Log.w(TAG, "Не удалось подтвердить применение DPI: не удалось получить текущий DPI. Состояние НЕ зафиксировано.")
                 } else if (actualDpi == targetDpi) {
                     updateMonitorNotification(
-                        "${if (isExternal) "Внешний" else "Внутренний"} экран · $actualDpi DPI"
+                        formatDisplayStatus(currentActive.isExternal, currentActive.shortPx, actualDpi)
                     )
                     lastWasExternal = isExternal
                     Log.d(TAG, "DPI успешно применён и подтверждён ($targetDpi). Состояние зафиксировано.")
