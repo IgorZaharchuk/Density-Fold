@@ -164,6 +164,11 @@ fun MainScreen(viewModel: MainViewModel) {
                         ) { Text("Выдать разрешение через Shizuku") }
                     }
                     Button(
+                        onClick = { viewModel.inspectDirectApi() },
+                        enabled = uiState.directPermissionGranted && !uiState.isLoading,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Исследовать методы WindowManagerService") }
+                    Button(
                         onClick = { viewModel.testDirectDensity() },
                         enabled = uiState.directPermissionGranted && !uiState.isLoading,
                         modifier = Modifier.fillMaxWidth()

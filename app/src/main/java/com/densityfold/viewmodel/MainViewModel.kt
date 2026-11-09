@@ -263,6 +263,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+
+    fun inspectDirectApi() {
+        viewModelScope.launch {
+            val context = getApplication<Application>().applicationContext
+            _uiState.value = _uiState.value.copy(
+                isLoading = true,
+                errorMessage = null,
+                directTestResult = "Исследую runtime-класс WindowManagerService..."
+            )
+
+            val result = withContext(Dispatchers.IO) {
+                DirectDensityController.inspectRuntimeApi(context)
+            }
+
+            _uiState.value = _uiState.value.copy(
+                isLoading = false,
+                directTestResult = result.getOrElse {
+                    "Ошибка диагностики: ${it.message ?: it.javaClass.simpleName}"
+                }
+            )
+        }
+    }
+
     fun testDirectDensity() {
         viewModelScope.launch {
             val context = getApplication<Application>().applicationContext

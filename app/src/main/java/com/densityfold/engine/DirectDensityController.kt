@@ -13,6 +13,61 @@ import java.lang.reflect.InvocationTargetException
  */
 object DirectDensityController {
 
+    fun inspectRuntimeApi(context: Context): Result<String> {
+        if (context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            return Result.failure(SecurityException("Нет WRITE_SECURE_SETTINGS"))
+        }
+
+        return try {
+            val global = Class.forName("android.view.WindowManagerGlobal")
+            val getter = global.getDeclaredMethod("getWindowManagerService")
+            getter.isAccessible = true
+            val service = getter.invoke(null)
+                ?: error("WindowManagerService вернул null")
+
+            val runtimeClass = service.javaClass
+            val methods = (
+                runtimeClass.methods.toList() +
+                runtimeClass.declaredMethods.toList()
+            )
+                .distinctBy { it.toGenericString() }
+                .filter {
+                    val name = it.name.lowercase()
+                    "density" in name || "forced" in name
+                }
+                .sortedBy { it.name }
+                .joinToString("\\n") { method ->
+                    val params = method.parameterTypes.joinToString(", ") {
+                        it.simpleName
+                    }
+                    "${method.declaringClass.name}#${method.name}($params): ${method.returnType.simpleName}"
+                }
+
+            val interfaces = runtimeClass.interfaces.joinToString("\\n") {
+                it.name
+            }.ifBlank { "(нет непосредственно реализованных интерфейсов)" }
+
+            Result.success(
+                "Runtime-класс: ${runtimeClass.name}\\n" +
+                "Суперкласс: ${runtimeClass.superclass?.name ?: "(нет)"}\\n" +
+                "Интерфейсы:\\n$interfaces\\n\\n" +
+                "Методы density / forced: " +
+                (methods.ifBlank { "(не найдены)" })
+            )
+        } catch (e: Exception) {
+            Result.failure(IllegalStateException(
+                "Диагностика runtime API не удалась: ${e.javaClass.name}: ${e.message}", e
+            ))
+        } catch (e: LinkageError) {
+            Result.failure(IllegalStateException(
+                "Ошибка системного API: ${e.message}", e
+            ))
+        }
+    }
+
+
     fun setDensity(
         context: Context,
         displayId: Int,
