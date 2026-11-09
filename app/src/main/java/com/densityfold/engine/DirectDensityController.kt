@@ -23,31 +23,38 @@ object DirectDensityController {
                 IllegalArgumentException("Некорректный displayId: $displayId")
             )
         }
+
         if (density !in 72..2000) {
             return Result.failure(
                 IllegalArgumentException("Некорректное значение DPI: $density")
             )
         }
+
         if (context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS)
             != PackageManager.PERMISSION_GRANTED
         ) {
             return Result.failure(
-                SecurityException("Нет WRITE_SECURE_SETTINGS. Сначала нужно выдать разрешение.")
+                SecurityException(
+                    "Нет WRITE_SECURE_SETTINGS. Сначала нужно выдать разрешение."
+                )
             )
         }
 
         return try {
             val windowManagerGlobal =
                 Class.forName("android.view.WindowManagerGlobal")
+
             val getService = windowManagerGlobal.getDeclaredMethod(
                 "getWindowManagerService"
             )
             getService.isAccessible = true
+
             val windowManagerService = getService.invoke(null)
                 ?: error("WindowManagerService вернул null")
 
             val windowManagerInterface =
                 Class.forName("android.view.IWindowManager")
+
             val method = windowManagerInterface.getMethod(
                 "setForcedDisplayDensityForUser",
                 Int::class.javaPrimitiveType,
@@ -75,3 +82,14 @@ object DirectDensityController {
                     "Прямое управление DPI недоступно: ${e.message ?: e.javaClass.simpleName}",
                     e
                 )
+            )
+        } catch (e: LinkageError) {
+            Result.failure(
+                IllegalStateException(
+                    "Ошибка доступа к системному API: ${e.message}",
+                    e
+                )
+            )
+        }
+    }
+}
