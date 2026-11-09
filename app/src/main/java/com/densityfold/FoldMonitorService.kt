@@ -16,6 +16,7 @@ import androidx.core.app.NotificationCompat
 import com.densityfold.data.DensityPreferences
 import com.densityfold.engine.DisplayUtils
 import com.densityfold.engine.ShizukuManager
+import com.densityfold.engine.ShizukuCommandRunner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -44,9 +45,17 @@ class FoldMonitorService : Service() {
     }
 
     private val shizukuListener = Shizuku.OnBinderReceivedListener {
-        Log.d(TAG, "Получен Binder Shizuku, инициируем проверку DPI")
-        updateMonitorNotification("Мониторинг складывания активен")
-        scheduleDensityCheck()
+        Log.d(TAG, "Получен Binder Shizuku, восстанавливаем UserService")
+        scope.launch {
+            val result = ShizukuCommandRunner.reconnect()
+            if (result.isSuccess) {
+                Log.i(TAG, "UserService восстановлен после получения Binder Shizuku")
+                updateMonitorNotification("Мониторинг складывания активен")
+                scheduleDensityCheck()
+            } else {
+                Log.w(TAG, "Не удалось восстановить UserService: ${result.exceptionOrNull()?.message}")
+            }
+        }
     }
 
     private val shizukuDeadListener = Shizuku.OnBinderDeadListener {
@@ -81,15 +90,26 @@ class FoldMonitorService : Service() {
                 delay(3000)
                 val isAvailable = ShizukuManager.isShizukuAvailable()
 
-                if (isAvailable != wasAvailable) {
-                    Log.i(TAG, "Доступность Shizuku изменилась: $wasAvailable -> $isAvailable")
-                    wasAvailable = isAvailable
+                if (!isAvailable) {
+                    if (wasAvailable) {
+                        Log.i(TAG, "Доступность Shizuku изменилась: true -> false")
+                        updateMonitorNotification("Shizuku недоступен")
+                    }
+                    wasAvailable = false
+                    continue
+                }
 
-                    if (isAvailable) {
+                if (!wasAvailable) {
+                    Log.i(TAG, "Shizuku доступен, восстанавливаем UserService")
+                    val result = ShizukuCommandRunner.reconnect()
+                    if (result.isSuccess) {
+                        wasAvailable = true
+                        Log.i(TAG, "UserService восстановлен")
                         updateMonitorNotification("Мониторинг складывания активен")
                         scheduleDensityCheck()
                     } else {
-                        updateMonitorNotification("Shizuku недоступен")
+                        Log.w(TAG, "Не удалось восстановить UserService: ${result.exceptionOrNull()?.message}")
+                        updateMonitorNotification("Shizuku доступен, подключение демона…")
                     }
                 }
             }

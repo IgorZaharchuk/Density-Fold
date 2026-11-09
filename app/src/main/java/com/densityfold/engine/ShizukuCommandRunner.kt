@@ -67,6 +67,20 @@ object ShizukuCommandRunner {
         }
     }
 
+    /**
+     * Явно восстанавливает подключение фонового UserService.
+     */
+    suspend fun reconnect(): Result<Unit> {
+        return try {
+            ensureBound()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     private val userServiceArgs = UserServiceArgs(
         ComponentName(
             "com.densityfold",
