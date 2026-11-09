@@ -1,27 +1,16 @@
-<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    
-    <!-- Фон -->
-    <path
-        android:fillColor="#1a237e"
-        android:pathData="M0,0 L108,0 L108,108 L0,108 Z" />
-    
-    <!-- Закрытый Fold (только внешняя панель) -->
-    <path
-        android:fillColor="#ffffff"
-        android:pathData="M38,38 L70,38 L70,70 L38,70 Z" />
-    
-    <!-- Намёк на складку справа -->
-    <path
-        android:fillColor="#64b5f6"
-        android:pathData="M67,38 L70,38 L70,70 L67,70 Z" />
-    
-    <!-- Стрелка закрытия (две стрелки внутрь) -->
-    <path
-        android:fillColor="#ffffff"
-        android:pathData="M48,50 L54,50 L54,46 L60,50 L54,54 L54,50 Z" />
+    <path android:fillColor="#FF1A237E"
+        android:pathData="M0,0 L108,0 L108,108 L0,108 Z"/>
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M34,18 Q34,14 38,14 L70,14 Q74,14 74,18 L74,90 Q74,94 70,94 L38,94 Q34,94 34,90 Z"/>
+    <path android:fillColor="#FF64B5F6"
+        android:pathData="M67,18 L70,18 L70,90 L67,90 Z"/>
+    <path android:fillColor="#FF1A237E"
+        android:pathData="M43,23 L65,23 L65,84 L43,84 Z"/>
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M51,87 A3,3 0,1 0,57 87 A3,3 0,1 0,51 87"/>
 </vector>

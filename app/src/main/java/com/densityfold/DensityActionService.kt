@@ -119,7 +119,7 @@ class DensityActionService : Service() {
         val text = if (isSuccess) "$screenName экран: установлено $dp dp" else (errorMsg ?: "Неизвестная ошибка")
         
         val notification = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(android.R.drawable.ic_menu_manage)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_LOW)

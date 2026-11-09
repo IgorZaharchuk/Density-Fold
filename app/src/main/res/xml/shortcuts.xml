@@ -3,7 +3,7 @@
     <shortcut
         android:shortcutId="density_open"
         android:enabled="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_action_open"
         android:shortcutShortLabel="@string/shortcut_open_short"
         android:shortcutLongLabel="@string/shortcut_open_long"
         android:shortcutDisabledMessage="@string/shortcut_open_disabled">
@@ -15,7 +15,7 @@
     <shortcut
         android:shortcutId="density_closed"
         android:enabled="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_action_closed"
         android:shortcutShortLabel="@string/shortcut_closed_short"
         android:shortcutLongLabel="@string/shortcut_closed_long"
         android:shortcutDisabledMessage="@string/shortcut_closed_disabled">

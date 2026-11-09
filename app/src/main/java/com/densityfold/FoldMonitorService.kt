@@ -49,7 +49,7 @@ class FoldMonitorService : Service() {
 
     private val shizukuDeadListener = Shizuku.OnBinderDeadListener {
         Log.w(TAG, "Binder Shizuku отключён. Автоприменение приостановлено.")
-        updateMonitorNotification("Shizuku недоступен — автопереключение приостановлено")
+        updateMonitorNotification("Shizuku недоступен")
     }
 
     override fun onCreate() {
@@ -82,11 +82,11 @@ class FoldMonitorService : Service() {
         }
         
         val notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(android.R.drawable.ic_menu_manage)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Density Fold")
             .setContentText(
                 if (ShizukuManager.isShizukuAvailable()) "Мониторинг складывания активен"
-                else "Shizuku недоступен — автопереключение приостановлено"
+                else "Shizuku недоступен"
             )
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
@@ -107,7 +107,7 @@ class FoldMonitorService : Service() {
 
     private fun updateMonitorNotification(message: String) {
         val notification = NotificationCompat.Builder(this, "fold_monitor_channel")
-            .setSmallIcon(android.R.drawable.ic_menu_manage)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Density Fold")
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -141,7 +141,7 @@ class FoldMonitorService : Service() {
 
         if (!ShizukuManager.isShizukuAvailable()) {
             Log.w(TAG, "Shizuku недоступен. Состояние НЕ зафиксировано, ожидание восстановления.")
-            updateMonitorNotification("Shizuku недоступен — автопереключение приостановлено")
+            updateMonitorNotification("Shizuku недоступен")
             return
         }
 
@@ -158,13 +158,16 @@ class FoldMonitorService : Service() {
         if (currentDpiResult.isFailure) {
             Log.w(TAG, "Не удалось прочитать текущий DPI: ${currentDpiResult.exceptionOrNull()?.message}")
             if (!ShizukuManager.isShizukuAvailable()) {
-                updateMonitorNotification("Shizuku недоступен — автопереключение приостановлено")
+                updateMonitorNotification("Shizuku недоступен")
             }
             return
         }
         val currentDpi = currentDpiResult.getOrNull() ?: return
 
         if (currentDpi == targetDpi) {
+            updateMonitorNotification(
+                "${if (isExternal) "Внешний" else "Внутренний"} экран · $targetDpi DPI"
+            )
             // DPI уже правильный — но нужно подтвердить, что дисплей не сменился
             val currentActive = DisplayUtils.getActiveDisplay(applicationContext)
             if (currentActive != null && currentActive.isExternal == isExternal) {
@@ -201,6 +204,9 @@ class FoldMonitorService : Service() {
                 if (actualDpi == null) {
                     Log.w(TAG, "Не удалось подтвердить применение DPI: не удалось получить текущий DPI. Состояние НЕ зафиксировано.")
                 } else if (actualDpi == targetDpi) {
+                    updateMonitorNotification(
+                        "${if (isExternal) "Внешний" else "Внутренний"} экран · $actualDpi DPI"
+                    )
                     lastWasExternal = isExternal
                     Log.d(TAG, "DPI успешно применён и подтверждён ($targetDpi). Состояние зафиксировано.")
                 } else {
@@ -210,7 +216,7 @@ class FoldMonitorService : Service() {
             onFailure = {
                 Log.e(TAG, "Ошибка применения DPI: ${it.message}. Состояние НЕ зафиксировано.")
                 if (!ShizukuManager.isShizukuAvailable()) {
-                    updateMonitorNotification("Shizuku недоступен — автопереключение приостановлено")
+                    updateMonitorNotification("Shizuku недоступен")
                 }
             }
         )

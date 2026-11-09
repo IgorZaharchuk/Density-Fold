@@ -1,28 +1,23 @@
-<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    
-    <!-- Левая панель (внешний экран, узкая) — в safe zone -->
     <path
-        android:fillColor="#ffffff"
-        android:pathData="M36,38 L48,38 L48,70 L36,70 Z" />
-    
-    <!-- Правая панель (внутренний экран, широкая) — в safe zone -->
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M22,29 Q22,25 26,25 L49,25 L49,83 L26,83 Q22,83 22,79 Z"/>
     <path
-        android:fillColor="#64b5f6"
-        android:pathData="M50,38 L72,38 L72,70 L50,70 Z" />
-    
-    <!-- Складка посередине -->
+        android:fillColor="#FF64B5F6"
+        android:pathData="M59,25 L82,25 Q86,25 86,29 L86,79 Q86,83 82,83 L59,83 Z"/>
     <path
-        android:fillColor="#1a237e"
-        android:pathData="M49,38 L51,38 L51,70 L49,70 Z" />
-    
-    <!-- Блик на внутренней панели -->
+        android:fillColor="#FF1A237E"
+        android:pathData="M49,25 L59,25 L59,83 L49,83 Z"/>
     <path
-        android:fillColor="#ffffff"
-        android:pathData="M53,42 L69,42 L69,46 L53,46 Z"
-        android:alpha="0.4" />
+        android:fillColor="#FFFFFFFF"
+        android:alpha="0.55"
+        android:pathData="M29,32 L43,32 L43,35 L29,35 Z"/>
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:alpha="0.55"
+        android:pathData="M65,32 L79,32 L79,35 L65,35 Z"/>
 </vector>
