@@ -37,6 +37,36 @@ object ShizukuCommandRunner {
 
     private const val BIND_TIMEOUT_MS = 10_000L
 
+    // Автоматическое восстановление UserService при перезапуске Shizuku.
+    private val binderDeadListener = Shizuku.OnBinderDeadListener {
+        scope.launch { resetConnection() }
+    }
+
+    private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
+        scheduleReconnect()
+    }
+
+    init {
+        Shizuku.addBinderDeadListener(binderDeadListener)
+        Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
+    }
+
+    private fun scheduleReconnect() {
+        scope.launch {
+            for (attempt in 0 until 5) {
+                if (!Shizuku.pingBinder()) return@launch
+                try {
+                    ensureBound()
+                    return@launch
+                } catch (_: SecurityException) {
+                    return@launch
+                } catch (_: Exception) {
+                    if (attempt < 4) delay(1_000L * (attempt + 1))
+                }
+            }
+        }
+    }
+
     private val userServiceArgs = UserServiceArgs(
         ComponentName(
             "com.densityfold",
@@ -251,13 +281,15 @@ object ShizukuCommandRunner {
                 override fun onServiceDisconnected(
                     name: ComponentName?
                 ) {
-                    synchronized(stateLock) {
+                    val wasCurrent = synchronized(stateLock) {
                         if (connection === this) {
-                            // Не теряем саму ServiceConnection:
-                            // Android/Shizuku может подключить её повторно.
                             service = null
+                            true
+                        } else {
+                            false
                         }
                     }
+                    if (wasCurrent) scheduleReconnect()
                 }
 
                 override fun onBindingDied(
@@ -287,6 +319,7 @@ object ShizukuCommandRunner {
                             IllegalStateException("Binding died")
                         )
                     }
+                    scheduleReconnect()
                 }
 
                 override fun onNullBinding(
