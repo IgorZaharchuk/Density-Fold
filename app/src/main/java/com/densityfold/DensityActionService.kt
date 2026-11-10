@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.densityfold.engine.DensityApplyResult
 import com.densityfold.engine.DensityExecutor
 import com.densityfold.engine.DensityProfile
 import kotlinx.coroutines.CoroutineScope
@@ -30,10 +31,6 @@ class DensityActionService : Service() {
             return START_NOT_STICKY
         }
 
-        Log.d(TAG, "onStartCommand: action=$action, startId=$startId")
-        val isClosed = action == ACTION_CLOSED
-        val screenName = if (isClosed) "Внешний" else "Внутренний"
-
         val profile = when (action) {
             ACTION_OPEN -> DensityProfile.INNER
             ACTION_CLOSED -> DensityProfile.OUTER
@@ -44,57 +41,71 @@ class DensityActionService : Service() {
             }
         }
 
+        val fromMonitor = intent.getBooleanExtra(EXTRA_MONITOR_REQUEST, false)
+        Log.d(TAG, "onStartCommand: action=$action monitor=$fromMonitor startId=$startId")
+
         scope.launch {
+            var succeeded = false
+            var applied: DensityApplyResult? = null
+            var failureMessage: String? = null
+
             try {
                 Log.i(TAG, "Executing $profile through DensityExecutor")
 
-                val result = DensityExecutor.apply(
-                    applicationContext,
-                    profile
-                )
+                val result = DensityExecutor.apply(applicationContext, profile)
 
                 result.fold(
-                    onSuccess = { applied ->
-                        val screenName = if (applied.isExternal) "Внешний" else "Внутренний"
-                        val logicalDp = applied.targetDp
+                    onSuccess = { value ->
+                        succeeded = true
+                        applied = value
 
+                        val screenName = if (value.isExternal) "Внешний" else "Внутренний"
                         Log.i(
                             TAG,
                             "Action confirmed: screen=$screenName " +
-                                "target=${applied.targetDpi} actual=${applied.actualDpi}"
+                                "target=${value.targetDpi} actual=${value.actualDpi}"
                         )
 
                         showNotification(
                             applicationContext,
                             screenName,
-                            logicalDp,
+                            value.targetDp,
                             true,
                             null
                         )
                     },
                     onFailure = { error ->
-                        Log.e(TAG, "Density action failed: ${error.message}", error)
+                        failureMessage = error.message ?: "Не удалось применить DPI"
+                        Log.e(TAG, "Density action failed: $failureMessage", error)
 
                         showNotification(
                             applicationContext,
                             if (profile == DensityProfile.OUTER) "Внешний" else "Внутренний",
                             0,
                             false,
-                            error.message ?: "Не удалось применить DPI"
+                            failureMessage
                         )
                     }
                 )
             } catch (e: Exception) {
-                Log.e(TAG, "Exception in service: ${e.message}", e)
+                failureMessage = e.message ?: "Неизвестная ошибка"
+                Log.e(TAG, "Exception in service: $failureMessage", e)
+
                 showNotification(
                     applicationContext,
                     if (profile == DensityProfile.OUTER) "Внешний" else "Внутренний",
                     0,
                     false,
-                    e.message ?: "Неизвестная ошибка"
+                    failureMessage
                 )
             } finally {
-                sendCompletionBroadcast()
+                sendCompletionBroadcast(
+                    fromMonitor = fromMonitor,
+                    success = succeeded,
+                    applied = applied,
+                    error = failureMessage,
+                    expectedExternal = profile == DensityProfile.OUTER
+                )
                 stopSelf(startId)
             }
         }
@@ -102,23 +113,52 @@ class DensityActionService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun sendCompletionBroadcast() {
-        val intent = Intent(ACTION_COMPLETED).apply { setPackage(packageName) }
+    private fun sendCompletionBroadcast(
+        fromMonitor: Boolean,
+        success: Boolean,
+        applied: DensityApplyResult?,
+        error: String?,
+        expectedExternal: Boolean
+    ) {
+        val intent = Intent(ACTION_COMPLETED).apply {
+            setPackage(packageName)
+            putExtra(EXTRA_MONITOR_REQUEST, fromMonitor)
+            putExtra(EXTRA_SUCCESS, success)
+            putExtra(EXTRA_IS_EXTERNAL, applied?.isExternal ?: expectedExternal)
+            putExtra(EXTRA_SHORT_PX, applied?.shortPx ?: 0)
+            putExtra(EXTRA_ACTUAL_DPI, applied?.actualDpi ?: 0)
+            putExtra(EXTRA_ERROR, error)
+        }
         sendBroadcast(intent)
     }
 
-    private fun showNotification(context: Context, screenName: String, dp: Int, isSuccess: Boolean, errorMsg: String?) {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    private fun showNotification(
+        context: Context,
+        screenName: String,
+        dp: Int,
+        isSuccess: Boolean,
+        errorMsg: String?
+    ) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "density_actions_channel"
-        
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "Действия Density Fold", NotificationManager.IMPORTANCE_LOW)
-            notificationManager.createNotificationChannel(channel)
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    channelId,
+                    "Действия Density Fold",
+                    NotificationManager.IMPORTANCE_LOW
+                )
+            )
         }
-        
+
         val title = if (isSuccess) "Density Fold: Успешно" else "Density Fold: Ошибка"
-        val text = if (isSuccess) "$screenName экран: установлено $dp dp" else (errorMsg ?: "Неизвестная ошибка")
-        
+        val text = if (isSuccess) {
+            "$screenName экран: установлено $dp dp"
+        } else {
+            errorMsg ?: "Неизвестная ошибка"
+        }
+
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
@@ -126,8 +166,8 @@ class DensityActionService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setAutoCancel(true)
             .build()
-            
-        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+
+        manager.notify(System.currentTimeMillis().toInt(), notification)
     }
 
     override fun onDestroy() {
@@ -141,12 +181,29 @@ class DensityActionService : Service() {
         const val ACTION_CLOSED = "com.densityfold.ACTION_CLOSED"
         const val ACTION_COMPLETED = "com.densityfold.ACTION_COMPLETED"
 
-        fun startOpen(context: Context) {
-            context.startService(Intent(context, DensityActionService::class.java).apply { action = ACTION_OPEN })
+        const val EXTRA_MONITOR_REQUEST = "com.densityfold.EXTRA_MONITOR_REQUEST"
+        const val EXTRA_SUCCESS = "com.densityfold.EXTRA_SUCCESS"
+        const val EXTRA_IS_EXTERNAL = "com.densityfold.EXTRA_IS_EXTERNAL"
+        const val EXTRA_SHORT_PX = "com.densityfold.EXTRA_SHORT_PX"
+        const val EXTRA_ACTUAL_DPI = "com.densityfold.EXTRA_ACTUAL_DPI"
+        const val EXTRA_ERROR = "com.densityfold.EXTRA_ERROR"
+
+        fun startOpen(context: Context, fromMonitor: Boolean = false) {
+            context.startService(
+                Intent(context, DensityActionService::class.java).apply {
+                    action = ACTION_OPEN
+                    putExtra(EXTRA_MONITOR_REQUEST, fromMonitor)
+                }
+            )
         }
 
-        fun startClosed(context: Context) {
-            context.startService(Intent(context, DensityActionService::class.java).apply { action = ACTION_CLOSED })
+        fun startClosed(context: Context, fromMonitor: Boolean = false) {
+            context.startService(
+                Intent(context, DensityActionService::class.java).apply {
+                    action = ACTION_CLOSED
+                    putExtra(EXTRA_MONITOR_REQUEST, fromMonitor)
+                }
+            )
         }
     }
 }

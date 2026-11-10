@@ -4,8 +4,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.hardware.display.DisplayManager
 import android.os.Build
@@ -14,109 +16,119 @@ import android.util.Log
 import android.view.Display
 import androidx.core.app.NotificationCompat
 import com.densityfold.engine.DisplayUtils
-import com.densityfold.engine.DensityExecutor
-import com.densityfold.engine.DensityProfile
-import com.densityfold.engine.ShizukuManager
-import com.densityfold.engine.ShizukuCommandRunner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import rikka.shizuku.Shizuku
 
 class FoldMonitorService : Service() {
     private val TAG = "DensityFold-Monitor"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var displayManager: DisplayManager? = null
-    
+
     private val checkChannel = Channel<Unit>(Channel.CONFLATED)
+
+    private var lastRequestedExternal: Boolean? = null
+    private var actionInFlight = false
+    private var retryPending = false
+    private var retryJob: Job? = null
 
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
         override fun onDisplayRemoved(displayId: Int) {}
+
         override fun onDisplayChanged(displayId: Int) {
             if (displayId != Display.DEFAULT_DISPLAY) return
-            Log.d(TAG, "Обнаружено изменение дисплея (ID: $displayId)")
+            Log.d(TAG, "Изменился активный дисплей ID=$displayId")
             scheduleDensityCheck()
         }
     }
 
-    private val shizukuDeadListener = Shizuku.OnBinderDeadListener {
-        Log.w(
-            TAG,
-            "MAIN BINDER DEAD in monitor " +
-                ShizukuManager.availabilityDiagnostic()
-        )
-        updateMonitorNotification("Shizuku недоступен")
+    private val actionCompletedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != DensityActionService.ACTION_COMPLETED) return
+            if (!intent.getBooleanExtra(
+                    DensityActionService.EXTRA_MONITOR_REQUEST,
+                    false
+                )
+            ) return
+
+            actionInFlight = false
+
+            val success = intent.getBooleanExtra(
+                DensityActionService.EXTRA_SUCCESS,
+                false
+            )
+
+            if (success) {
+                retryPending = false
+                retryJob?.cancel()
+
+                val isExternal = intent.getBooleanExtra(
+                    DensityActionService.EXTRA_IS_EXTERNAL,
+                    false
+                )
+                val shortPx = intent.getIntExtra(
+                    DensityActionService.EXTRA_SHORT_PX,
+                    0
+                )
+                val actualDpi = intent.getIntExtra(
+                    DensityActionService.EXTRA_ACTUAL_DPI,
+                    0
+                )
+
+                if (shortPx > 0 && actualDpi > 0) {
+                    updateMonitorNotification(
+                        formatDisplayStatus(isExternal, shortPx, actualDpi)
+                    )
+                } else {
+                    updateMonitorNotification("Мониторинг складывания активен")
+                }
+
+                Log.i(TAG, "Действие подтверждено монитором")
+
+                val active = DisplayUtils.getActiveDisplay(applicationContext)
+                if (active == null || active.isExternal != isExternal) {
+                    Log.i(TAG, "Экран изменился во время выполнения, повторная проверка")
+                    scheduleDensityCheck()
+                }
+            } else {
+                retryPending = true
+                val error = intent.getStringExtra(DensityActionService.EXTRA_ERROR)
+                Log.w(TAG, "Действие не выполнено: ${error ?: "неизвестная ошибка"}")
+                updateMonitorNotification("Shizuku недоступен · ожидание восстановления")
+                scheduleRetry()
+            }
+        }
     }
 
     override fun onCreate() {
         super.onCreate()
-        Log.i(
-            TAG,
-            "MONITOR onCreate " + ShizukuManager.availabilityDiagnostic()
-        )
-        Log.d(TAG, "Сервис создан, регистрация слушателей")
+
+        Log.i(TAG, "MONITOR onCreate")
         displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         displayManager?.registerDisplayListener(displayListener, null)
-        Shizuku.addBinderDeadListener(shizukuDeadListener)
+
+        val filter = IntentFilter(DensityActionService.ACTION_COMPLETED)
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(actionCompletedReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(actionCompletedReceiver, filter)
+        }
+
         startForegroundSafely()
-        
+
         scope.launch {
             for (event in checkChannel) {
                 try {
                     performDensityCheck()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Исключение при обработке события DPI: ${e.message}", e)
-                }
-            }
-        }
-
-        // Резервная проверка Shizuku: обнаруживает восстановление Binder
-        // даже если OnBinderReceivedListener не обновил уведомление.
-        scope.launch {
-            var wasAvailable = ShizukuManager.isShizukuAvailable()
-            Log.i(
-                TAG,
-                "Availability poll started available=$wasAvailable " +
-                    ShizukuManager.availabilityDiagnostic()
-            )
-            while (true) {
-                delay(3000)
-                val isAvailable = ShizukuManager.isShizukuAvailable()
-
-                if (!isAvailable) {
-                    if (wasAvailable) {
-                        Log.w(
-                            TAG,
-                            "Availability true -> false " +
-                                ShizukuManager.availabilityDiagnostic()
-                        )
-                        updateMonitorNotification("Shizuku недоступен")
-                    }
-                    wasAvailable = false
-                    continue
-                }
-
-                if (!wasAvailable) {
-                    Log.i(
-                        TAG,
-                        "Availability false -> true; reconnect UserService " +
-                            ShizukuManager.availabilityDiagnostic()
-                    )
-                    val result = ShizukuCommandRunner.reconnect()
-                    if (result.isSuccess) {
-                        wasAvailable = true
-                        Log.i(TAG, "UserService восстановлен")
-                        updateMonitorNotification("Мониторинг складывания активен")
-                        scheduleDensityCheck()
-                    } else {
-                        Log.w(TAG, "Не удалось восстановить UserService: ${result.exceptionOrNull()?.message}")
-                        updateMonitorNotification("Shizuku доступен, подключение демона…")
-                    }
+                    Log.e(TAG, "Ошибка обработки смены экрана: ${e.message}", e)
                 }
             }
         }
@@ -134,32 +146,40 @@ class FoldMonitorService : Service() {
 
     private fun startForegroundSafely() {
         val channelId = "fold_monitor_channel"
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "Монитор складывания", NotificationManager.IMPORTANCE_LOW)
-            notificationManager.createNotificationChannel(channel)
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    channelId,
+                    "Монитор складывания",
+                    NotificationManager.IMPORTANCE_LOW
+                )
+            )
         }
-        
+
         val active = DisplayUtils.getActiveDisplay(applicationContext)
         val initialMessage = if (active != null && active.density > 0) {
             formatDisplayStatus(active.isExternal, active.shortPx, active.density)
-        } else if (ShizukuManager.isShizukuAvailable()) {
-            "Мониторинг складывания активен"
         } else {
-            "Shizuku недоступен"
+            "Мониторинг складывания активен"
         }
+
         val notification = buildMonitorNotification(initialMessage)
-            
+
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                startForeground(
+                    1,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
             } else {
                 startForeground(1, notification)
             }
-            Log.d(TAG, "Foreground уведомление успешно установлено")
+            Log.d(TAG, "Foreground уведомление установлено")
         } catch (e: Exception) {
-            Log.e(TAG, "Критическая ошибка запуска Foreground сервиса: ${e.message}. Сервис будет остановлен.")
+            Log.e(TAG, "Ошибка запуска Foreground: ${e.message}", e)
             stopSelf()
         }
     }
@@ -175,7 +195,11 @@ class FoldMonitorService : Service() {
             .build()
     }
 
-    private fun formatDisplayStatus(isExternal: Boolean, shortPx: Int, dpi: Int): String {
+    private fun formatDisplayStatus(
+        isExternal: Boolean,
+        shortPx: Int,
+        dpi: Int
+    ): String {
         val logicalWidthDp = DisplayUtils.dpiToDp(dpi, shortPx)
         val screenName = if (isExternal) "Внешний" else "Внутренний"
         return "$screenName экран · $dpi DPI · $logicalWidthDp dp"
@@ -187,7 +211,7 @@ class FoldMonitorService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "Сервис запущен (startId: $startId)")
+        Log.d(TAG, "Сервис запущен startId=$startId")
         scheduleDensityCheck()
         return START_STICKY
     }
@@ -197,45 +221,68 @@ class FoldMonitorService : Service() {
     }
 
     private suspend fun performDensityCheck() {
-        Log.d(TAG, "Начало проверки и применения DPI через DensityExecutor")
+        val active = DisplayUtils.getActiveDisplay(applicationContext)
+        if (active == null) {
+            Log.w(TAG, "Активный дисплей не определён")
+            return
+        }
 
-        val result = DensityExecutor.apply(
-            applicationContext,
-            DensityProfile.AUTO
-        )
+        val isExternal = active.isExternal
 
-        result.fold(
-            onSuccess = { applied ->
-                updateMonitorNotification(
-                    formatDisplayStatus(
-                        applied.isExternal,
-                        applied.shortPx,
-                        applied.actualDpi
-                    )
-                )
-                Log.d(
-                    TAG,
-                    "DPI подтверждён: целевой=${applied.targetDpi}, " +
-                        "фактический=${applied.actualDpi}"
-                )
-            },
-            onFailure = { error ->
-                Log.w(
-                    TAG,
-                    "AUTO-применение не подтверждено: ${error.message}",
-                    error
-                )
-                if (!ShizukuManager.isShizukuAvailable()) {
-                    updateMonitorNotification("Shizuku недоступен")
-                }
+        if (actionInFlight) {
+            Log.d(TAG, "Действие уже выполняется, событие объединено")
+            return
+        }
+
+        if (lastRequestedExternal == isExternal && !retryPending) {
+            return
+        }
+
+        lastRequestedExternal = isExternal
+        retryPending = false
+        actionInFlight = true
+
+        val actionName = if (isExternal) "Внешний" else "Внутренний"
+        Log.i(TAG, "Запуск действия: $actionName")
+
+        try {
+            if (isExternal) {
+                DensityActionService.startClosed(applicationContext, fromMonitor = true)
+            } else {
+                DensityActionService.startOpen(applicationContext, fromMonitor = true)
             }
-        )
+        } catch (e: Exception) {
+            actionInFlight = false
+            retryPending = true
+            Log.e(TAG, "Не удалось запустить действие: ${e.message}", e)
+            updateMonitorNotification("Не удалось запустить действие · повторная попытка")
+            scheduleRetry()
+        }
+    }
+
+    private fun scheduleRetry() {
+        if (retryJob?.isActive == true) return
+
+        retryJob = scope.launch {
+            delay(5_000L)
+            if (retryPending && !actionInFlight) {
+                Log.i(TAG, "Повторный запуск действия для текущего экрана")
+                scheduleDensityCheck()
+            }
+        }
     }
 
     override fun onDestroy() {
-        Log.d(TAG, "Сервис останавливается, очистка ресурсов")
+        Log.d(TAG, "Монитор останавливается")
         displayManager?.unregisterDisplayListener(displayListener)
-        Shizuku.removeBinderDeadListener(shizukuDeadListener)
+        retryJob?.cancel()
+
+        try {
+            unregisterReceiver(actionCompletedReceiver)
+        } catch (e: Exception) {
+            Log.w(TAG, "Не удалось снять receiver: ${e.message}")
+        }
+
         checkChannel.close()
         scope.cancel()
         super.onDestroy()
