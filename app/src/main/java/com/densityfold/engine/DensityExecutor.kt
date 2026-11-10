@@ -53,9 +53,11 @@ object DensityExecutor {
             val readiness = ShizukuManager.awaitShizukuReady(timeoutMs)
             readiness.getOrThrow()
 
+            ensureAutoDisplayUnchanged(context, profile, active)
             val currentDpi = ShizukuManager.getCurrentDensity().getOrThrow()
 
             if (currentDpi != targetDpi) {
+                ensureAutoDisplayUnchanged(context, profile, active)
                 ShizukuManager.setDensity(targetDpi).getOrThrow()
             }
 
@@ -79,6 +81,8 @@ object DensityExecutor {
                 }
             }
 
+            ensureAutoDisplayUnchanged(context, profile, active)
+
             Result.success(
                 DensityApplyResult(
                     isExternal = isExternal,
@@ -90,6 +94,25 @@ object DensityExecutor {
             )
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+    private fun ensureAutoDisplayUnchanged(
+        context: Context,
+        profile: DensityProfile,
+        initial: DisplayInfo
+    ) {
+        if (profile != DensityProfile.AUTO) return
+
+        val current = DisplayUtils.getActiveDisplay(context)
+            ?: throw IllegalStateException("Не удалось определить активный экран")
+
+        if (
+            current.isExternal != initial.isExternal ||
+            current.shortPx != initial.shortPx
+        ) {
+            throw IllegalStateException(
+                "Экран изменился во время AUTO-применения; команда отменена или результат не подтверждён"
+            )
         }
     }
 }
