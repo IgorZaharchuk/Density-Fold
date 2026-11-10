@@ -121,6 +121,7 @@ class FoldMonitorService : Service() {
         super.onCreate()
 
         Log.i(TAG, "MONITOR onCreate")
+        diagnoseSystemShizukuService()
         displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         displayManager?.registerDisplayListener(displayListener, null)
 
@@ -143,6 +144,55 @@ class FoldMonitorService : Service() {
                     Log.e(TAG, "Ошибка обработки смены экрана: ${e.message}", e)
                 }
             }
+        }
+    }
+
+
+    /**
+     * Диагностика доступности системного Binder Shizuku.
+     * Не запускает Activity, не подключает UserService и ничего не меняет.
+     */
+    private fun diagnoseSystemShizukuService() {
+        try {
+            val serviceManager = Class.forName("android.os.ServiceManager")
+            val checkService = serviceManager.getDeclaredMethod(
+                "checkService",
+                String::class.java
+            )
+
+            val binder = checkService.invoke(null, "shizuku") as? IBinder
+
+            when {
+                binder == null -> {
+                    Log.i(
+                        TAG,
+                        "SYSTEM SERVICE PROBE: checkService доступен, shizuku=null"
+                    )
+                }
+                binder.pingBinder() -> {
+                    Log.i(
+                        TAG,
+                        "SYSTEM SERVICE PROBE: checkService доступен, " +
+                            "shizuku Binder найден и жив"
+                    )
+                }
+                else -> {
+                    Log.w(
+                        TAG,
+                        "SYSTEM SERVICE PROBE: Binder найден, но pingBinder=false"
+                    )
+                }
+            }
+        } catch (e: Throwable) {
+            val cause = (e as? java.lang.reflect.InvocationTargetException)
+                ?.targetException ?: e
+
+            Log.w(
+                TAG,
+                "SYSTEM SERVICE PROBE: недоступен: " +
+                    "${cause.javaClass.name}: ${cause.message}",
+                cause
+            )
         }
     }
 
