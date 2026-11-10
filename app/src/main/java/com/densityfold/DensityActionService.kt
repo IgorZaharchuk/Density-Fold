@@ -135,6 +135,11 @@ class DensityActionService : Service() {
             putExtra(EXTRA_ACTUAL_DPI, applied?.actualDpi ?: 0)
             putExtra(EXTRA_ERROR, error)
         }
+        Log.i(
+            TAG,
+            "Отправка результата монитору: monitor=$fromMonitor success=$success " +
+                "external=${applied?.isExternal ?: expectedExternal} error=${error ?: "none"}"
+        )
         sendBroadcast(intent)
     }
 

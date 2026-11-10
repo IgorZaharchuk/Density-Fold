@@ -28,6 +28,7 @@ abstract class BaseActionActivity : Activity() {
             DensityActionService.EXTRA_MONITOR_REQUEST,
             false
         )
+        Log.i(TAG, "Activity получила запрос: monitor=$fromMonitor action=$action")
 
         startService(Intent(this, DensityActionService::class.java).apply {
             this.action = this@BaseActionActivity.action

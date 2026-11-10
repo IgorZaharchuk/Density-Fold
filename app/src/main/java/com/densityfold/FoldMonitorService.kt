@@ -63,6 +63,7 @@ class FoldMonitorService : Service() {
                 DensityActionService.EXTRA_SUCCESS,
                 false
             )
+            Log.i(TAG, "Получен результат действия от сервиса: success=$success")
 
             if (success) {
                 retryPending = false
@@ -229,6 +230,15 @@ class FoldMonitorService : Service() {
 
         val isExternal = active.isExternal
 
+        Log.i(
+            TAG,
+            "Текущее состояние дисплея: ${if (isExternal) "Внешний" else "Внутренний"}, " +
+                "${active.width}x${active.height}, DPI=${active.density}"
+        )
+        updateMonitorNotification(
+            formatDisplayStatus(isExternal, active.shortPx, active.density)
+        )
+
         if (actionInFlight) {
             Log.d(TAG, "Действие уже выполняется, событие объединено")
             return
@@ -252,6 +262,11 @@ class FoldMonitorService : Service() {
                 OpenActionActivity::class.java
             }
 
+            Log.i(
+                TAG,
+                "Запуск Activity монитором: ${targetActivity.simpleName}, " +
+                    "экран=${if (isExternal) "Внешний" else "Внутренний"}"
+            )
             startActivity(
                 Intent(this, targetActivity).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
