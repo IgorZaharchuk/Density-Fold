@@ -1,9 +1,6 @@
 package com.densityfold.engine
 
 import android.util.Log
-import android.os.Bundle
-import android.net.Uri
-import android.content.Context
 import android.os.Handler
 import android.os.Looper
 
@@ -101,33 +98,6 @@ object ShizukuCommandRunner {
 
         return "pid=${android.os.Process.myPid()} " +
             "mainBinderPing=$ping permission=$permission"
-    }
-
-    /**
-     * Диагностика доступности Binder через Provider Shizuku Manager.
-     * Не участвует в принятии решения о восстановлении.
-     */
-    fun probeManagerProvider(context: Context): String {
-        return try {
-            val reply = context.contentResolver.call(
-                Uri.parse("content://moe.shizuku.privileged.api.shizuku"),
-                "getBinder",
-                null,
-                Bundle()
-            )
-
-            when {
-                reply == null -> "NO_BINDER"
-                reply.containsKey(
-                    "moe.shizuku.privileged.api.intent.extra.BINDER"
-                ) -> "BINDER_ALIVE"
-                else -> "EMPTY_REPLY"
-            }
-        } catch (e: SecurityException) {
-            "SECURITY_EXCEPTION: ${e.message}"
-        } catch (e: Exception) {
-            "PROVIDER_ERROR: ${e.javaClass.simpleName}: ${e.message}"
-        }
     }
 
     fun mainBinderAvailable(): Boolean {
