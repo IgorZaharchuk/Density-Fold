@@ -11,7 +11,7 @@ import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.hardware.display.DisplayManager
 import android.os.Build
-import android.os.IBinder
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import android.view.Display
@@ -40,7 +40,8 @@ class FoldMonitorService : Service() {
     private var retryJob: Job? = null
     private var actionTimeoutJob: Job? = null
     private var shizukuWatchdogJob: Job? = null
-    private var recoveryActionAttempted = false
+    private var lastRecoveryAttemptAt = 0L
+    private val recoveryRetryIntervalMs = 60_000L
 
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
@@ -106,9 +107,6 @@ class FoldMonitorService : Service() {
                 }
             } else {
                 retryPending = true
-                if (!ShizukuCommandRunner.mainBinderAvailable()) {
-                    recoveryActionAttempted = false
-                }
                 val error = intent.getStringExtra(DensityActionService.EXTRA_ERROR)
                 Log.w(TAG, "Действие не выполнено: ${error ?: "неизвестная ошибка"}")
                 updateMonitorNotification("Shizuku недоступен · ожидание восстановления")
@@ -121,7 +119,6 @@ class FoldMonitorService : Service() {
         super.onCreate()
 
         Log.i(TAG, "MONITOR onCreate")
-        diagnoseSystemShizukuService()
         displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         displayManager?.registerDisplayListener(displayListener, null)
 
@@ -148,54 +145,6 @@ class FoldMonitorService : Service() {
     }
 
 
-    /**
-     * Диагностика доступности системного Binder Shizuku.
-     * Не запускает Activity, не подключает UserService и ничего не меняет.
-     */
-    private fun diagnoseSystemShizukuService() {
-        try {
-            val serviceManager = Class.forName("android.os.ServiceManager")
-            val checkService = serviceManager.getDeclaredMethod(
-                "checkService",
-                String::class.java
-            )
-
-            val binder = checkService.invoke(null, "shizuku") as? IBinder
-
-            when {
-                binder == null -> {
-                    Log.i(
-                        TAG,
-                        "SYSTEM SERVICE PROBE: checkService доступен, shizuku=null"
-                    )
-                }
-                binder.pingBinder() -> {
-                    Log.i(
-                        TAG,
-                        "SYSTEM SERVICE PROBE: checkService доступен, " +
-                            "shizuku Binder найден и жив"
-                    )
-                }
-                else -> {
-                    Log.w(
-                        TAG,
-                        "SYSTEM SERVICE PROBE: Binder найден, но pingBinder=false"
-                    )
-                }
-            }
-        } catch (e: Throwable) {
-            val cause = (e as? java.lang.reflect.InvocationTargetException)
-                ?.targetException ?: e
-
-            Log.w(
-                TAG,
-                "SYSTEM SERVICE PROBE: недоступен: " +
-                    "${cause.javaClass.name}: ${cause.message}",
-                cause
-            )
-        }
-    }
-
     private fun startShizukuWatchdog() {
         shizukuWatchdogJob?.cancel()
         shizukuWatchdogJob = scope.launch {
@@ -214,14 +163,16 @@ class FoldMonitorService : Service() {
                 }
 
                 if (mainBinder) {
-                    recoveryActionAttempted = false
+                    lastRecoveryAttemptAt = 0L
                 }
 
+                val now = SystemClock.elapsedRealtime()
                 if (state == "MAIN_BINDER_DEAD" &&
-                    !recoveryActionAttempted &&
-                    !actionInFlight
+                    !actionInFlight &&
+                    (lastRecoveryAttemptAt == 0L ||
+                        now - lastRecoveryAttemptAt >= recoveryRetryIntervalMs)
                 ) {
-                    recoveryActionAttempted = launchRecoveryAction()
+                    launchRecoveryAction()
                 }
 
                 if (state != previousState) {
@@ -275,6 +226,7 @@ class FoldMonitorService : Service() {
     }
 
     private fun launchRecoveryAction(): Boolean {
+        lastRecoveryAttemptAt = SystemClock.elapsedRealtime()
         if (!Settings.canDrawOverlays(this)) {
             Log.w(TAG, "SHIZUKU RECOVERY: нет SYSTEM_ALERT_WINDOW")
             updateMonitorNotification("Разрешите фоновый запуск для восстановления Shizuku")
@@ -322,7 +274,6 @@ class FoldMonitorService : Service() {
                 if (actionInFlight) {
                     actionInFlight = false
                     retryPending = true
-                    recoveryActionAttempted = false
                     Log.w(TAG, "SHIZUKU RECOVERY: тайм-аут штатного действия")
                     updateMonitorNotification(
                         "Нет ответа от Shizuku · повторная попытка"
@@ -489,8 +440,7 @@ class FoldMonitorService : Service() {
                     actionInFlight = false
                     retryPending = true
                     if (!ShizukuCommandRunner.mainBinderAvailable()) {
-                        recoveryActionAttempted = false
-                    }
+                        }
                     Log.w(TAG, "Тайм-аут ожидания результата действия")
                     updateMonitorNotification("Нет ответа от сервиса · повторная попытка")
                     scheduleRetry()
