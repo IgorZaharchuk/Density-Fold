@@ -173,6 +173,16 @@ class FoldMonitorService : Service() {
                     (lastRecoveryAttemptAt == 0L ||
                         now - lastRecoveryAttemptAt >= recoveryRetryIntervalMs)
                 ) {
+                    val providerProbe =
+                        ShizukuCommandRunner.probeManagerProvider(
+                            this@FoldMonitorService
+                        )
+                    Log.i(
+                        TAG,
+                        "SHIZUKU MANAGER PROVIDER PROBE: $providerProbe"
+                    )
+
+                    // Штатное восстановление оставляем без изменений.
                     launchRecoveryAction()
                 }
 
