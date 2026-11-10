@@ -1,6 +1,9 @@
 package com.densityfold
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
@@ -39,7 +42,20 @@ class MainActivity : ComponentActivity() {
         }
         mainViewModel = ViewModelProvider(this)[MainViewModel::class.java]
         Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
-        setContent { DensityFoldTheme { MainScreen(viewModel = mainViewModel) } }
+        setContent {
+            DensityFoldTheme {
+                MainScreen(
+                    viewModel = mainViewModel,
+                    onRequestOverlayPermission = {
+                        val intent = Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:$packageName")
+                        )
+                        startActivity(intent)
+                    }
+                )
+            }
+        }
     }
     
     override fun onResume() {
@@ -60,7 +76,10 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: MainViewModel) {
+fun MainScreen(
+    viewModel: MainViewModel,
+    onRequestOverlayPermission: () -> Unit
+) {
     val uiState by viewModel.uiState.collectAsState()
     var showDiagnostics by remember { mutableStateOf(false) }
     
@@ -188,6 +207,23 @@ fun MainScreen(viewModel: MainViewModel) {
                             onClick = { viewModel.applyOuterDensity() },
                             enabled = uiState.isShizukuAvailable && !uiState.isLoading
                         ) { Text("Применить") }
+                    }
+                }
+            }
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Эксперимент фонового запуска Activity", fontWeight = FontWeight.Bold)
+                    Text(
+                        "Разрешение необходимо для проверки восстановления после перезапуска Shizuku.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Button(onClick = onRequestOverlayPermission) {
+                        Text("Разрешить фоновый запуск")
                     }
                 }
             }

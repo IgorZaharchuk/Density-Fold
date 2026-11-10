@@ -12,6 +12,7 @@ import android.content.pm.ServiceInfo
 import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.IBinder
+import android.provider.Settings
 import android.util.Log
 import android.view.Display
 import androidx.core.app.NotificationCompat
@@ -39,6 +40,7 @@ class FoldMonitorService : Service() {
     private var retryJob: Job? = null
     private var actionTimeoutJob: Job? = null
     private var shizukuWatchdogJob: Job? = null
+    private var backgroundProbeAttempted = false
 
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
@@ -158,6 +160,17 @@ class FoldMonitorService : Service() {
                     else -> "READY"
                 }
 
+                if (mainBinder) {
+                    backgroundProbeAttempted = false
+                }
+
+                if (state == "MAIN_BINDER_DEAD" &&
+                    !backgroundProbeAttempted
+                ) {
+                    backgroundProbeAttempted = true
+                    launchBackgroundProbeActivity()
+                }
+
                 if (state != previousState) {
                     val diagnostic = ShizukuCommandRunner.connectionDiagnostic()
                     Log.i(TAG, "SHIZUKU STATE: $state; $diagnostic")
@@ -205,6 +218,30 @@ class FoldMonitorService : Service() {
 
                 delay(3_000L)
             }
+        }
+    }
+
+    private fun launchBackgroundProbeActivity() {
+        if (!Settings.canDrawOverlays(this)) {
+            Log.w(TAG, "BAL PROBE: SYSTEM_ALERT_WINDOW не предоставлен")
+            return
+        }
+
+        try {
+            val intent = Intent(
+                this,
+                BackgroundLaunchProbeActivity::class.java
+            ).apply {
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_NO_ANIMATION
+                )
+            }
+
+            startActivity(intent)
+            Log.i(TAG, "BAL PROBE: startActivity вызван из FoldMonitorService")
+        } catch (e: Exception) {
+            Log.e(TAG, "BAL PROBE: ошибка запуска Activity", e)
         }
     }
 
