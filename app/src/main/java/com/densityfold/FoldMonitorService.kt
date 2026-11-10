@@ -45,12 +45,20 @@ class FoldMonitorService : Service() {
     }
 
     private val shizukuDeadListener = Shizuku.OnBinderDeadListener {
-        Log.w(TAG, "Binder Shizuku отключён. Автоприменение приостановлено.")
+        Log.w(
+            TAG,
+            "MAIN BINDER DEAD in monitor " +
+                ShizukuManager.availabilityDiagnostic()
+        )
         updateMonitorNotification("Shizuku недоступен")
     }
 
     override fun onCreate() {
         super.onCreate()
+        Log.i(
+            TAG,
+            "MONITOR onCreate " + ShizukuManager.availabilityDiagnostic()
+        )
         Log.d(TAG, "Сервис создан, регистрация слушателей")
         displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         displayManager?.registerDisplayListener(displayListener, null)
@@ -71,13 +79,22 @@ class FoldMonitorService : Service() {
         // даже если OnBinderReceivedListener не обновил уведомление.
         scope.launch {
             var wasAvailable = ShizukuManager.isShizukuAvailable()
+            Log.i(
+                TAG,
+                "Availability poll started available=$wasAvailable " +
+                    ShizukuManager.availabilityDiagnostic()
+            )
             while (true) {
                 delay(3000)
                 val isAvailable = ShizukuManager.isShizukuAvailable()
 
                 if (!isAvailable) {
                     if (wasAvailable) {
-                        Log.i(TAG, "Доступность Shizuku изменилась: true -> false")
+                        Log.w(
+                            TAG,
+                            "Availability true -> false " +
+                                ShizukuManager.availabilityDiagnostic()
+                        )
                         updateMonitorNotification("Shizuku недоступен")
                     }
                     wasAvailable = false
@@ -85,7 +102,11 @@ class FoldMonitorService : Service() {
                 }
 
                 if (!wasAvailable) {
-                    Log.i(TAG, "Shizuku доступен, восстанавливаем UserService")
+                    Log.i(
+                        TAG,
+                        "Availability false -> true; reconnect UserService " +
+                            ShizukuManager.availabilityDiagnostic()
+                    )
                     val result = ShizukuCommandRunner.reconnect()
                     if (result.isSuccess) {
                         wasAvailable = true
@@ -187,7 +208,11 @@ class FoldMonitorService : Service() {
         val isExternal = active.isExternal
 
         if (!ShizukuManager.isShizukuAvailable()) {
-            Log.w(TAG, "Shizuku недоступен. Состояние НЕ зафиксировано, ожидание восстановления.")
+            Log.w(
+                TAG,
+                "Shizuku unavailable during DPI check; state not committed. " +
+                    ShizukuManager.availabilityDiagnostic()
+            )
             updateMonitorNotification("Shizuku недоступен")
             return
         }

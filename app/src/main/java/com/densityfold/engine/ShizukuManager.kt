@@ -7,6 +7,32 @@ object ShizukuManager {
     var lastRawOutput: String = ""
         private set
 
+    fun availabilityDiagnostic(): String {
+        val binderPing = try {
+            Shizuku.pingBinder()
+        } catch (e: Exception) {
+            return "pid=${android.os.Process.myPid()} " +
+                "mainBinderPing=error:${e.javaClass.simpleName} " +
+                "permission=not_checked"
+        }
+
+        val permission = if (!binderPing) {
+            "not_checked"
+        } else {
+            try {
+                if (
+                    Shizuku.checkSelfPermission() ==
+                    PackageManager.PERMISSION_GRANTED
+                ) "granted" else "denied"
+            } catch (e: Exception) {
+                "error:${e.javaClass.simpleName}"
+            }
+        }
+
+        return "pid=${android.os.Process.myPid()} " +
+            "mainBinderPing=$binderPing permission=$permission"
+    }
+
     fun isShizukuAvailable(): Boolean {
         return try {
             Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED &&
