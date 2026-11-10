@@ -13,8 +13,9 @@ import android.os.IBinder
 import android.util.Log
 import android.view.Display
 import androidx.core.app.NotificationCompat
-import com.densityfold.data.DensityPreferences
 import com.densityfold.engine.DisplayUtils
+import com.densityfold.engine.DensityExecutor
+import com.densityfold.engine.DensityProfile
 import com.densityfold.engine.ShizukuManager
 import com.densityfold.engine.ShizukuCommandRunner
 import kotlinx.coroutines.CoroutineScope
@@ -30,7 +31,6 @@ class FoldMonitorService : Service() {
     private val TAG = "DensityFold-Monitor"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var displayManager: DisplayManager? = null
-    private var lastWasExternal: Boolean? = null
     
     private val checkChannel = Channel<Unit>(Channel.CONFLATED)
 
@@ -197,96 +197,34 @@ class FoldMonitorService : Service() {
     }
 
     private suspend fun performDensityCheck() {
-        Log.d(TAG, "Начало проверки и применения DPI")
+        Log.d(TAG, "Начало проверки и применения DPI через DensityExecutor")
 
-        val active = DisplayUtils.getActiveDisplay(applicationContext)
-        if (active == null) {
-            Log.e(TAG, "Не удалось определить активный дисплей. Ожидание следующего события.")
-            return
-        }
+        val result = DensityExecutor.apply(
+            applicationContext,
+            DensityProfile.AUTO
+        )
 
-        val isExternal = active.isExternal
-
-        if (!ShizukuManager.isShizukuAvailable()) {
-            Log.w(
-                TAG,
-                "Shizuku unavailable during DPI check; state not committed. " +
-                    ShizukuManager.availabilityDiagnostic()
-            )
-            updateMonitorNotification("Shizuku недоступен")
-            return
-        }
-
-        val prefs = DensityPreferences(applicationContext)
-        val targetDp = if (isExternal) prefs.getOuterDp() else prefs.getInnerDp()
-        val targetDpi = DisplayUtils.dpToDpi(targetDp, active.shortPx)
-        
-        if (targetDpi == null) {
-            Log.e(TAG, "Некорректные параметры для расчёта DPI. Ожидание следующего события.")
-            return
-        }
-
-        val currentDpiResult = ShizukuManager.getCurrentDensity()
-        if (currentDpiResult.isFailure) {
-            Log.w(TAG, "Не удалось прочитать текущий DPI: ${currentDpiResult.exceptionOrNull()?.message}")
-            if (!ShizukuManager.isShizukuAvailable()) {
-                updateMonitorNotification("Shizuku недоступен")
-            }
-            return
-        }
-        val currentDpi = currentDpiResult.getOrNull() ?: return
-
-        if (currentDpi == targetDpi) {
-            updateMonitorNotification(
-                formatDisplayStatus(isExternal, active.shortPx, currentDpi)
-            )
-            // DPI уже правильный — но нужно подтвердить, что дисплей не сменился
-            val currentActive = DisplayUtils.getActiveDisplay(applicationContext)
-            if (currentActive != null && currentActive.isExternal == isExternal) {
-                lastWasExternal = isExternal
-                Log.d(TAG, "DPI уже установлен корректно ($targetDpi). Состояние зафиксировано.")
-            } else if (currentActive == null) {
-                Log.w(TAG, "DPI уже правильный, но не удалось определить текущий дисплей. Состояние НЕ зафиксировано.")
-            } else {
-                Log.w(TAG, "Экран сменился во время проверки DPI. Состояние НЕ зафиксировано, запланирована повторная проверка.")
-                scheduleDensityCheck()
-            }
-            return
-        }
-
-        Log.d(TAG, "Применение DPI: $targetDpi для ${if (isExternal) "внешнего" else "внутреннего"} экрана")
-        val result = ShizukuManager.setDensity(targetDpi)
-        
         result.fold(
-            onSuccess = { 
-                // ПРИОРИТЕТ 1: Проверяем, не сменился ли экран во время применения DPI
-                val currentActive = DisplayUtils.getActiveDisplay(applicationContext)
-                if (currentActive == null) {
-                    Log.w(TAG, "Не удалось подтвердить применение DPI: не удалось определить текущий дисплей. Состояние НЕ зафиксировано.")
-                    return@fold
-                }
-                if (currentActive.isExternal != isExternal) {
-                    Log.w(TAG, "Экран сменился во время применения DPI. Состояние НЕ зафиксировано, запланирована повторная проверка.")
-                    scheduleDensityCheck()
-                    return@fold
-                }
-                
-                // ПРИОРИТЕТ 2: Экран не сменился — проверяем фактический DPI
-                val actualDpi = ShizukuManager.getCurrentDensity().getOrNull()
-                if (actualDpi == null) {
-                    Log.w(TAG, "Не удалось подтвердить применение DPI: не удалось получить текущий DPI. Состояние НЕ зафиксировано.")
-                } else if (actualDpi == targetDpi) {
-                    updateMonitorNotification(
-                        formatDisplayStatus(currentActive.isExternal, currentActive.shortPx, actualDpi)
+            onSuccess = { applied ->
+                updateMonitorNotification(
+                    formatDisplayStatus(
+                        applied.isExternal,
+                        applied.shortPx,
+                        applied.actualDpi
                     )
-                    lastWasExternal = isExternal
-                    Log.d(TAG, "DPI успешно применён и подтверждён ($targetDpi). Состояние зафиксировано.")
-                } else {
-                    Log.w(TAG, "Не удалось подтвердить применение DPI: целевой=$targetDpi, фактический=$actualDpi. Состояние НЕ зафиксировано.")
-                }
+                )
+                Log.d(
+                    TAG,
+                    "DPI подтверждён: целевой=${applied.targetDpi}, " +
+                        "фактический=${applied.actualDpi}"
+                )
             },
-            onFailure = {
-                Log.e(TAG, "Ошибка применения DPI: ${it.message}. Состояние НЕ зафиксировано.")
+            onFailure = { error ->
+                Log.w(
+                    TAG,
+                    "AUTO-применение не подтверждено: ${error.message}",
+                    error
+                )
                 if (!ShizukuManager.isShizukuAvailable()) {
                     updateMonitorNotification("Shizuku недоступен")
                 }
