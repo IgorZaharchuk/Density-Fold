@@ -36,6 +36,7 @@ class FoldMonitorService : Service() {
     private var actionInFlight = false
     private var retryPending = false
     private var retryJob: Job? = null
+    private var actionTimeoutJob: Job? = null
 
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
@@ -57,6 +58,8 @@ class FoldMonitorService : Service() {
                 )
             ) return
 
+            actionTimeoutJob?.cancel()
+            actionTimeoutJob = null
             actionInFlight = false
 
             val success = intent.getBooleanExtra(
@@ -256,27 +259,31 @@ class FoldMonitorService : Service() {
         Log.i(TAG, "Запуск действия: $actionName")
 
         try {
-            val targetActivity = if (isExternal) {
-                ClosedActionActivity::class.java
+            if (isExternal) {
+                Log.i(TAG, "Прямой запуск сервиса: Внешний")
+                DensityActionService.startClosed(this, fromMonitor = true)
             } else {
-                OpenActionActivity::class.java
+                Log.i(TAG, "Прямой запуск сервиса: Внутренний")
+                DensityActionService.startOpen(this, fromMonitor = true)
             }
 
-            Log.i(
-                TAG,
-                "Запуск Activity монитором: ${targetActivity.simpleName}, " +
-                    "экран=${if (isExternal) "Внешний" else "Внутренний"}"
-            )
-            startActivity(
-                Intent(this, targetActivity).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    putExtra(DensityActionService.EXTRA_MONITOR_REQUEST, true)
+            actionTimeoutJob?.cancel()
+            actionTimeoutJob = scope.launch {
+                delay(20_000L)
+                if (actionInFlight) {
+                    actionInFlight = false
+                    retryPending = true
+                    Log.w(TAG, "Тайм-аут ожидания результата действия")
+                    updateMonitorNotification("Нет ответа от сервиса · повторная попытка")
+                    scheduleRetry()
                 }
-            )
+            }
         } catch (e: Exception) {
+            actionTimeoutJob?.cancel()
+            actionTimeoutJob = null
             actionInFlight = false
             retryPending = true
-            Log.e(TAG, "Не удалось запустить действие: ${e.message}", e)
+            Log.e(TAG, "Не удалось запустить сервис: ${e.message}", e)
             updateMonitorNotification("Не удалось запустить действие · повторная попытка")
             scheduleRetry()
         }
@@ -298,6 +305,7 @@ class FoldMonitorService : Service() {
         Log.d(TAG, "Монитор останавливается")
         displayManager?.unregisterDisplayListener(displayListener)
         retryJob?.cancel()
+        actionTimeoutJob?.cancel()
 
         try {
             unregisterReceiver(actionCompletedReceiver)
