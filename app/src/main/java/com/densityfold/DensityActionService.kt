@@ -37,11 +37,23 @@ class DensityActionService : Service() {
 
         scope.launch {
             try {
-                if (!ShizukuManager.isShizukuAvailable()) {
-                    Log.d(TAG, "Shizuku not available")
-                    showNotification(applicationContext, screenName, 0, false, "Shizuku не активен")
+                val readiness = ShizukuManager.awaitShizukuReady(10_000L)
+
+                if (readiness.isFailure) {
+                    val error = readiness.exceptionOrNull()
+                    Log.w(TAG, "Shizuku readiness failed: ${error?.message}")
+
+                    showNotification(
+                        applicationContext,
+                        screenName,
+                        0,
+                        false,
+                        error?.message ?: "Не удалось подключиться к Shizuku"
+                    )
                     return@launch
                 }
+
+                Log.i(TAG, "Shizuku ready, executing action: $action")
 
                 val prefs = DensityPreferences(applicationContext)
                 val targetDp = if (isClosed) prefs.getOuterDp() else prefs.getInnerDp()

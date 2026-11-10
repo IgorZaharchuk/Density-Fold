@@ -52,6 +52,10 @@ object ShizukuManager {
         }
     }
 
+    suspend fun awaitShizukuReady(timeoutMs: Long = 10_000L): Result<Unit> {
+        return ShizukuCommandRunner.awaitReady(timeoutMs)
+    }
+
     suspend fun setDensity(dpi: Int): Result<String> {
         if (dpi <= 0) {
             return Result.failure(IllegalArgumentException("DPI должен быть положительным: $dpi"))

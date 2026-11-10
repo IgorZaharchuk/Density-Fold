@@ -17,6 +17,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -136,6 +138,67 @@ object ShizukuCommandRunner {
                 }
             }
             Log.e(TAG, "RECONNECT exhausted all attempts ${mainBinderState()}")
+        }
+    }
+
+    /**
+     * Ожидает основной Binder Shizuku и готовность UserService.
+     */
+    suspend fun awaitReady(timeoutMs: Long = 10_000L): Result<Unit> {
+        var lastError: Exception? = null
+
+        return try {
+            withTimeout(timeoutMs) {
+                while (true) {
+                    val binderAlive = try {
+                        Shizuku.pingBinder()
+                    } catch (_: Exception) {
+                        false
+                    }
+
+                    if (binderAlive) {
+                        val permissionGranted = try {
+                            Shizuku.checkSelfPermission() ==
+                                android.content.pm.PackageManager.PERMISSION_GRANTED
+                        } catch (_: Exception) {
+                            false
+                        }
+
+                        if (!permissionGranted) {
+                            throw SecurityException(
+                                "Разрешение Shizuku не предоставлено"
+                            )
+                        }
+
+                        try {
+                            ensureBound()
+                            Log.i(TAG, "WAIT READY: Shizuku and UserService ready")
+                            return@withTimeout
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            lastError = e
+                            Log.w(TAG, "WAIT READY: bind attempt failed: ${e.message}")
+                        }
+                    }
+
+                    delay(250L)
+                }
+            }
+
+            Result.success(Unit)
+        } catch (e: TimeoutCancellationException) {
+            Result.failure(
+                IllegalStateException(
+                    "Таймаут ожидания Shizuku (${timeoutMs}ms). " +
+                        "Последняя ошибка: ${lastError?.message ?: "Binder недоступен"}",
+                    e
+                )
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
