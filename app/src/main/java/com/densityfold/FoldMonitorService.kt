@@ -44,20 +44,6 @@ class FoldMonitorService : Service() {
         }
     }
 
-    private val shizukuListener = Shizuku.OnBinderReceivedListener {
-        Log.d(TAG, "Получен Binder Shizuku, восстанавливаем UserService")
-        scope.launch {
-            val result = ShizukuCommandRunner.reconnect()
-            if (result.isSuccess) {
-                Log.i(TAG, "UserService восстановлен после получения Binder Shizuku")
-                updateMonitorNotification("Мониторинг складывания активен")
-                scheduleDensityCheck()
-            } else {
-                Log.w(TAG, "Не удалось восстановить UserService: ${result.exceptionOrNull()?.message}")
-            }
-        }
-    }
-
     private val shizukuDeadListener = Shizuku.OnBinderDeadListener {
         Log.w(TAG, "Binder Shizuku отключён. Автоприменение приостановлено.")
         updateMonitorNotification("Shizuku недоступен")
@@ -68,7 +54,6 @@ class FoldMonitorService : Service() {
         Log.d(TAG, "Сервис создан, регистрация слушателей")
         displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         displayManager?.registerDisplayListener(displayListener, null)
-        Shizuku.addBinderReceivedListenerSticky(shizukuListener)
         Shizuku.addBinderDeadListener(shizukuDeadListener)
         startForegroundSafely()
         
@@ -287,7 +272,6 @@ class FoldMonitorService : Service() {
     override fun onDestroy() {
         Log.d(TAG, "Сервис останавливается, очистка ресурсов")
         displayManager?.unregisterDisplayListener(displayListener)
-        Shizuku.removeBinderReceivedListener(shizukuListener)
         Shizuku.removeBinderDeadListener(shizukuDeadListener)
         checkChannel.close()
         scope.cancel()

@@ -1,5 +1,9 @@
 package com.densityfold.engine
 
+import android.util.Log
+import android.os.Handler
+import android.os.Looper
+
 import android.content.ComponentName
 import android.content.ServiceConnection
 import android.os.IBinder
@@ -12,6 +16,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -24,9 +29,12 @@ import kotlin.coroutines.resumeWithException
 
 object ShizukuCommandRunner {
 
+    private const val TAG = "DensityFold-Shizuku"
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val stateLock = Any()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     // Обе ссылки изменяются только под stateLock.
     private var service: IShizukuService? = null
@@ -39,16 +47,24 @@ object ShizukuCommandRunner {
 
     // Автоматическое восстановление UserService при перезапуске Shizuku.
     private val binderDeadListener = Shizuku.OnBinderDeadListener {
-        scope.launch { resetConnection() }
+        detachConnection()
+        Log.i(TAG, "Binder умер: старые ссылки UserService очищены")
     }
 
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
         scheduleReconnect()
     }
 
-    init {
+    private var lifecycleListenersInstalled = false
+
+    @Synchronized
+    fun installLifecycleListeners() {
+        if (lifecycleListenersInstalled) return
+        lifecycleListenersInstalled = true
+
         Shizuku.addBinderDeadListener(binderDeadListener)
         Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
+        Log.i(TAG, "Слушатели жизненного цикла Shizuku установлены")
     }
 
     private fun scheduleReconnect() {
@@ -87,10 +103,10 @@ object ShizukuCommandRunner {
             "com.densityfold.engine.ShizukuUserService"
         )
     )
-        .daemon(false)
+        .daemon(true)
         .processNameSuffix("shizuku_service")
         .debuggable(false)
-        .version(1)
+        .version(2)
 
     suspend fun execute(command: String): Result<String> {
         return try {
@@ -415,31 +431,46 @@ object ShizukuCommandRunner {
                 timeoutJob.start()
             }
 
-            try {
-                Shizuku.bindUserService(userServiceArgs, conn)
+            scope.launch {
+                try {
+                    withContext(Dispatchers.Main.immediate) {
+                        val isCurrent = synchronized(stateLock) {
+                            connection === conn
+                        }
 
-            } catch (e: Exception) {
-                var shouldResume = false
+                        if (!completed.get() && isCurrent) {
+                            if (!Shizuku.pingBinder()) {
+                                throw IllegalStateException(
+                                    "Shizuku binder died before bind"
+                                )
+                            }
 
-                synchronized(stateLock) {
-                    if (
-                        connection === conn &&
-                        completed.compareAndSet(false, true)
-                    ) {
-                        connection = null
-                        service = null
-                        shouldResume = true
+                            Shizuku.bindUserService(userServiceArgs, conn)
+                        } else if (!completed.get()) {
+                            throw IllegalStateException(
+                                "UserService connection became stale"
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    var shouldResume = false
+
+                    synchronized(stateLock) {
+                        if (connection === conn) {
+                            connection = null
+                            service = null
+                        }
+
+                        shouldResume = completed.compareAndSet(false, true)
+                    }
+
+                    timeoutJob.cancel()
+
+                    if (shouldResume) {
+                        unbindQuietly(conn)
+                        cont.resumeWithException(e)
                     }
                 }
-
-                timeoutJob.cancel()
-
-                if (shouldResume) {
-                    unbindQuietly(conn)
-                    cont.resumeWithException(e)
-                }
-
-                return@suspendCancellableCoroutine
             }
 
             cont.invokeOnCancellation {
@@ -485,18 +516,41 @@ object ShizukuCommandRunner {
     }
 
     /**
-     * remove=false снимает привязку, не запрашивая
-     * уничтожение самого UserService.
+     * Снимает привязку и при необходимости удаляет UserService.
      */
-    private fun unbindQuietly(conn: ServiceConnection) {
-        try {
-            Shizuku.unbindUserService(
-                userServiceArgs,
-                conn,
-                false
-            )
-        } catch (_: Exception) {
-            // Shizuku мог уже потерять собственный Binder.
+    private fun unbindQuietly(
+        conn: ServiceConnection,
+        remove: Boolean = true
+    ) {
+        val action = Runnable {
+            try {
+                if (!Shizuku.pingBinder()) return@Runnable
+
+                Shizuku.unbindUserService(
+                    userServiceArgs,
+                    conn,
+                    remove
+                )
+            } catch (_: Exception) {
+                // Shizuku мог уже потерять собственный Binder.
+            }
+        }
+
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            action.run()
+        } else {
+            mainHandler.post(action)
+        }
+    }
+
+    /**
+     * Binder умер: локально забываем старое соединение.
+     * unbind здесь намеренно не вызывается.
+     */
+    private suspend fun forgetConnectionAfterBinderDeath() {
+        bindMutex.withLock {
+            detachConnection()
+            Log.i(TAG, "Старые ссылки UserService очищены")
         }
     }
 
