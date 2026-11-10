@@ -246,11 +246,18 @@ class FoldMonitorService : Service() {
         Log.i(TAG, "Запуск действия: $actionName")
 
         try {
-            if (isExternal) {
-                DensityActionService.startClosed(applicationContext, fromMonitor = true)
+            val targetActivity = if (isExternal) {
+                ClosedActionActivity::class.java
             } else {
-                DensityActionService.startOpen(applicationContext, fromMonitor = true)
+                OpenActionActivity::class.java
             }
+
+            startActivity(
+                Intent(this, targetActivity).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    putExtra(DensityActionService.EXTRA_MONITOR_REQUEST, true)
+                }
+            )
         } catch (e: Exception) {
             actionInFlight = false
             retryPending = true

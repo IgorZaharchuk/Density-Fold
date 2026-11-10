@@ -66,38 +66,44 @@ class DensityActionService : Service() {
                                 "target=${value.targetDpi} actual=${value.actualDpi}"
                         )
 
-                        showNotification(
-                            applicationContext,
-                            screenName,
-                            value.targetDp,
-                            true,
-                            null
-                        )
+                        if (!fromMonitor) {
+                            showNotification(
+                                applicationContext,
+                                screenName,
+                                value.targetDp,
+                                true,
+                                null
+                            )
+                        }
                     },
                     onFailure = { error ->
                         failureMessage = error.message ?: "Не удалось применить DPI"
                         Log.e(TAG, "Density action failed: $failureMessage", error)
 
-                        showNotification(
-                            applicationContext,
-                            if (profile == DensityProfile.OUTER) "Внешний" else "Внутренний",
-                            0,
-                            false,
-                            failureMessage
-                        )
+                        if (!fromMonitor) {
+                            showNotification(
+                                applicationContext,
+                                if (profile == DensityProfile.OUTER) "Внешний" else "Внутренний",
+                                0,
+                                false,
+                                failureMessage
+                            )
+                        }
                     }
                 )
             } catch (e: Exception) {
                 failureMessage = e.message ?: "Неизвестная ошибка"
                 Log.e(TAG, "Exception in service: $failureMessage", e)
 
-                showNotification(
-                    applicationContext,
-                    if (profile == DensityProfile.OUTER) "Внешний" else "Внутренний",
-                    0,
-                    false,
-                    failureMessage
-                )
+                if (!fromMonitor) {
+                    showNotification(
+                        applicationContext,
+                        if (profile == DensityProfile.OUTER) "Внешний" else "Внутренний",
+                        0,
+                        false,
+                        failureMessage
+                    )
+                }
             } finally {
                 sendCompletionBroadcast(
                     fromMonitor = fromMonitor,

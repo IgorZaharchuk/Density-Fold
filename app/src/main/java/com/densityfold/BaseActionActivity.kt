@@ -24,8 +24,14 @@ abstract class BaseActionActivity : Activity() {
         Log.d(TAG, "Запуск сервиса с действием: $action")
 
         // Запускаем сервис — он работает независимо от Activity
+        val fromMonitor = intent.getBooleanExtra(
+            DensityActionService.EXTRA_MONITOR_REQUEST,
+            false
+        )
+
         startService(Intent(this, DensityActionService::class.java).apply {
             this.action = this@BaseActionActivity.action
+            putExtra(DensityActionService.EXTRA_MONITOR_REQUEST, fromMonitor)
         })
 
         // Немедленно завершаем Activity, чтобы минимизировать потерю фокуса
