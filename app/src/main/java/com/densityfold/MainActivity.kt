@@ -216,9 +216,9 @@ fun MainScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Эксперимент фонового запуска Activity", fontWeight = FontWeight.Bold)
+                    Text("Фоновое восстановление Shizuku", fontWeight = FontWeight.Bold)
                     Text(
-                        "Разрешение необходимо для проверки восстановления после перезапуска Shizuku.",
+                        "Разрешение необходимо для запуска штатного действия при восстановлении Shizuku в фоне.",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

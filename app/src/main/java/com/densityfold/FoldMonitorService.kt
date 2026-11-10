@@ -40,7 +40,7 @@ class FoldMonitorService : Service() {
     private var retryJob: Job? = null
     private var actionTimeoutJob: Job? = null
     private var shizukuWatchdogJob: Job? = null
-    private var backgroundProbeAttempted = false
+    private var recoveryActionAttempted = false
 
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
@@ -106,6 +106,9 @@ class FoldMonitorService : Service() {
                 }
             } else {
                 retryPending = true
+                if (!ShizukuCommandRunner.mainBinderAvailable()) {
+                    recoveryActionAttempted = false
+                }
                 val error = intent.getStringExtra(DensityActionService.EXTRA_ERROR)
                 Log.w(TAG, "Действие не выполнено: ${error ?: "неизвестная ошибка"}")
                 updateMonitorNotification("Shizuku недоступен · ожидание восстановления")
@@ -161,14 +164,14 @@ class FoldMonitorService : Service() {
                 }
 
                 if (mainBinder) {
-                    backgroundProbeAttempted = false
+                    recoveryActionAttempted = false
                 }
 
                 if (state == "MAIN_BINDER_DEAD" &&
-                    !backgroundProbeAttempted
+                    !recoveryActionAttempted &&
+                    !actionInFlight
                 ) {
-                    backgroundProbeAttempted = true
-                    launchBackgroundProbeActivity()
+                    recoveryActionAttempted = launchRecoveryAction()
                 }
 
                 if (state != previousState) {
@@ -221,27 +224,69 @@ class FoldMonitorService : Service() {
         }
     }
 
-    private fun launchBackgroundProbeActivity() {
+    private fun launchRecoveryAction(): Boolean {
         if (!Settings.canDrawOverlays(this)) {
-            Log.w(TAG, "BAL PROBE: SYSTEM_ALERT_WINDOW не предоставлен")
-            return
+            Log.w(TAG, "SHIZUKU RECOVERY: нет SYSTEM_ALERT_WINDOW")
+            updateMonitorNotification("Разрешите фоновый запуск для восстановления Shizuku")
+            return false
         }
 
-        try {
-            val intent = Intent(
-                this,
-                BackgroundLaunchProbeActivity::class.java
-            ).apply {
+        val active = DisplayUtils.getActiveDisplay(applicationContext)
+        if (active == null) {
+            Log.w(TAG, "SHIZUKU RECOVERY: активный экран не определён")
+            return false
+        }
+
+        val isExternal = active.isExternal
+        val activityClass = if (isExternal) {
+            ClosedActionActivity::class.java
+        } else {
+            OpenActionActivity::class.java
+        }
+
+        val screenName = if (isExternal) "Внешний" else "Внутренний"
+
+        return try {
+            val intent = Intent(this, activityClass).apply {
                 addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK or
                         Intent.FLAG_ACTIVITY_NO_ANIMATION
                 )
+                putExtra(DensityActionService.EXTRA_MONITOR_REQUEST, true)
             }
 
+            lastRequestedExternal = isExternal
+            retryPending = false
+            actionInFlight = true
+
+            Log.i(
+                TAG,
+                "SHIZUKU RECOVERY: запуск штатного действия $screenName"
+            )
+
             startActivity(intent)
-            Log.i(TAG, "BAL PROBE: startActivity вызван из FoldMonitorService")
+
+            actionTimeoutJob?.cancel()
+            actionTimeoutJob = scope.launch {
+                delay(20_000L)
+                if (actionInFlight) {
+                    actionInFlight = false
+                    retryPending = true
+                    recoveryActionAttempted = false
+                    Log.w(TAG, "SHIZUKU RECOVERY: тайм-аут штатного действия")
+                    updateMonitorNotification(
+                        "Нет ответа от Shizuku · повторная попытка"
+                    )
+                    scheduleRetry()
+                }
+            }
+
+            true
         } catch (e: Exception) {
-            Log.e(TAG, "BAL PROBE: ошибка запуска Activity", e)
+            actionInFlight = false
+            retryPending = true
+            Log.e(TAG, "SHIZUKU RECOVERY: ошибка запуска $screenName", e)
+            false
         }
     }
 
@@ -354,6 +399,19 @@ class FoldMonitorService : Service() {
             return
         }
 
+        if (!ShizukuCommandRunner.mainBinderAvailable()) {
+            retryPending = true
+            Log.i(
+                TAG,
+                "Главный Shizuku Binder недоступен: " +
+                    "ожидание запуска штатного действия watchdog"
+            )
+            updateMonitorNotification(
+                "Shizuku Binder недоступен · восстановление"
+            )
+            return
+        }
+
         if (lastRequestedExternal == isExternal && !retryPending) {
             return
         }
@@ -380,6 +438,9 @@ class FoldMonitorService : Service() {
                 if (actionInFlight) {
                     actionInFlight = false
                     retryPending = true
+                    if (!ShizukuCommandRunner.mainBinderAvailable()) {
+                        recoveryActionAttempted = false
+                    }
                     Log.w(TAG, "Тайм-аут ожидания результата действия")
                     updateMonitorNotification("Нет ответа от сервиса · повторная попытка")
                     scheduleRetry()
