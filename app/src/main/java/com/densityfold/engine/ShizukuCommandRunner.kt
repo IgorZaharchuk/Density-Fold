@@ -100,6 +100,36 @@ object ShizukuCommandRunner {
             "mainBinderPing=$ping permission=$permission"
     }
 
+    fun mainBinderAvailable(): Boolean {
+        return try {
+            Shizuku.pingBinder()
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    fun permissionGranted(): Boolean {
+        return try {
+            mainBinderAvailable() &&
+                Shizuku.checkSelfPermission() ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    fun userServiceAvailable(): Boolean {
+        val current = synchronized(stateLock) { service }
+        return current != null && isUserServiceAlive(current)
+    }
+
+    fun connectionDiagnostic(): String {
+        return "pid=${android.os.Process.myPid()} " +
+            "mainBinder=${mainBinderAvailable()} " +
+            "permission=${permissionGranted()} " +
+            "userService=${userServiceAvailable()}"
+    }
+
     private fun scheduleReconnect() {
         Log.i(TAG, "RECONNECT requested ${mainBinderState()}")
         scope.launch {

@@ -16,6 +16,7 @@ import android.util.Log
 import android.view.Display
 import androidx.core.app.NotificationCompat
 import com.densityfold.engine.DisplayUtils
+import com.densityfold.engine.ShizukuCommandRunner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,6 +38,7 @@ class FoldMonitorService : Service() {
     private var retryPending = false
     private var retryJob: Job? = null
     private var actionTimeoutJob: Job? = null
+    private var shizukuWatchdogJob: Job? = null
 
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
@@ -126,6 +128,7 @@ class FoldMonitorService : Service() {
         }
 
         startForegroundSafely()
+        startShizukuWatchdog()
 
         scope.launch {
             for (event in checkChannel) {
@@ -134,6 +137,73 @@ class FoldMonitorService : Service() {
                 } catch (e: Exception) {
                     Log.e(TAG, "Ошибка обработки смены экрана: ${e.message}", e)
                 }
+            }
+        }
+    }
+
+    private fun startShizukuWatchdog() {
+        shizukuWatchdogJob?.cancel()
+        shizukuWatchdogJob = scope.launch {
+            var previousState: String? = null
+
+            while (true) {
+                val mainBinder = ShizukuCommandRunner.mainBinderAvailable()
+                val permission = ShizukuCommandRunner.permissionGranted()
+                val userService = ShizukuCommandRunner.userServiceAvailable()
+
+                val state = when {
+                    !mainBinder -> "MAIN_BINDER_DEAD"
+                    !permission -> "PERMISSION_DENIED"
+                    !userService -> "USER_SERVICE_DISCONNECTED"
+                    else -> "READY"
+                }
+
+                if (state != previousState) {
+                    val diagnostic = ShizukuCommandRunner.connectionDiagnostic()
+                    Log.i(TAG, "SHIZUKU STATE: $state; $diagnostic")
+
+                    val message = when (state) {
+                        "MAIN_BINDER_DEAD" ->
+                            "Shizuku Binder недоступен · ожидание запуска"
+                        "PERMISSION_DENIED" ->
+                            "Shizuku запущен · нет разрешения"
+                        "USER_SERVICE_DISCONNECTED" ->
+                            "Shizuku Binder работает · восстановление UserService"
+                        else -> {
+                            val active = DisplayUtils.getActiveDisplay(applicationContext)
+                            if (active != null && active.density > 0) {
+                                formatDisplayStatus(
+                                    active.isExternal,
+                                    active.shortPx,
+                                    active.density
+                                ) + " · Shizuku подключён"
+                            } else {
+                                "Shizuku подключён · автомат готов"
+                            }
+                        }
+                    }
+
+                    updateMonitorNotification(message)
+                    previousState = state
+                }
+
+                // Если основной Binder уже вернулся, но UserService ещё нет,
+                // восстанавливаем соединение независимо от смены экрана.
+                if (mainBinder && permission && !userService) {
+                    Log.i(TAG, "WATCHDOG: попытка восстановления UserService")
+                    val result = ShizukuCommandRunner.reconnect()
+                    if (result.isSuccess) {
+                        Log.i(TAG, "WATCHDOG: UserService восстановлен")
+                    } else {
+                        Log.w(
+                            TAG,
+                            "WATCHDOG: восстановление не удалось: " +
+                                (result.exceptionOrNull()?.message ?: "неизвестная ошибка")
+                        )
+                    }
+                }
+
+                delay(3_000L)
             }
         }
     }
@@ -306,6 +376,7 @@ class FoldMonitorService : Service() {
         displayManager?.unregisterDisplayListener(displayListener)
         retryJob?.cancel()
         actionTimeoutJob?.cancel()
+        shizukuWatchdogJob?.cancel()
 
         try {
             unregisterReceiver(actionCompletedReceiver)
