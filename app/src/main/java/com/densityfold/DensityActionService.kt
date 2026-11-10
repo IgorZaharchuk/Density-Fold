@@ -9,9 +9,8 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.densityfold.data.DensityPreferences
-import com.densityfold.engine.DisplayUtils
-import com.densityfold.engine.ShizukuManager
+import com.densityfold.engine.DensityExecutor
+import com.densityfold.engine.DensityProfile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,77 +34,67 @@ class DensityActionService : Service() {
         val isClosed = action == ACTION_CLOSED
         val screenName = if (isClosed) "Внешний" else "Внутренний"
 
+        val profile = when (action) {
+            ACTION_OPEN -> DensityProfile.INNER
+            ACTION_CLOSED -> DensityProfile.OUTER
+            else -> {
+                Log.w(TAG, "Unknown action: $action")
+                stopSelf(startId)
+                return START_NOT_STICKY
+            }
+        }
+
         scope.launch {
             try {
-                val readiness = ShizukuManager.awaitShizukuReady(10_000L)
+                Log.i(TAG, "Executing $profile through DensityExecutor")
 
-                if (readiness.isFailure) {
-                    val error = readiness.exceptionOrNull()
-                    Log.w(TAG, "Shizuku readiness failed: ${error?.message}")
+                val result = DensityExecutor.apply(
+                    applicationContext,
+                    profile
+                )
 
-                    showNotification(
-                        applicationContext,
-                        screenName,
-                        0,
-                        false,
-                        error?.message ?: "Не удалось подключиться к Shizuku"
-                    )
-                    return@launch
-                }
-
-                Log.i(TAG, "Shizuku ready, executing action: $action")
-
-                val prefs = DensityPreferences(applicationContext)
-                val targetDp = if (isClosed) prefs.getOuterDp() else prefs.getInnerDp()
-                
-                val shortPx = if (isClosed) DisplayUtils.getOuterShortPx(applicationContext) 
-                              else DisplayUtils.getInnerShortPx(applicationContext)
-                
-                val targetDpi = DisplayUtils.dpToDpi(targetDp, shortPx)
-                if (targetDpi == null) {
-                    Log.d(TAG, "Invalid targetDpi calculation")
-                    showNotification(applicationContext, screenName, 0, false, "Некорректные параметры")
-                    return@launch
-                }
-
-                val currentDpiResult = ShizukuManager.getCurrentDensity()
-                if (currentDpiResult.isFailure) {
-                    val error = currentDpiResult.exceptionOrNull()
-                    Log.w(TAG, "Cannot read current DPI: ${error?.message}")
-                    showNotification(
-                        applicationContext,
-                        screenName,
-                        targetDp,
-                        false,
-                        error?.message ?: "Не удалось проверить подключение Shizuku"
-                    )
-                    return@launch
-                }
-                val currentDpi = currentDpiResult.getOrNull()
-                if (currentDpi == targetDpi) {
-                    Log.d(TAG, "Bypass: currentDpi ($currentDpi) == targetDpi ($targetDpi)")
-                    return@launch
-                }
-
-                Log.d(TAG, "Executing wm density $targetDpi")
-                val result = ShizukuManager.setDensity(targetDpi)
                 result.fold(
-                    onSuccess = { 
-                        Log.d(TAG, "wm density success")
-                        showNotification(applicationContext, screenName, targetDp, true, null) 
+                    onSuccess = { applied ->
+                        val screenName = if (applied.isExternal) "Внешний" else "Внутренний"
+                        val logicalDp = applied.targetDp
+
+                        Log.i(
+                            TAG,
+                            "Action confirmed: screen=$screenName " +
+                                "target=${applied.targetDpi} actual=${applied.actualDpi}"
+                        )
+
+                        showNotification(
+                            applicationContext,
+                            screenName,
+                            logicalDp,
+                            true,
+                            null
+                        )
                     },
-                    onFailure = { 
-                        Log.d(TAG, "wm density failed: ${it.message}")
-                        showNotification(applicationContext, screenName, targetDp, false, it.message) 
+                    onFailure = { error ->
+                        Log.e(TAG, "Density action failed: ${error.message}", error)
+
+                        showNotification(
+                            applicationContext,
+                            if (profile == DensityProfile.OUTER) "Внешний" else "Внутренний",
+                            0,
+                            false,
+                            error.message ?: "Не удалось применить DPI"
+                        )
                     }
                 )
             } catch (e: Exception) {
-                Log.d(TAG, "Exception in service: ${e.message}")
-                showNotification(applicationContext, screenName, 0, false, e.message ?: "Неизвестная ошибка")
+                Log.e(TAG, "Exception in service: ${e.message}", e)
+                showNotification(
+                    applicationContext,
+                    if (profile == DensityProfile.OUTER) "Внешний" else "Внутренний",
+                    0,
+                    false,
+                    e.message ?: "Неизвестная ошибка"
+                )
             } finally {
-                Log.d(TAG, "finally block: sending ACTION_COMPLETED")
                 sendCompletionBroadcast()
-                Log.d(TAG, "finally block: calling stopSelf($startId)")
                 stopSelf(startId)
             }
         }
