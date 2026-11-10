@@ -296,7 +296,7 @@ object ShizukuCommandRunner {
                         }
                     } else if (failed) {
                         timeoutJobHolder.get()?.cancel()
-                        unbindQuietly(this)
+                        unbindQuietlyDeferred(this)
 
                         if (shouldResume) {
                             cont.resumeWithException(
@@ -342,7 +342,7 @@ object ShizukuCommandRunner {
                     if (!wasCurrent) return
 
                     timeoutJobHolder.get()?.cancel()
-                    unbindQuietly(this)
+                    unbindQuietlyDeferred(this)
 
                     if (shouldResume) {
                         cont.resumeWithException(
@@ -372,7 +372,7 @@ object ShizukuCommandRunner {
                     if (!wasCurrent) return
 
                     timeoutJobHolder.get()?.cancel()
-                    unbindQuietly(this)
+                    unbindQuietlyDeferred(this)
 
                     if (shouldResume) {
                         cont.resumeWithException(
@@ -397,12 +397,11 @@ object ShizukuCommandRunner {
                 delay(BIND_TIMEOUT_MS)
 
                 val timedOut = synchronized(stateLock) {
-                    if (
-                        connection === conn &&
-                        completed.compareAndSet(false, true)
-                    ) {
-                        connection = null
-                        service = null
+                    if (completed.compareAndSet(false, true)) {
+                        if (connection === conn) {
+                            connection = null
+                            service = null
+                        }
                         true
                     } else {
                         false
@@ -488,7 +487,7 @@ object ShizukuCommandRunner {
                 }
 
                 if (wasCurrent) {
-                    unbindQuietly(conn)
+                    unbindQuietlyDeferred(conn)
                 }
             }
         }
@@ -516,41 +515,46 @@ object ShizukuCommandRunner {
     }
 
     /**
-     * Снимает привязку и при необходимости удаляет UserService.
+     * Снимает привязку на главном потоке и дожидается выполнения unbind.
      */
-    private fun unbindQuietly(
+    private suspend fun unbindQuietly(
         conn: ServiceConnection,
-        remove: Boolean = true
+        remove: Boolean = false
     ) {
-        val action = Runnable {
-            try {
-                if (!Shizuku.pingBinder()) return@Runnable
-
-                Shizuku.unbindUserService(
-                    userServiceArgs,
-                    conn,
-                    remove
-                )
-            } catch (_: Exception) {
-                // Shizuku мог уже потерять собственный Binder.
-            }
-        }
-
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            action.run()
-        } else {
-            mainHandler.post(action)
+        withContext(Dispatchers.Main.immediate) {
+            unbindQuietlyNow(conn, remove)
         }
     }
 
     /**
-     * Binder умер: локально забываем старое соединение.
-     * unbind здесь намеренно не вызывается.
+     * Откладывает unbind до завершения callback Shizuku.
      */
-    private suspend fun forgetConnectionAfterBinderDeath() {
-        bindMutex.withLock {
-            detachConnection()
-            Log.i(TAG, "Старые ссылки UserService очищены")
+    private fun unbindQuietlyDeferred(
+        conn: ServiceConnection,
+        remove: Boolean = false
+    ) {
+        mainHandler.post {
+            unbindQuietlyNow(conn, remove)
+        }
+    }
+
+    /**
+     * Вызывается только на главном потоке.
+     */
+    private fun unbindQuietlyNow(
+        conn: ServiceConnection,
+        remove: Boolean = false
+    ) {
+        try {
+            if (!Shizuku.pingBinder()) return
+
+            Shizuku.unbindUserService(
+                userServiceArgs,
+                conn,
+                remove
+            )
+        } catch (_: Exception) {
+            // Shizuku мог уже потерять собственный Binder.
         }
     }
 
