@@ -7,7 +7,6 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.densityfold.engine.DisplayUtils
 import kotlinx.coroutines.flow.first
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "density_prefs")
@@ -19,7 +18,7 @@ class DensityPreferences(private val context: Context) {
         val FOLD_MONITOR_ENABLED = booleanPreferencesKey("fold_monitor_enabled")
         val AUTO_START_ENABLED = booleanPreferencesKey("auto_start_enabled")
 
-        const val DEFAULT_INNER_DP = 900
+        const val DEFAULT_INNER_DPI = 350
         const val DEFAULT_OUTER_DPI = 440
         const val DEFAULT_MONITOR_ENABLED = false
         const val DEFAULT_AUTO_START_ENABLED = false
@@ -30,10 +29,7 @@ class DensityPreferences(private val context: Context) {
 
     suspend fun getInnerDpi(): Int {
         val stored = context.dataStore.data.first()[INNER_DPI]
-        return stored ?: DisplayUtils.dpToDpi(
-            DEFAULT_INNER_DP,
-            DisplayUtils.getInnerShortPx(context)
-        ) ?: 350
+        return stored ?: DEFAULT_INNER_DPI
     }
 
     suspend fun getOuterDpi(): Int {

@@ -267,7 +267,7 @@ fun MainScreen(
                                 actualDpi, display.shortPx
                             )
                             Text(
-                                "$actualDp dp · $actualDpi DPI",
+                                "$actualDpi DPI · $actualDp dp",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 13.sp,
                                 maxLines = 1
@@ -522,7 +522,7 @@ private fun DensitySettingCard(
             ) {
                 TextButton(
                     onClick = {
-                        val next = (current - 5).coerceAtLeast(safeMin)
+                        val next = (current - 1).coerceAtLeast(safeMin)
                         value = next.toString()
                         onDpiChange(next)
                     },
@@ -556,7 +556,7 @@ private fun DensitySettingCard(
 
                 TextButton(
                     onClick = {
-                        val next = (current + 5).coerceAtMost(safeMax)
+                        val next = (current + 1).coerceAtMost(safeMax)
                         value = next.toString()
                         onDpiChange(next)
                     },
