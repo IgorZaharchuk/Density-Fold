@@ -287,6 +287,37 @@ class FoldMonitorService : Service() {
         }
     }
 
+    private fun startForegroundSafely() {
+        notifications.ensureChannel()
+
+        val active = DisplayUtils.getActiveDisplay(applicationContext)
+        val initialMessage = if (active != null && active.density > 0) {
+            notifications.formatDisplayStatus(
+                active.isExternal,
+                active.shortPx,
+                active.density
+            )
+        } else {
+            "Мониторинг складывания активен"
+        }
+
+        try {
+            val notification = notifications.build(initialMessage)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    1,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else {
+                startForeground(1, notification)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка запуска Foreground: ${e.message}", e)
+            stopSelf()
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         scheduleDensityCheck()
         return START_STICKY
