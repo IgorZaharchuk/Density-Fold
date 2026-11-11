@@ -51,7 +51,6 @@ class FoldMonitorService : Service() {
 
         override fun onDisplayChanged(displayId: Int) {
             if (displayId != Display.DEFAULT_DISPLAY) return
-            Log.d(TAG, "Изменился активный дисплей ID=$displayId")
             scheduleDensityCheck()
         }
     }
@@ -73,7 +72,6 @@ class FoldMonitorService : Service() {
                 DensityActionService.EXTRA_SUCCESS,
                 false
             )
-            Log.i(TAG, "Получен результат действия от сервиса: success=$success")
 
             if (success) {
                 retryPending = false
@@ -349,7 +347,6 @@ class FoldMonitorService : Service() {
             } else {
                 startForeground(1, notification)
             }
-            Log.d(TAG, "Foreground уведомление установлено")
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка запуска Foreground: ${e.message}", e)
             stopSelf()
@@ -383,7 +380,6 @@ class FoldMonitorService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "Сервис запущен startId=$startId")
         scheduleDensityCheck()
         return START_STICKY
     }
@@ -401,27 +397,16 @@ class FoldMonitorService : Service() {
 
         val isExternal = active.isExternal
 
-        Log.i(
-            TAG,
-            "Текущее состояние дисплея: ${if (isExternal) "Внешний" else "Внутренний"}, " +
-                "${active.width}x${active.height}, DPI=${active.density}"
-        )
         updateMonitorNotification(
             formatDisplayStatus(isExternal, active.shortPx, active.density)
         )
 
         if (actionInFlight) {
-            Log.d(TAG, "Действие уже выполняется, событие объединено")
             return
         }
 
         if (!ShizukuCommandRunner.mainBinderAvailable()) {
             retryPending = true
-            Log.i(
-                TAG,
-                "Главный Shizuku Binder недоступен: " +
-                    "ожидание запуска штатного действия watchdog"
-            )
             updateMonitorNotification(
                 "Shizuku Binder недоступен · восстановление"
             )
@@ -441,10 +426,8 @@ class FoldMonitorService : Service() {
 
         try {
             if (isExternal) {
-                Log.i(TAG, "Прямой запуск сервиса: Внешний")
                 DensityActionService.startClosed(this, fromMonitor = true)
             } else {
-                Log.i(TAG, "Прямой запуск сервиса: Внутренний")
                 DensityActionService.startOpen(this, fromMonitor = true)
             }
 

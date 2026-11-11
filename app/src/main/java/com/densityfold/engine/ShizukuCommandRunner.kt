@@ -195,13 +195,11 @@ object ShizukuCommandRunner {
 
                         try {
                             ensureBound()
-                            Log.i(TAG, "WAIT READY: Shizuku and UserService ready")
                             return@withTimeout
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
                             lastError = e
-                            Log.w(TAG, "WAIT READY: bind attempt failed: ${e.message}")
                         }
                     }
 
@@ -604,7 +602,6 @@ object ShizukuCommandRunner {
                                 )
                             }
 
-                            Log.i(TAG, "USER SERVICE calling bindUserService ${mainBinderState()}")
                             Shizuku.bindUserService(userServiceArgs, conn)
                         } else if (!completed.get()) {
                             throw IllegalStateException(

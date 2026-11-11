@@ -21,7 +21,6 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
 
-        Log.d(TAG, "Получено событие BOOT_COMPLETED")
 
         val pendingResult = goAsync()
         val appContext = context.applicationContext
@@ -32,15 +31,12 @@ class BootReceiver : BroadcastReceiver() {
                 val monitorEnabled = prefs.isFoldMonitorEnabled()
                 val autoStartEnabled = prefs.isAutoStartEnabled()
 
-                Log.d(TAG, "Монитор: $monitorEnabled, Автозапуск: $autoStartEnabled")
 
                 if (monitorEnabled && autoStartEnabled) {
-                    Log.d(TAG, "Запуск FoldMonitorService")
                     appContext.startService(
                         Intent(appContext, FoldMonitorService::class.java)
                     )
                 } else {
-                    Log.d(TAG, "FoldMonitorService не запущен (отключён в настройках)")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Ошибка при обработке BOOT_COMPLETED: ${e.message}", e)

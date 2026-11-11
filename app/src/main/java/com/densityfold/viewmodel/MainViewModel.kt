@@ -3,6 +3,7 @@ package com.densityfold.viewmodel
 import android.app.Application
 import android.content.Intent
 import android.provider.Settings
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.densityfold.FoldMonitorService
@@ -217,38 +218,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-        flushDpiPreference(profile)
+        try {
+            flushDpiPreference(profile)
 
-        val result = DensityExecutor.apply(
-            context = context,
-            profile = profile
-        )
+            val result = DensityExecutor.apply(
+                context = context,
+                profile = profile
+            )
 
-        result.fold(
-            onSuccess = { applied ->
-                val message = if (applied.alreadyApplied) {
-                    bypassMessage(applied.targetDpi)
-                } else {
-                    successMessage(applied.targetDpi)
-                }
+            result.fold(
+                onSuccess = { applied ->
+                    val message = if (applied.alreadyApplied) {
+                        bypassMessage(applied.targetDpi)
+                    } else {
+                        successMessage(applied.targetDpi)
+                    }
 
-                _uiState.update {
-                    it.copy(
-                        successMessage = message,
-                        isLoading = false
-                    )
+                    _uiState.update {
+                        it.copy(
+                            successMessage = message,
+                            errorMessage = null
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    throw error
                 }
-            },
-            onFailure = { error ->
-                _uiState.update {
-                    it.copy(
-                        isShizukuAvailable = ShizukuManager.isShizukuAvailable(),
-                        errorMessage = error.message ?: "Не удалось применить DPI",
-                        isLoading = false
-                    )
-                }
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _uiState.update {
+                it.copy(
+                    isShizukuAvailable = ShizukuManager.isShizukuAvailable(),
+                    errorMessage = e.message ?: "Не удалось применить DPI"
+                )
             }
-        )
+        } finally {
+            _uiState.update { it.copy(isLoading = false) }
+        }
     }
 
     fun clearMessages() {
@@ -272,7 +280,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 Shizuku.requestPermission(1001)
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w("DensityFold-UI", "Не удалось запросить разрешение Shizuku", e)
         }
     }
 }

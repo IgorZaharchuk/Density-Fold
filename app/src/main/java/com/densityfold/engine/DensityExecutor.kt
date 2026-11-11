@@ -31,66 +31,66 @@ object DensityExecutor {
     ): Result<DensityApplyResult> {
         return applyMutex.withLock {
             try {
-            val active = DisplayUtils.getActiveDisplay(context)
-                ?: throw IllegalStateException("Не удалось определить активный экран")
+                val active = DisplayUtils.getActiveDisplay(context)
+                    ?: throw IllegalStateException("Не удалось определить активный экран")
 
-            val isExternal = profile == DensityProfile.OUTER
+                val isExternal = profile == DensityProfile.OUTER
 
-            if (active.isExternal != isExternal) {
-                throw IllegalStateException(
-                    if (isExternal) {
-                        "Для применения настроек внешнего экрана закройте телефон"
-                    } else {
-                        "Для применения настроек внутреннего экрана раскройте телефон"
-                    }
-                )
-            }
+                if (active.isExternal != isExternal) {
+                    throw IllegalStateException(
+                        if (isExternal) {
+                            "Для применения настроек внешнего экрана закройте телефон"
+                        } else {
+                            "Для применения настроек внутреннего экрана раскройте телефон"
+                        }
+                    )
+                }
 
-            val shortPx = active.shortPx
+                val shortPx = active.shortPx
 
-            val preferences = DensityPreferences(context)
-            val targetDpi = if (isExternal) {
-                preferences.getOuterDpi()
-            } else {
-                preferences.getInnerDpi()
-            }
+                val preferences = DensityPreferences(context)
+                val targetDpi = if (isExternal) {
+                    preferences.getOuterDpi()
+                } else {
+                    preferences.getInnerDpi()
+                }
 
-            val targetDp = DisplayUtils.dpiToDp(targetDpi, shortPx)
+                val targetDp = DisplayUtils.dpiToDp(targetDpi, shortPx)
 
-            ShizukuManager.awaitShizukuReady(timeoutMs).getOrThrow()
+                ShizukuManager.awaitShizukuReady(timeoutMs).getOrThrow()
 
-            ensureDisplayUnchanged(context, active)
-
-            val currentDpi = ShizukuManager.getCurrentDensity().getOrThrow()
-            val alreadyApplied = currentDpi == targetDpi
-
-            if (!alreadyApplied) {
                 ensureDisplayUnchanged(context, active)
-                ShizukuManager.setDensity(targetDpi).getOrThrow()
-            }
 
-            val actualDpi = ShizukuManager.getCurrentDensity().getOrThrow()
+                val currentDpi = ShizukuManager.getCurrentDensity().getOrThrow()
+                val alreadyApplied = currentDpi == targetDpi
 
-            if (actualDpi != targetDpi) {
-                throw IllegalStateException(
-                    "Проверка DPI не пройдена: целевой=$targetDpi, фактический=$actualDpi"
+                if (!alreadyApplied) {
+                    ensureDisplayUnchanged(context, active)
+                    ShizukuManager.setDensity(targetDpi).getOrThrow()
+                }
+
+                val actualDpi = ShizukuManager.getCurrentDensity().getOrThrow()
+
+                if (actualDpi != targetDpi) {
+                    throw IllegalStateException(
+                        "Проверка DPI не пройдена: целевой=$targetDpi, фактический=$actualDpi"
+                    )
+                }
+
+                ensureDisplayUnchanged(context, active)
+
+                Result.success(
+                    DensityApplyResult(
+                        isExternal = isExternal,
+                        shortPx = shortPx,
+                        targetDp = targetDp,
+                        targetDpi = targetDpi,
+                        actualDpi = actualDpi,
+                        alreadyApplied = alreadyApplied
+                    )
                 )
-            }
-
-            ensureDisplayUnchanged(context, active)
-
-            Result.success(
-                DensityApplyResult(
-                    isExternal = isExternal,
-                    shortPx = shortPx,
-                    targetDp = targetDp,
-                    targetDpi = targetDpi,
-                    actualDpi = actualDpi,
-                    alreadyApplied = alreadyApplied
-                )
-            )
-        } catch (e: CancellationException) {
-            throw e
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Result.failure(e)
             }

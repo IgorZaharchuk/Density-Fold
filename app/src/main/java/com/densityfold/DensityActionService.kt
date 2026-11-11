@@ -26,7 +26,6 @@ class DensityActionService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action ?: run {
-            Log.d(TAG, "onStartCommand: null action, stopping")
             stopSelf(startId)
             return START_NOT_STICKY
         }
@@ -42,7 +41,6 @@ class DensityActionService : Service() {
         }
 
         val fromMonitor = intent.getBooleanExtra(EXTRA_MONITOR_REQUEST, false)
-        Log.d(TAG, "onStartCommand: action=$action monitor=$fromMonitor startId=$startId")
 
         scope.launch {
             var succeeded = false
@@ -50,7 +48,6 @@ class DensityActionService : Service() {
             var failureMessage: String? = null
 
             try {
-                Log.i(TAG, "Executing $profile through DensityExecutor")
 
                 val result = DensityExecutor.apply(applicationContext, profile)
 
@@ -135,11 +132,6 @@ class DensityActionService : Service() {
             putExtra(EXTRA_ACTUAL_DPI, applied?.actualDpi ?: 0)
             putExtra(EXTRA_ERROR, error)
         }
-        Log.i(
-            TAG,
-            "Отправка результата монитору: monitor=$fromMonitor success=$success " +
-                "external=${applied?.isExternal ?: expectedExternal} error=${error ?: "none"}"
-        )
         sendBroadcast(intent)
     }
 
@@ -182,7 +174,6 @@ class DensityActionService : Service() {
     }
 
     override fun onDestroy() {
-        Log.d(TAG, "onDestroy")
         scope.cancel()
         super.onDestroy()
     }

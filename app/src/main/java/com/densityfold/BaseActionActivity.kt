@@ -21,14 +21,12 @@ abstract class BaseActionActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        Log.d(TAG, "Запуск сервиса с действием: $action")
 
         // Запускаем сервис — он работает независимо от Activity
         val fromMonitor = intent.getBooleanExtra(
             DensityActionService.EXTRA_MONITOR_REQUEST,
             false
         )
-        Log.i(TAG, "Activity получила запрос: monitor=$fromMonitor action=$action")
 
         startService(Intent(this, DensityActionService::class.java).apply {
             this.action = this@BaseActionActivity.action
