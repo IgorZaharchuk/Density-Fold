@@ -173,7 +173,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        if (active.isExternal == isInner) {
+        if (active.isExternal == (profile == DensityProfile.INNER)) {
             _uiState.value = state.copy(
                 errorMessage = wrongScreenMessage,
                 isLoading = false
