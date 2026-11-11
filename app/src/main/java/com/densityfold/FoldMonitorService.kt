@@ -209,9 +209,9 @@ class FoldMonitorService : Service() {
                                     active.isExternal,
                                     active.shortPx,
                                     active.density
-                                ) + " · Shizuku подключён"
+                                )
                             } else {
-                                "Shizuku подключён · автомат готов"
+                                "Мониторинг складывания активен"
                             }
                         }
                     }
