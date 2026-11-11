@@ -11,6 +11,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.clickable
@@ -24,6 +25,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -166,16 +168,30 @@ fun MainScreen(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        Text(
-                            when {
-                                display == null -> "Экран не определён"
-                                display.isExternal -> "Внешний экран"
-                                else -> "Внутренний экран"
-                            },
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Image(
+                                painter = painterResource(
+                                    if (display?.isExternal == true)
+                                        R.drawable.ic_screen_phone
+                                    else R.drawable.ic_screen_book
+                                ),
+                                contentDescription = null,
+                                modifier = Modifier.size(25.dp)
+                            )
+                            Text(
+                                when {
+                                    display == null -> "Экран не определён"
+                                    display.isExternal -> "Внешний экран"
+                                    else -> "Внутренний экран"
+                                },
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
@@ -295,10 +311,14 @@ fun MainScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Text(
-                            if (automationExpanded) "⌃" else "⌄",
-                            fontSize = 22.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        Image(
+                            painter = painterResource(
+                                if (automationExpanded) R.drawable.ic_expand
+                                else R.drawable.ic_collapse
+                            ),
+                            contentDescription = if (automationExpanded)
+                                "Свернуть" else "Развернуть",
+                            modifier = Modifier.size(24.dp)
                         )
                     }
 
@@ -399,7 +419,21 @@ private fun DensitySettingCard(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            Text(title, fontWeight = FontWeight.Bold)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Image(
+                    painter = painterResource(
+                        if (title == "Внешний экран")
+                            R.drawable.ic_screen_phone
+                        else R.drawable.ic_screen_book
+                    ),
+                    contentDescription = null,
+                    modifier = Modifier.size(23.dp)
+                )
+                Text(title, fontWeight = FontWeight.Bold)
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -462,7 +496,11 @@ private fun DensitySettingCard(
                     },
                     enabled = enabled
                 ) {
-                    Text("−", fontSize = 21.sp)
+                    Image(
+                        painter = painterResource(R.drawable.ic_minus),
+                        contentDescription = "Уменьшить DPI",
+                        modifier = Modifier.size(26.dp)
+                    )
                 }
 
                 Slider(
@@ -489,7 +527,11 @@ private fun DensitySettingCard(
                     },
                     enabled = enabled
                 ) {
-                    Text("+", fontSize = 21.sp)
+                    Image(
+                        painter = painterResource(R.drawable.ic_plus),
+                        contentDescription = "Увеличить DPI",
+                        modifier = Modifier.size(26.dp)
+                    )
                 }
             }
         }
