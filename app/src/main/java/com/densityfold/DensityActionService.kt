@@ -188,22 +188,23 @@ class DensityActionService : Service() {
         const val EXTRA_ACTUAL_DPI = "com.densityfold.EXTRA_ACTUAL_DPI"
         const val EXTRA_ERROR = "com.densityfold.EXTRA_ERROR"
 
-        fun startOpen(context: Context, fromMonitor: Boolean = false) {
+        private fun startAction(
+            context: Context,
+            action: String,
+            fromMonitor: Boolean
+        ) {
             context.startService(
                 Intent(context, DensityActionService::class.java).apply {
-                    action = ACTION_OPEN
+                    this.action = action
                     putExtra(EXTRA_MONITOR_REQUEST, fromMonitor)
                 }
             )
         }
 
-        fun startClosed(context: Context, fromMonitor: Boolean = false) {
-            context.startService(
-                Intent(context, DensityActionService::class.java).apply {
-                    action = ACTION_CLOSED
-                    putExtra(EXTRA_MONITOR_REQUEST, fromMonitor)
-                }
-            )
-        }
+        fun startOpen(context: Context, fromMonitor: Boolean = false) =
+            startAction(context, ACTION_OPEN, fromMonitor)
+
+        fun startClosed(context: Context, fromMonitor: Boolean = false) =
+            startAction(context, ACTION_CLOSED, fromMonitor)
     }
 }
