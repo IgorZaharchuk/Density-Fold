@@ -140,22 +140,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { refreshDisplaysInternal() }
     }
 
-    fun setInnerDpi(dpi: Int) {
-        val value = dpi.coerceIn(
-            DensityPreferences.MIN_DPI,
-            DensityPreferences.MAX_DPI
-        )
-        _uiState.update { it.copy(innerDpi = value) }
-        scheduleDpiSave(DensityProfile.INNER, value)
-    }
+    fun setInnerDpi(dpi: Int) = setDpi(DensityProfile.INNER, dpi)
 
-    fun setOuterDpi(dpi: Int) {
+    fun setOuterDpi(dpi: Int) = setDpi(DensityProfile.OUTER, dpi)
+
+    private fun setDpi(profile: DensityProfile, dpi: Int) {
         val value = dpi.coerceIn(
             DensityPreferences.MIN_DPI,
             DensityPreferences.MAX_DPI
         )
-        _uiState.update { it.copy(outerDpi = value) }
-        scheduleDpiSave(DensityProfile.OUTER, value)
+
+        _uiState.update {
+            when (profile) {
+                DensityProfile.INNER -> it.copy(innerDpi = value)
+                DensityProfile.OUTER -> it.copy(outerDpi = value)
+            }
+        }
+
+        scheduleDpiSave(profile, value)
     }
 
     private fun scheduleDpiSave(profile: DensityProfile, dpi: Int) {
