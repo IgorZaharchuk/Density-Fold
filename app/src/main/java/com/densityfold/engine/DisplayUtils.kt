@@ -7,13 +7,10 @@ import android.util.DisplayMetrics
 import android.view.Display
 
 data class DisplayInfo(
-    val displayId: Int,
-    val name: String,
     val width: Int,
     val height: Int,
     val density: Int,
-    val isDefault: Boolean,
-    val isExternal: Boolean = false
+    val isExternal: Boolean
 ) {
     val shortPx: Int get() = minOf(width, height)
 }
@@ -36,12 +33,9 @@ object DisplayUtils {
         val isInner = shortPx >= INNER_THRESHOLD_PX
 
         return DisplayInfo(
-            displayId = display.displayId,
-            name = if (isInner) "Внутренний экран" else "Внешний экран",
             width = size.x,
             height = size.y,
             density = metrics.densityDpi,
-            isDefault = true,
             isExternal = !isInner
         )
     }
