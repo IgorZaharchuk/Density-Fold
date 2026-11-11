@@ -155,7 +155,7 @@ fun MainScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    HorizontalDivider()
+                    Divider()
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -187,7 +187,7 @@ fun MainScreen(
                         )
                     }
 
-                    HorizontalDivider()
+                    Divider()
 
                     Text(
                         if (uiState.isShizukuAvailable) {
@@ -263,7 +263,7 @@ fun MainScreen(
                         onCheckedChange = viewModel::setFoldMonitorEnabled
                     )
 
-                    HorizontalDivider()
+                    Divider()
 
                     SettingSwitch(
                         title = "Автозапуск при загрузке",
