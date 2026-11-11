@@ -44,15 +44,17 @@ object DisplayUtils {
         )
     }
 
-    fun getInnerShortPx(context: Context): Int {
-        val active = getActiveDisplay(context)
-        return if (active != null && !active.isExternal) active.shortPx else 1968
-    }
+    fun getInnerShortPx(active: DisplayInfo?): Int =
+        if (active != null && !active.isExternal) active.shortPx else 1968
 
-    fun getOuterShortPx(context: Context): Int {
-        val active = getActiveDisplay(context)
-        return if (active != null && active.isExternal) active.shortPx else 1080
-    }
+    fun getOuterShortPx(active: DisplayInfo?): Int =
+        if (active != null && active.isExternal) active.shortPx else 1080
+
+    fun getInnerShortPx(context: Context): Int =
+        getInnerShortPx(getActiveDisplay(context))
+
+    fun getOuterShortPx(context: Context): Int =
+        getOuterShortPx(getActiveDisplay(context))
 
     fun dpToDpi(dp: Int, shortPx: Int): Int? {
         if (dp <= 0 || shortPx <= 0) return null
