@@ -112,7 +112,7 @@ fun MainScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text("Density Fold", fontWeight = FontWeight.Bold)
+                    Text("Density Fold", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 },
                 actions = {
                     Row(
@@ -448,6 +448,10 @@ private fun DensitySettingCard(
                     },
                     valueRange = safeMin.toFloat()..safeMax.toFloat(),
                     modifier = Modifier.weight(1f),
+                    colors = SliderDefaults.colors(
+                        activeTrackColor = MaterialTheme.colorScheme.outlineVariant,
+                        inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
+                    ),
                     enabled = enabled
                 )
 
