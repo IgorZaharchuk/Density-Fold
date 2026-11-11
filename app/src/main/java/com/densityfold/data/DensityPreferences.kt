@@ -7,56 +7,66 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.densityfold.engine.DisplayUtils
 import kotlinx.coroutines.flow.first
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "density_prefs")
 
 class DensityPreferences(private val context: Context) {
     companion object {
-        val INNER_DP = intPreferencesKey("inner_dp")
-        val OUTER_DP = intPreferencesKey("outer_dp")
+        val INNER_DPI = intPreferencesKey("inner_dpi")
+        val OUTER_DPI = intPreferencesKey("outer_dpi")
         val FOLD_MONITOR_ENABLED = booleanPreferencesKey("fold_monitor_enabled")
         val AUTO_START_ENABLED = booleanPreferencesKey("auto_start_enabled")
-        
-        val INNER_DPI_LEGACY = intPreferencesKey("inner_dpi")
-        val OUTER_DPI_LEGACY = intPreferencesKey("outer_dpi")
-        
+
         const val DEFAULT_INNER_DP = 900
         const val DEFAULT_OUTER_DP = 411
         const val DEFAULT_MONITOR_ENABLED = false
         const val DEFAULT_AUTO_START_ENABLED = false
-        
-        const val MIN_DP = 200
-        const val MAX_DP = 1200
+
+        const val MIN_DPI = 72
+        const val MAX_DPI = 2000
     }
 
-    suspend fun getInnerDp(): Int = context.dataStore.data.first()[INNER_DP] ?: DEFAULT_INNER_DP
-    suspend fun getOuterDp(): Int = context.dataStore.data.first()[OUTER_DP] ?: DEFAULT_OUTER_DP
-    suspend fun isFoldMonitorEnabled(): Boolean = context.dataStore.data.first()[FOLD_MONITOR_ENABLED] ?: DEFAULT_MONITOR_ENABLED
-    suspend fun isAutoStartEnabled(): Boolean = context.dataStore.data.first()[AUTO_START_ENABLED] ?: DEFAULT_AUTO_START_ENABLED
-    
-    suspend fun setInnerDp(dp: Int) { context.dataStore.edit { it[INNER_DP] = dp.coerceIn(MIN_DP, MAX_DP) } }
-    suspend fun setOuterDp(dp: Int) { context.dataStore.edit { it[OUTER_DP] = dp.coerceIn(MIN_DP, MAX_DP) } }
-    suspend fun setFoldMonitorEnabled(enabled: Boolean) { context.dataStore.edit { it[FOLD_MONITOR_ENABLED] = enabled } }
-    suspend fun setAutoStartEnabled(enabled: Boolean) { context.dataStore.edit { it[AUTO_START_ENABLED] = enabled } }
-    
-    suspend fun migrateLegacyDpiToDp(innerShortPx: Int, outerShortPx: Int) {
-        val prefs = context.dataStore.data.first()
-        
-        if (!prefs.contains(INNER_DP) && prefs.contains(INNER_DPI_LEGACY)) {
-            val legacyDpi = prefs[INNER_DPI_LEGACY]
-            val newDp = if (legacyDpi != null && legacyDpi > 0 && innerShortPx > 0) {
-                (innerShortPx * 160f / legacyDpi).toInt().coerceIn(MIN_DP, MAX_DP)
-            } else { DEFAULT_INNER_DP }
-            context.dataStore.edit { store -> store[INNER_DP] = newDp; store.remove(INNER_DPI_LEGACY) }
+    suspend fun getInnerDpi(): Int {
+        val stored = context.dataStore.data.first()[INNER_DPI]
+        return stored ?: DisplayUtils.dpToDpi(
+            DEFAULT_INNER_DP,
+            DisplayUtils.getInnerShortPx(context)
+        ) ?: 350
+    }
+
+    suspend fun getOuterDpi(): Int {
+        val stored = context.dataStore.data.first()[OUTER_DPI]
+        return stored ?: DisplayUtils.dpToDpi(
+            DEFAULT_OUTER_DP,
+            DisplayUtils.getOuterShortPx(context)
+        ) ?: 420
+    }
+
+    suspend fun isFoldMonitorEnabled(): Boolean =
+        context.dataStore.data.first()[FOLD_MONITOR_ENABLED] ?: DEFAULT_MONITOR_ENABLED
+
+    suspend fun isAutoStartEnabled(): Boolean =
+        context.dataStore.data.first()[AUTO_START_ENABLED] ?: DEFAULT_AUTO_START_ENABLED
+
+    suspend fun setInnerDpi(dpi: Int) {
+        context.dataStore.edit {
+            it[INNER_DPI] = dpi.coerceIn(MIN_DPI, MAX_DPI)
         }
-        
-        if (!prefs.contains(OUTER_DP) && prefs.contains(OUTER_DPI_LEGACY)) {
-            val legacyDpi = prefs[OUTER_DPI_LEGACY]
-            val newDp = if (legacyDpi != null && legacyDpi > 0 && outerShortPx > 0) {
-                (outerShortPx * 160f / legacyDpi).toInt().coerceIn(MIN_DP, MAX_DP)
-            } else { DEFAULT_OUTER_DP }
-            context.dataStore.edit { store -> store[OUTER_DP] = newDp; store.remove(OUTER_DPI_LEGACY) }
+    }
+
+    suspend fun setOuterDpi(dpi: Int) {
+        context.dataStore.edit {
+            it[OUTER_DPI] = dpi.coerceIn(MIN_DPI, MAX_DPI)
         }
+    }
+
+    suspend fun setFoldMonitorEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[FOLD_MONITOR_ENABLED] = enabled }
+    }
+
+    suspend fun setAutoStartEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[AUTO_START_ENABLED] = enabled }
     }
 }

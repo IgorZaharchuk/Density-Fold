@@ -70,7 +70,7 @@ class DensityActionService : Service() {
                             showNotification(
                                 applicationContext,
                                 screenName,
-                                value.targetDp,
+                                value.targetDpi,
                                 true,
                                 null
                             )
@@ -146,7 +146,7 @@ class DensityActionService : Service() {
     private fun showNotification(
         context: Context,
         screenName: String,
-        dp: Int,
+        dpi: Int,
         isSuccess: Boolean,
         errorMsg: String?
     ) {
@@ -165,7 +165,7 @@ class DensityActionService : Service() {
 
         val title = if (isSuccess) "Density Fold: Успешно" else "Density Fold: Ошибка"
         val text = if (isSuccess) {
-            "$screenName экран: установлено $dp dp"
+            "$screenName экран: установлено $dpi DPI"
         } else {
             errorMsg ?: "Неизвестная ошибка"
         }

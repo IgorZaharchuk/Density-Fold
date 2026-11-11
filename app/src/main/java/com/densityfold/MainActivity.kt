@@ -11,7 +11,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.*\nimport androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -89,17 +89,23 @@ fun MainScreen(
     onRequestOverlayPermission: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-
-    var innerDpText by remember { mutableStateOf(uiState.innerDp.toString()) }
-    var outerDpText by remember { mutableStateOf(uiState.outerDp.toString()) }
     var automationExpanded by remember { mutableStateOf(false) }
 
-    LaunchedEffect(uiState.innerDp) {
-        innerDpText = uiState.innerDp.toString()
+    LaunchedEffect(uiState.errorMessage, uiState.successMessage) {
+        if (uiState.errorMessage != null || uiState.successMessage != null) {
+            kotlinx.coroutines.delay(4000)
+            viewModel.clearMessages()
+        }
     }
-    LaunchedEffect(uiState.outerDp) {
-        outerDpText = uiState.outerDp.toString()
-    }
+
+    val innerMin = (com.densityfold.engine.DisplayUtils.dpToDpi(1200, uiState.innerShortPx) ?: 72)
+        .coerceAtLeast(72)
+    val innerMax = (com.densityfold.engine.DisplayUtils.dpToDpi(200, uiState.innerShortPx) ?: 2000)
+        .coerceAtMost(2000)
+    val outerMin = (com.densityfold.engine.DisplayUtils.dpToDpi(1200, uiState.outerShortPx) ?: 72)
+        .coerceAtLeast(72)
+    val outerMax = (com.densityfold.engine.DisplayUtils.dpToDpi(200, uiState.outerShortPx) ?: 2000)
+        .coerceAtMost(2000)
 
     Scaffold(
         topBar = {
@@ -107,7 +113,21 @@ fun MainScreen(
                 title = {
                     Column {
                         Text("Density Fold", fontWeight = FontWeight.Bold)
-
+                        Text(
+                            if (uiState.isShizukuAvailable) "Shizuku подключён"
+                            else "Ожидание Shizuku",
+                            fontSize = 12.sp,
+                            color = if (uiState.isShizukuAvailable)
+                                MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.error
+                        )
+                    }
+                },
+                actions = {
+                    if (!uiState.isShizukuAvailable) {
+                        TextButton(onClick = viewModel::requestShizukuPermission) {
+                            Text("Подключить")
+                        }
                     }
                 }
             )
@@ -117,21 +137,52 @@ fun MainScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
+                .padding(horizontal = 16.dp, vertical = 10.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+            uiState.errorMessage?.let {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        "Текущее состояние",
+                        it,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+
+            uiState.successMessage?.let {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        it,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        "Активный экран",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-
                     val display = uiState.activeDisplay
                     Text(
                         when {
@@ -139,107 +190,47 @@ fun MainScreen(
                             display.isExternal -> "Внешний экран"
                             else -> "Внутренний экран"
                         },
-                        style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.SemiBold
                     )
-
                     Text(
-                        if (display != null) {
-                            "${display.width} × ${display.height} px"
-                        } else {
-                            "Разрешение недоступно"
-                        },
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        if (display != null) "${display.width} × ${display.height} px"
+                        else "Разрешение недоступно",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 13.sp
                     )
-
-                    Divider()
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text("Текущий DPI")
-                        Text(
-                            if (uiState.currentDensity > 0) {
-                                uiState.currentDensity.toString()
-                            } else {
-                                "—"
-                            },
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text("Логическая ширина")
-                        Text(
-                            if (uiState.currentDp > 0) {
-                                "${uiState.currentDp} dp"
-                            } else {
-                                "—"
-                            },
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
-                    Divider()
-
-                    Text(
-                        if (uiState.isShizukuAvailable) {
-                            "Shizuku подключён"
-                        } else {
-                            "Ожидание подключения Shizuku"
-                        },
-                        color = if (uiState.isShizukuAvailable) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.error
-                        }
-                    )
-
-                    if (!uiState.isShizukuAvailable) {
-                        OutlinedButton(
-                            onClick = { viewModel.requestShizukuPermission() },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Запросить разрешение Shizuku")
-                        }
-                    }
                 }
             }
 
             Text(
-                "Настройки плотности",
+                "Настройка DPI",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
 
             DensitySettingCard(
                 title = "Внутренний экран",
-                value = innerDpText,
-                onValueChange = { value ->
-                    innerDpText = value
-                    value.toIntOrNull()?.takeIf { it in 200..1200 }?.let {
-                        viewModel.setInnerDp(it)
-                    }
-                },
-                onApply = { viewModel.applyInnerDensity() },
+                dpi = uiState.innerDpi,
+                dp = com.densityfold.engine.DisplayUtils.dpiToDp(
+                    uiState.innerDpi, uiState.innerShortPx
+                ),
+                minDpi = innerMin,
+                maxDpi = innerMax,
+                onDpiChange = viewModel::setInnerDpi,
+                onApply = viewModel::applyInnerDensity,
                 enabled = uiState.isShizukuAvailable && !uiState.isLoading
             )
 
             DensitySettingCard(
                 title = "Внешний экран",
-                value = outerDpText,
-                onValueChange = { value ->
-                    outerDpText = value
-                    value.toIntOrNull()?.takeIf { it in 200..1200 }?.let {
-                        viewModel.setOuterDp(it)
-                    }
-                },
-                onApply = { viewModel.applyOuterDensity() },
+                dpi = uiState.outerDpi,
+                dp = com.densityfold.engine.DisplayUtils.dpiToDp(
+                    uiState.outerDpi, uiState.outerShortPx
+                ),
+                minDpi = outerMin,
+                maxDpi = outerMax,
+                onDpiChange = viewModel::setOuterDpi,
+                onApply = viewModel::applyOuterDensity,
                 enabled = uiState.isShizukuAvailable && !uiState.isLoading
             )
 
@@ -249,7 +240,7 @@ fun MainScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { automationExpanded = !automationExpanded }
-                            .padding(16.dp),
+                            .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
@@ -259,11 +250,9 @@ fun MainScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                if (uiState.isFoldMonitorEnabled) {
+                                if (uiState.isFoldMonitorEnabled)
                                     "Автоприменение включено"
-                                } else {
-                                    "Автоприменение выключено"
-                                },
+                                else "Автоприменение выключено",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -278,30 +267,24 @@ fun MainScreen(
                     if (automationExpanded) {
                         Column(
                             modifier = Modifier.padding(
-                                start = 16.dp,
-                                end = 16.dp,
-                                bottom = 16.dp
+                                start = 14.dp, end = 14.dp, bottom = 14.dp
                             ),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             SettingSwitch(
                                 title = "Автоприменение при складывании",
-                                description = "Менять плотность при смене экрана",
+                                description = "Менять DPI при смене экрана",
                                 checked = uiState.isFoldMonitorEnabled,
                                 onCheckedChange = viewModel::setFoldMonitorEnabled
                             )
-
-                            Divider()
-
+                            HorizontalDivider()
                             SettingSwitch(
                                 title = "Автозапуск при загрузке",
                                 description = "Запускать монитор после перезагрузки",
                                 checked = uiState.isAutoStartEnabled,
                                 onCheckedChange = viewModel::setAutoStartEnabled
                             )
-
-                            Divider()
-
+                            HorizontalDivider()
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
@@ -326,13 +309,10 @@ fun MainScreen(
             if (!uiState.isOverlayPermissionGranted) {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            "Фоновое восстановление",
-                            fontWeight = FontWeight.Bold
-                        )
+                        Text("Фоновое восстановление", fontWeight = FontWeight.Bold)
                         Text(
                             "Разрешение нужно для восстановления связи с Shizuku в фоне.",
                             fontSize = 13.sp,
@@ -347,34 +327,6 @@ fun MainScreen(
                     }
                 }
             }
-
-            uiState.errorMessage?.let {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Text(
-                        it,
-                        modifier = Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                }
-            }
-
-            uiState.successMessage?.let {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                ) {
-                    Text(
-                        it,
-                        modifier = Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
         }
     }
 }
@@ -382,39 +334,62 @@ fun MainScreen(
 @Composable
 private fun DensitySettingCard(
     title: String,
-    value: String,
-    onValueChange: (String) -> Unit,
+    dpi: Int,
+    dp: Int,
+    minDpi: Int,
+    maxDpi: Int,
+    onDpiChange: (Int) -> Unit,
     onApply: () -> Unit,
     enabled: Boolean
 ) {
-    val currentValue = value.toIntOrNull()?.coerceIn(200, 1200) ?: 200
+    var value by remember(dpi) { mutableStateOf(dpi.toString()) }
+    val safeMin = minDpi.coerceAtMost(maxDpi)
+    val safeMax = maxDpi.coerceAtLeast(safeMin)
+    val current = (value.toIntOrNull() ?: dpi).coerceIn(safeMin, safeMax)
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Text(title, fontWeight = FontWeight.Bold)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Text("Плотность:")
+                Text("DPI:", fontWeight = FontWeight.SemiBold)
 
                 OutlinedTextField(
                     value = value,
-                    onValueChange = onValueChange,
-                    modifier = Modifier.weight(1f),
-                    singleLine = true
+                    onValueChange = {
+                        value = it.filter(Char::isDigit).take(4)
+                        value.toIntOrNull()?.takeIf { number ->
+                            number in safeMin..safeMax
+                        }?.let(onDpiChange)
+                    },
+                    modifier = Modifier.width(82.dp),
+                    singleLine = true,
+                    enabled = enabled,
+                    textStyle = MaterialTheme.typography.bodyLarge
                 )
+
+                Text(
+                    "$dp dp",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+
+                Spacer(modifier = Modifier.weight(1f))
 
                 Button(
                     onClick = onApply,
-                    enabled = enabled
+                    enabled = enabled,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                 ) {
-                    Text("Применить")
+                    Text("Применить", maxLines = 1)
                 }
             }
 
@@ -424,26 +399,36 @@ private fun DensitySettingCard(
             ) {
                 TextButton(
                     onClick = {
-                        onValueChange((currentValue - 10).coerceAtLeast(200).toString())
-                    }
+                        val next = (current - 5).coerceAtLeast(safeMin)
+                        value = next.toString()
+                        onDpiChange(next)
+                    },
+                    enabled = enabled
                 ) {
-                    Text("−", fontSize = 22.sp)
+                    Text("−", fontSize = 21.sp)
                 }
 
                 Slider(
-                    value = currentValue.toFloat(),
-                    onValueChange = { onValueChange(it.toInt().toString()) },
-                    valueRange = 200f..1200f,
-                    steps = 99,
-                    modifier = Modifier.weight(1f)
+                    value = current.toFloat(),
+                    onValueChange = {
+                        val next = it.toInt().coerceIn(safeMin, safeMax)
+                        value = next.toString()
+                        onDpiChange(next)
+                    },
+                    valueRange = safeMin.toFloat()..safeMax.toFloat(),
+                    modifier = Modifier.weight(1f),
+                    enabled = enabled
                 )
 
                 TextButton(
                     onClick = {
-                        onValueChange((currentValue + 10).coerceAtMost(1200).toString())
-                    }
+                        val next = (current + 5).coerceAtMost(safeMax)
+                        value = next.toString()
+                        onDpiChange(next)
+                    },
+                    enabled = enabled
                 ) {
-                    Text("+", fontSize = 22.sp)
+                    Text("+", fontSize = 21.sp)
                 }
             }
         }

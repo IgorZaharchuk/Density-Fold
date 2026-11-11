@@ -20,8 +20,10 @@ data class UiState(
     val activeDisplay: DisplayInfo? = null,
     val currentDensity: Int = 0,
     val currentDp: Int = 0,
-    val innerDp: Int = 900,
-    val outerDp: Int = 411,
+    val innerDpi: Int = 350,
+    val outerDpi: Int = 420,
+    val innerShortPx: Int = 1968,
+    val outerShortPx: Int = 1080,
     val isFoldMonitorEnabled: Boolean = false,
     val isAutoStartEnabled: Boolean = false,
     val isShizukuAvailable: Boolean = false,
@@ -66,11 +68,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun loadSettingsInternal() {
         val innerShortPx = DisplayUtils.getInnerShortPx(getApplication())
         val outerShortPx = DisplayUtils.getOuterShortPx(getApplication())
-        preferences.migrateLegacyDpiToDp(innerShortPx, outerShortPx)
 
         _uiState.value = _uiState.value.copy(
-            innerDp = preferences.getInnerDp(),
-            outerDp = preferences.getOuterDp(),
+            innerDpi = preferences.getInnerDpi(),
+            outerDpi = preferences.getOuterDpi(),
+            innerShortPx = innerShortPx,
+            outerShortPx = outerShortPx,
             isFoldMonitorEnabled = preferences.isFoldMonitorEnabled(),
             isAutoStartEnabled = preferences.isAutoStartEnabled(),
             isShizukuAvailable = ShizukuManager.isShizukuAvailable()
@@ -104,41 +107,47 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val context = getApplication<Application>().applicationContext
         val active = DisplayUtils.getActiveDisplay(context)
         val currentDpi = ShizukuManager.getCurrentDensity().getOrNull() ?: 0
-        val currentDp = if (currentDpi > 0 && active != null) DisplayUtils.dpiToDp(currentDpi, active.shortPx) else 0
+        val currentDp = if (currentDpi > 0 && active != null) {
+            DisplayUtils.dpiToDp(currentDpi, active.shortPx)
+        } else 0
 
         _uiState.value = _uiState.value.copy(
             activeDisplay = active,
             currentDensity = currentDpi,
             currentDp = currentDp,
+            innerShortPx = DisplayUtils.getInnerShortPx(context),
+            outerShortPx = DisplayUtils.getOuterShortPx(context),
             isShizukuAvailable = ShizukuManager.isShizukuAvailable(),
             isOverlayPermissionGranted = Settings.canDrawOverlays(context),
             errorMessage = null
         )
     }
 
-    fun refreshDisplays() { viewModelScope.launch { refreshDisplaysInternal() } }
+    fun refreshDisplays() {
+        viewModelScope.launch { refreshDisplaysInternal() }
+    }
 
-    fun setInnerDp(dp: Int) {
+    fun setInnerDpi(dpi: Int) {
         viewModelScope.launch {
-            preferences.setInnerDp(dp)
-            _uiState.value = _uiState.value.copy(innerDp = dp)
+            preferences.setInnerDpi(dpi)
+            _uiState.value = _uiState.value.copy(innerDpi = dpi)
         }
     }
 
-    fun setOuterDp(dp: Int) {
+    fun setOuterDpi(dpi: Int) {
         viewModelScope.launch {
-            preferences.setOuterDp(dp)
-            _uiState.value = _uiState.value.copy(outerDp = dp)
+            preferences.setOuterDpi(dpi)
+            _uiState.value = _uiState.value.copy(outerDpi = dpi)
         }
     }
 
     fun applyInnerDensity() {
         viewModelScope.launch {
             applyDensity(
-                targetDp = _uiState.value.innerDp,
+                targetDpi = _uiState.value.innerDpi,
                 isInner = true,
-                successMessage = { "Внутренний экран: ${it} dp" },
-                bypassMessage = { "Внутренний экран: уже ${it} dp (без изменений)" },
+                successMessage = { "Внутренний экран: установлено $it DPI" },
+                bypassMessage = { "Внутренний экран: уже $it DPI" },
                 wrongScreenMessage = "Для применения настроек внутреннего экрана раскройте телефон"
             )
         }
@@ -147,17 +156,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun applyOuterDensity() {
         viewModelScope.launch {
             applyDensity(
-                targetDp = _uiState.value.outerDp,
+                targetDpi = _uiState.value.outerDpi,
                 isInner = false,
-                successMessage = { "Внешний экран: ${it} dp" },
-                bypassMessage = { "Внешний экран: уже ${it} dp (без изменений)" },
+                successMessage = { "Внешний экран: установлено $it DPI" },
+                bypassMessage = { "Внешний экран: уже $it DPI" },
                 wrongScreenMessage = "Для применения настроек внешнего экрана закройте телефон"
             )
         }
     }
 
     private suspend fun applyDensity(
-        targetDp: Int,
+        targetDpi: Int,
         isInner: Boolean,
         successMessage: (Int) -> String,
         bypassMessage: (Int) -> String,
@@ -176,28 +185,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        val targetDpi = DisplayUtils.dpToDpi(targetDp, active.shortPx)
-        if (targetDpi == null) {
-            _uiState.value = state.copy(errorMessage = "Некорректные параметры для расчёта DPI")
-            return
-        }
-
         val freshDpiResult = ShizukuManager.getCurrentDensity()
         if (freshDpiResult.isFailure) {
-            val error = freshDpiResult.exceptionOrNull()
             _uiState.value = state.copy(
                 isShizukuAvailable = ShizukuManager.isShizukuAvailable(),
-                errorMessage = error?.message ?: "Не удалось связаться с Shizuku",
+                errorMessage = freshDpiResult.exceptionOrNull()?.message
+                    ?: "Не удалось связаться с Shizuku",
                 isLoading = false
             )
             return
         }
+
         val freshDpi = freshDpiResult.getOrNull()
         if (freshDpi != null && freshDpi == targetDpi) {
             _uiState.value = state.copy(
                 currentDensity = targetDpi,
                 currentDp = DisplayUtils.dpiToDp(targetDpi, active.shortPx),
-                successMessage = bypassMessage(targetDp),
+                successMessage = bypassMessage(targetDpi),
                 isLoading = false
             )
             return
@@ -210,12 +214,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             onSuccess = {
                 _uiState.value = _uiState.value.copy(
                     currentDensity = targetDpi,
-                    currentDp = targetDp,
-                    successMessage = successMessage(targetDp),
+                    currentDp = DisplayUtils.dpiToDp(targetDpi, active.shortPx),
+                    successMessage = successMessage(targetDpi),
                     isLoading = false
                 )
             },
-            onFailure = { _uiState.value = _uiState.value.copy(errorMessage = it.message, isLoading = false) }
+            onFailure = {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = it.message ?: "Не удалось применить DPI",
+                    isLoading = false
+                )
+            }
+        )
+    }
+
+    fun clearMessages() {
+        _uiState.value = _uiState.value.copy(
+            errorMessage = null,
+            successMessage = null
         )
     }
 
@@ -227,8 +243,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun requestShizukuPermission() {
         try {
-            if (rikka.shizuku.Shizuku.getUid() != -1) {
-                rikka.shizuku.Shizuku.requestPermission(1001)
+            if (Shizuku.getUid() != -1) {
+                Shizuku.requestPermission(1001)
             }
         } catch (e: Exception) {
             e.printStackTrace()

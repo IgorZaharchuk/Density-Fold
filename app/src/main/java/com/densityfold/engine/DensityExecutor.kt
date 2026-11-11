@@ -41,14 +41,13 @@ object DensityExecutor {
             }
 
             val preferences = DensityPreferences(context)
-            val targetDp = if (isExternal) {
-                preferences.getOuterDp()
+            val targetDpi = if (isExternal) {
+                preferences.getOuterDpi()
             } else {
-                preferences.getInnerDp()
+                preferences.getInnerDpi()
             }
 
-            val targetDpi = DisplayUtils.dpToDpi(targetDp, shortPx)
-                ?: throw IllegalArgumentException("Некорректные параметры для расчёта DPI")
+            val targetDp = DisplayUtils.dpiToDp(targetDpi, shortPx)
 
             val readiness = ShizukuManager.awaitShizukuReady(timeoutMs)
             readiness.getOrThrow()
