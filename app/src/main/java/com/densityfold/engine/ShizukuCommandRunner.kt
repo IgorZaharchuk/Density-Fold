@@ -172,6 +172,8 @@ object ShizukuCommandRunner {
                 } catch (e: SecurityException) {
                     Log.e(TAG, "RECONNECT permission error: ${e.message}", e)
                     return@launch
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.w(
                         TAG,
