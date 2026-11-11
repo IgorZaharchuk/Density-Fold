@@ -190,30 +190,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun applyInnerDensity() {
-        viewModelScope.launch {
-            applyDensity(
-                profile = DensityProfile.INNER,
-                successMessage = { "Внутренний экран: установлено $it DPI" },
-                bypassMessage = { "Внутренний экран: уже $it DPI" },
-            )
-        }
+        viewModelScope.launch { applyDensity(DensityProfile.INNER) }
     }
 
     fun applyOuterDensity() {
-        viewModelScope.launch {
-            applyDensity(
-                profile = DensityProfile.OUTER,
-                successMessage = { "Внешний экран: установлено $it DPI" },
-                bypassMessage = { "Внешний экран: уже $it DPI" },
-            )
-        }
+        viewModelScope.launch { applyDensity(DensityProfile.OUTER) }
     }
 
-    private suspend fun applyDensity(
-        profile: DensityProfile,
-        successMessage: (Int) -> String,
-        bypassMessage: (Int) -> String
-    ) {
+    private suspend fun applyDensity(profile: DensityProfile) {
         val context = getApplication<Application>().applicationContext
 
         _uiState.update {
@@ -232,25 +216,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 profile = profile
             )
 
-            result.fold(
-                onSuccess = { applied ->
-                    val message = if (applied.alreadyApplied) {
-                        bypassMessage(applied.targetDpi)
-                    } else {
-                        successMessage(applied.targetDpi)
-                    }
+            val applied = result.getOrThrow()
+            val screenName = if (profile == DensityProfile.INNER) {
+                "Внутренний"
+            } else {
+                "Внешний"
+            }
+            val status = if (applied.alreadyApplied) "уже" else "установлено"
 
-                    _uiState.update {
-                        it.copy(
-                            successMessage = message,
-                            errorMessage = null
-                        )
-                    }
-                },
-                onFailure = { error ->
-                    throw error
-                }
-            )
+            _uiState.update {
+                it.copy(
+                    successMessage = "$screenName экран: $status ${applied.targetDpi} DPI",
+                    errorMessage = null
+                )
+            }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {

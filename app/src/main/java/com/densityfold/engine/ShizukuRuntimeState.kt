@@ -8,9 +8,6 @@ data class ShizukuRuntimeState(
     val isAvailable: Boolean
         get() = mainBinder && permission
 
-    val isReady: Boolean
-        get() = isAvailable && userService
-
     val label: String
         get() = when {
             !mainBinder -> "MAIN_BINDER_DEAD"

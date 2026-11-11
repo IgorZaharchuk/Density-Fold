@@ -136,16 +136,6 @@ object ShizukuCommandRunner {
         }
     }
 
-    fun permissionGranted(): Boolean {
-        return try {
-            mainBinderAvailable() &&
-                Shizuku.checkSelfPermission() ==
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-        } catch (_: Exception) {
-            false
-        }
-    }
-
     fun userServiceAvailable(): Boolean {
         val current = synchronized(stateLock) { service }
         return current != null && isUserServiceAlive(current)
