@@ -111,6 +111,7 @@ fun MainScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.height(56.dp),
                 title = {
                     Text("Density Fold", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 },
@@ -235,7 +236,7 @@ fun MainScreen(
 
             Text(
                 "Настройка DPI",
-                style = MaterialTheme.typography.titleLarge,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
 
@@ -449,8 +450,8 @@ private fun DensitySettingCard(
                     valueRange = safeMin.toFloat()..safeMax.toFloat(),
                     modifier = Modifier.weight(1f),
                     colors = SliderDefaults.colors(
-                        activeTrackColor = MaterialTheme.colorScheme.outlineVariant,
-                        inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
+                        activeTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                        inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
                     ),
                     enabled = enabled
                 )
