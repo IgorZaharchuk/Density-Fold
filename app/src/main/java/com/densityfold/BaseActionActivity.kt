@@ -3,7 +3,6 @@ package com.densityfold
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 
 /**
  * Минимально возможная Activity для запуска DensityActionService.
@@ -14,7 +13,6 @@ import android.util.Log
  * Это минимизирует потерю фокуса предыдущего приложения.
  */
 abstract class BaseActionActivity : Activity() {
-    private val TAG = "DensityFold-Action"
 
     protected abstract val action: String
 

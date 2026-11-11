@@ -82,9 +82,6 @@ class MainActivity : ComponentActivity() {
         if (::mainViewModel.isInitialized) mainViewModel.refreshDisplays()
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
