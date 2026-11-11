@@ -264,19 +264,10 @@ class FoldMonitorService : Service() {
 
             startActivity(intent)
 
-            actionTimeoutJob?.cancel()
-            actionTimeoutJob = scope.launch {
-                delay(20_000L)
-                if (actionInFlight) {
-                    actionInFlight = false
-                    retryPending = true
-                    Log.w(TAG, "SHIZUKU RECOVERY: тайм-аут штатного действия")
-                    notifications.update(
-                        "Нет ответа от Shizuku · повторная попытка"
-                    )
-                    scheduleRetry()
-                }
-            }
+            startActionTimeout(
+                logMessage = "SHIZUKU RECOVERY: тайм-аут штатного действия",
+                notificationMessage = "Нет ответа от Shizuku · повторная попытка"
+            )
 
             true
         } catch (e: Exception) {
@@ -370,17 +361,10 @@ class FoldMonitorService : Service() {
                 DensityActionService.startOpen(this, fromMonitor = true)
             }
 
-            actionTimeoutJob?.cancel()
-            actionTimeoutJob = scope.launch {
-                delay(20_000L)
-                if (actionInFlight) {
-                    actionInFlight = false
-                    retryPending = true
-                    Log.w(TAG, "Тайм-аут ожидания результата действия")
-                    notifications.update("Нет ответа от сервиса · повторная попытка")
-                    scheduleRetry()
-                }
-            }
+            startActionTimeout(
+                logMessage = "Тайм-аут ожидания результата действия",
+                notificationMessage = "Нет ответа от сервиса · повторная попытка"
+            )
         } catch (e: Exception) {
             actionTimeoutJob?.cancel()
             actionTimeoutJob = null
@@ -389,6 +373,23 @@ class FoldMonitorService : Service() {
             Log.e(TAG, "Не удалось запустить сервис: ${e.message}", e)
             notifications.update("Не удалось запустить действие · повторная попытка")
             scheduleRetry()
+        }
+    }
+
+    private fun startActionTimeout(
+        logMessage: String,
+        notificationMessage: String
+    ) {
+        actionTimeoutJob?.cancel()
+        actionTimeoutJob = scope.launch {
+            delay(20_000L)
+            if (actionInFlight) {
+                actionInFlight = false
+                retryPending = true
+                Log.w(TAG, logMessage)
+                notifications.update(notificationMessage)
+                scheduleRetry()
+            }
         }
     }
 

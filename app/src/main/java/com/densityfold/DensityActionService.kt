@@ -51,34 +51,26 @@ class DensityActionService : Service() {
 
             try {
 
-                val result = DensityExecutor.apply(applicationContext, profile)
+                val value = DensityExecutor.apply(applicationContext, profile).getOrThrow()
+                succeeded = true
+                applied = value
 
-                result.fold(
-                    onSuccess = { value ->
-                        succeeded = true
-                        applied = value
-
-                        val screenName = if (value.isExternal) "Внешний" else "Внутренний"
-                        Log.i(
-                            TAG,
-                            "Action confirmed: screen=$screenName " +
-                                "target=${value.targetDpi} actual=${value.actualDpi}"
-                        )
-
-                        if (!fromMonitor) {
-                            showNotification(
-                                applicationContext,
-                                screenName,
-                                value.targetDpi,
-                                true,
-                                null
-                            )
-                        }
-                    },
-                    onFailure = { error ->
-                        failureMessage = reportFailure(error, profile, fromMonitor)
-                    }
+                val screenName = if (value.isExternal) "Внешний" else "Внутренний"
+                Log.i(
+                    TAG,
+                    "Action confirmed: screen=$screenName " +
+                        "target=${value.targetDpi} actual=${value.actualDpi}"
                 )
+
+                if (!fromMonitor) {
+                    showNotification(
+                        applicationContext,
+                        screenName,
+                        value.targetDpi,
+                        true,
+                        null
+                    )
+                }
             } catch (e: CancellationException) {
                 cancelled = true
                 throw e
