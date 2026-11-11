@@ -57,7 +57,7 @@ object ShizukuCommandRunner {
 
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
         Log.i(TAG, "MAIN BINDER RECEIVED ${mainBinderState()}")
-        scheduleReconnect()
+        requestReconnect()
     }
 
     private var lifecycleListenersInstalled = false
@@ -124,7 +124,7 @@ object ShizukuCommandRunner {
         return current != null && isUserServiceAlive(current)
     }
 
-    private fun scheduleReconnect() {
+    fun requestReconnect() {
         if (!reconnectInProgress.compareAndSet(false, true)) return
 
         Log.i(TAG, "RECONNECT requested ${mainBinderState()}")
@@ -171,9 +171,6 @@ object ShizukuCommandRunner {
         }
     }
 
-    fun requestReconnect() {
-        scheduleReconnect()
-    }
 
     /**
      * Ожидает основной Binder Shizuku и готовность UserService.
@@ -470,7 +467,7 @@ object ShizukuCommandRunner {
                     }
                     if (wasCurrent) {
                         Log.w(TAG, "USER SERVICE disconnected ${mainBinderState()}")
-                        scheduleReconnect()
+                        requestReconnect()
                     }
                 }
 
@@ -502,7 +499,7 @@ object ShizukuCommandRunner {
                             IllegalStateException("Binding died")
                         )
                     }
-                    scheduleReconnect()
+                    requestReconnect()
                 }
 
                 override fun onNullBinding(
