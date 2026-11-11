@@ -74,33 +74,11 @@ class DensityActionService : Service() {
                         }
                     },
                     onFailure = { error ->
-                        failureMessage = error.message ?: "Не удалось применить DPI"
-                        Log.e(TAG, "Density action failed: $failureMessage", error)
-
-                        if (!fromMonitor) {
-                            showNotification(
-                                applicationContext,
-                                if (profile == DensityProfile.OUTER) "Внешний" else "Внутренний",
-                                0,
-                                false,
-                                failureMessage
-                            )
-                        }
+                        failureMessage = reportFailure(error, profile, fromMonitor)
                     }
                 )
             } catch (e: Exception) {
-                failureMessage = e.message ?: "Неизвестная ошибка"
-                Log.e(TAG, "Exception in service: $failureMessage", e)
-
-                if (!fromMonitor) {
-                    showNotification(
-                        applicationContext,
-                        if (profile == DensityProfile.OUTER) "Внешний" else "Внутренний",
-                        0,
-                        false,
-                        failureMessage
-                    )
-                }
+                failureMessage = reportFailure(e, profile, fromMonitor)
             } finally {
                 sendCompletionBroadcast(
                     fromMonitor = fromMonitor,
@@ -114,6 +92,27 @@ class DensityActionService : Service() {
         }
 
         return START_NOT_STICKY
+    }
+
+    private fun reportFailure(
+        error: Throwable,
+        profile: DensityProfile,
+        fromMonitor: Boolean
+    ): String {
+        val message = error.message ?: "Не удалось применить DPI"
+        Log.e(TAG, "Density action failed: $message", error)
+
+        if (!fromMonitor) {
+            showNotification(
+                applicationContext,
+                if (profile == DensityProfile.OUTER) "Внешний" else "Внутренний",
+                0,
+                false,
+                message
+            )
+        }
+
+        return message
     }
 
     private fun sendCompletionBroadcast(
@@ -159,7 +158,7 @@ class DensityActionService : Service() {
         val text = if (isSuccess) {
             "$screenName экран: установлено $dpi DPI"
         } else {
-            errorMsg ?: "Неизвестная ошибка"
+            errorMsg ?: "Не удалось применить DPI"
         }
 
         val notification = NotificationCompat.Builder(context, channelId)
