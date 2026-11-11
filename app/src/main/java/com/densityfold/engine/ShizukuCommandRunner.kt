@@ -279,7 +279,10 @@ object ShizukuCommandRunner {
                 )
             }
 
-            val rawResult = currentService.executeCommand(command)
+            // Синхронный Binder-вызов не должен блокировать главный поток.
+            val rawResult = withContext(Dispatchers.IO) {
+                currentService.executeCommand(command)
+            }
 
             if (rawResult == null) {
                 resetConnection()
