@@ -20,6 +20,8 @@ data class DisplayInfo(
 
 object DisplayUtils {
     const val INNER_THRESHOLD_PX = 1400
+    const val FALLBACK_INNER_SHORT_PX = 1968
+    const val FALLBACK_OUTER_SHORT_PX = 1080
 
     fun getActiveDisplay(context: Context): DisplayInfo? {
         val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager ?: return null
@@ -45,10 +47,10 @@ object DisplayUtils {
     }
 
     fun getInnerShortPx(active: DisplayInfo?): Int =
-        if (active != null && !active.isExternal) active.shortPx else 1968
+        if (active != null && !active.isExternal) active.shortPx else FALLBACK_INNER_SHORT_PX
 
     fun getOuterShortPx(active: DisplayInfo?): Int =
-        if (active != null && active.isExternal) active.shortPx else 1080
+        if (active != null && active.isExternal) active.shortPx else FALLBACK_OUTER_SHORT_PX
 
     fun getInnerShortPx(context: Context): Int =
         getInnerShortPx(getActiveDisplay(context))

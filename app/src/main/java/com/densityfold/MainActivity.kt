@@ -287,6 +287,8 @@ fun MainScreen(
                 ),
                 minDpi = innerMin,
                 maxDpi = innerMax,
+                sizeIsEstimated = uiState.innerSizeEstimated,
+                referenceShortPx = uiState.innerShortPx,
                 onDpiChange = viewModel::setInnerDpi,
                 onApply = viewModel::applyInnerDensity,
                 enabled = uiState.isShizukuAvailable && !uiState.isLoading
@@ -300,6 +302,8 @@ fun MainScreen(
                 ),
                 minDpi = outerMin,
                 maxDpi = outerMax,
+                sizeIsEstimated = uiState.outerSizeEstimated,
+                referenceShortPx = uiState.outerShortPx,
                 onDpiChange = viewModel::setOuterDpi,
                 onApply = viewModel::applyOuterDensity,
                 enabled = uiState.isShizukuAvailable && !uiState.isLoading
@@ -422,6 +426,8 @@ private fun DensitySettingCard(
     dp: Int,
     minDpi: Int,
     maxDpi: Int,
+    sizeIsEstimated: Boolean,
+    referenceShortPx: Int,
     onDpiChange: (Int) -> Unit,
     onApply: () -> Unit,
     enabled: Boolean
@@ -484,7 +490,7 @@ private fun DensitySettingCard(
                 )
 
                 Text(
-                    "$dp dp",
+                    if (sizeIsEstimated) "≈ $dp dp" else "$dp dp",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1
@@ -510,6 +516,14 @@ private fun DensitySettingCard(
                 ) {
                     Text("Применить", maxLines = 1)
                 }
+            }
+
+            if (sizeIsEstimated) {
+                Text(
+                    "Расчёт по резервному размеру: $referenceShortPx px",
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             Row(

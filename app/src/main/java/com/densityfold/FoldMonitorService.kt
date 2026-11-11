@@ -221,16 +221,7 @@ class FoldMonitorService : Service() {
                 }
 
                 if (mainBinder && permission && !userService) {
-                    val result = ShizukuCommandRunner.reconnect()
-                    if (result.isSuccess) {
-                        Log.i(TAG, "UserService восстановлен")
-                    } else {
-                        Log.w(
-                            TAG,
-                            "Не удалось восстановить UserService: " +
-                                (result.exceptionOrNull()?.message ?: "неизвестная ошибка")
-                        )
-                    }
+                    ShizukuCommandRunner.requestReconnect()
                 }
 
                 delay(3_000L)

@@ -44,6 +44,7 @@ object ShizukuCommandRunner {
 
     // Сериализует bind и полную очистку подключения.
     private val bindMutex = Mutex()
+    private val reconnectInProgress = AtomicBoolean(false)
 
     private const val BIND_TIMEOUT_MS = 10_000L
 
@@ -124,9 +125,12 @@ object ShizukuCommandRunner {
     }
 
     private fun scheduleReconnect() {
+        if (!reconnectInProgress.compareAndSet(false, true)) return
+
         Log.i(TAG, "RECONNECT requested ${mainBinderState()}")
         scope.launch {
-            for (attempt in 0 until 5) {
+            try {
+                for (attempt in 0 until 5) {
                 val binderAlive = try {
                     Shizuku.pingBinder()
                 } catch (_: Exception) {
@@ -160,8 +164,15 @@ object ShizukuCommandRunner {
                     if (attempt < 4) delay(1_000L * (attempt + 1))
                 }
             }
-            Log.e(TAG, "RECONNECT exhausted all attempts ${mainBinderState()}")
+                Log.e(TAG, "RECONNECT exhausted all attempts ${mainBinderState()}")
+            } finally {
+                reconnectInProgress.set(false)
+            }
         }
+    }
+
+    fun requestReconnect() {
+        scheduleReconnect()
     }
 
     /**
@@ -216,20 +227,6 @@ object ShizukuCommandRunner {
                     e
                 )
             )
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    /**
-     * Явно восстанавливает подключение фонового UserService.
-     */
-    suspend fun reconnect(): Result<Unit> {
-        return try {
-            ensureBound()
-            Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

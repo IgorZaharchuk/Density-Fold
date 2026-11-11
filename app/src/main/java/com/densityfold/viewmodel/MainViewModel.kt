@@ -27,8 +27,10 @@ data class UiState(
     val activeDisplay: DisplayInfo? = null,
     val innerDpi: Int = 350,
     val outerDpi: Int = 440,
-    val innerShortPx: Int = 1968,
-    val outerShortPx: Int = 1080,
+    val innerShortPx: Int = DisplayUtils.FALLBACK_INNER_SHORT_PX,
+    val outerShortPx: Int = DisplayUtils.FALLBACK_OUTER_SHORT_PX,
+    val innerSizeEstimated: Boolean = true,
+    val outerSizeEstimated: Boolean = true,
     val isFoldMonitorEnabled: Boolean = false,
     val isAutoStartEnabled: Boolean = false,
     val isShizukuAvailable: Boolean = false,
@@ -93,6 +95,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 outerDpi = outerDpi,
                 innerShortPx = innerShortPx,
                 outerShortPx = outerShortPx,
+                innerSizeEstimated = active == null || active.isExternal,
+                outerSizeEstimated = active == null || !active.isExternal,
                 isFoldMonitorEnabled = monitorEnabled,
                 isAutoStartEnabled = autoStartEnabled,
                 isShizukuAvailable = ShizukuManager.isShizukuAvailable()
@@ -132,6 +136,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 activeDisplay = active,
                 innerShortPx = DisplayUtils.getInnerShortPx(active),
                 outerShortPx = DisplayUtils.getOuterShortPx(active),
+                innerSizeEstimated = active == null || active.isExternal,
+                outerSizeEstimated = active == null || !active.isExternal,
                 isShizukuAvailable = ShizukuManager.isShizukuAvailable(),
                 isOverlayPermissionGranted = Settings.canDrawOverlays(context)
             )
