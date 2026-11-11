@@ -4,35 +4,6 @@ import android.content.pm.PackageManager
 import rikka.shizuku.Shizuku
 
 object ShizukuManager {
-    var lastRawOutput: String = ""
-        private set
-
-    fun availabilityDiagnostic(): String {
-        val binderPing = try {
-            Shizuku.pingBinder()
-        } catch (e: Exception) {
-            return "pid=${android.os.Process.myPid()} " +
-                "mainBinderPing=error:${e.javaClass.simpleName} " +
-                "permission=not_checked"
-        }
-
-        val permission = if (!binderPing) {
-            "not_checked"
-        } else {
-            try {
-                if (
-                    Shizuku.checkSelfPermission() ==
-                    PackageManager.PERMISSION_GRANTED
-                ) "granted" else "denied"
-            } catch (e: Exception) {
-                "error:${e.javaClass.simpleName}"
-            }
-        }
-
-        return "pid=${android.os.Process.myPid()} " +
-            "mainBinderPing=$binderPing permission=$permission"
-    }
-
     fun isShizukuAvailable(): Boolean {
         return try {
             Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED &&
@@ -88,7 +59,6 @@ object ShizukuManager {
         val command = "wm density"
         return ShizukuCommandRunner.execute(command).fold(
             onSuccess = { rawOutput ->
-                lastRawOutput = rawOutput
                 val density = parseDensity(rawOutput)
                 if (density > 0) {
                     Result.success(density)
@@ -97,8 +67,6 @@ object ShizukuManager {
                 }
             },
             onFailure = { error ->
-                // Сохраняем текст ошибки в lastRawOutput для диагностики
-                lastRawOutput = "ОШИБКА: ${error.message ?: error::class.simpleName}"
                 Result.failure(error)
             }
         )

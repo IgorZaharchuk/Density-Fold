@@ -2,6 +2,7 @@ package com.densityfold.viewmodel
 
 import android.app.Application
 import android.content.Intent
+import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.densityfold.FoldMonitorService
@@ -27,7 +28,7 @@ data class UiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val successMessage: String? = null,
-    val diagnosticInfo: String = ""
+    val isOverlayPermissionGranted: Boolean = false
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -110,7 +111,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             currentDensity = currentDpi,
             currentDp = currentDp,
             isShizukuAvailable = ShizukuManager.isShizukuAvailable(),
-            diagnosticInfo = DisplayUtils.getDiagnosticString(context),
+            isOverlayPermissionGranted = Settings.canDrawOverlays(context),
             errorMessage = null
         )
     }

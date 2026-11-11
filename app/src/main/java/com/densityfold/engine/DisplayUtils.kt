@@ -86,43 +86,5 @@ object DisplayUtils {
         return (shortPx * 160f / dpi).toInt()
     }
 
-    fun getDiagnosticString(context: Context): String {
-        val sb = StringBuilder()
-        sb.appendLine("=== Текущий экран ===")
 
-        val active = getActiveDisplay(context)
-        if (active == null) {
-            sb.appendLine("Активный дисплей: не определён")
-        } else {
-            sb.appendLine("Тип: ${active.name}")
-            sb.appendLine("Разрешение: ${active.width} × ${active.height} px")
-            sb.appendLine("Физический shortPx: ${active.shortPx} (порог внутреннего: $INNER_THRESHOLD_PX)")
-            sb.appendLine("Системный DPI: ${active.density}")
-        }
-
-        sb.appendLine()
-        sb.appendLine("=== Плотность через Shizuku ===")
-
-        val rawOutput = ShizukuManager.lastRawOutput
-        if (rawOutput.isBlank()) {
-            sb.appendLine("Данные ещё не запрашивались")
-        } else if (rawOutput.startsWith("ОШИБКА:")) {
-            sb.appendLine(rawOutput)
-            sb.appendLine("Попробуйте открыть приложение и дождаться подключения Shizuku")
-        } else {
-            val currentDpi = ShizukuManager.parseDensity(rawOutput)
-            sb.appendLine("Текущий DPI: $currentDpi")
-
-            if (active != null && currentDpi > 0) {
-                val currentDp = dpiToDp(currentDpi, active.shortPx)
-                sb.appendLine("Логическая ширина: $currentDp dp")
-            }
-
-            sb.appendLine()
-            sb.appendLine("=== WM DENSITY RAW OUTPUT ===")
-            sb.appendLine(rawOutput)
-        }
-
-        return sb.toString()
-    }
 }

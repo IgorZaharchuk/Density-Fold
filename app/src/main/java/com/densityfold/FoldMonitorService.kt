@@ -1,8 +1,5 @@
 package com.densityfold
 
-import android.app.ActivityManager
-import android.app.AppOpsManager
-import android.os.Process
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -45,7 +42,6 @@ class FoldMonitorService : Service() {
     private var actionTimeoutJob: Job? = null
     private var shizukuWatchdogJob: Job? = null
     private var lastRecoveryAttemptAt = 0L
-    private val recoveryRetryIntervalMs = 60_000L
 
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
@@ -153,7 +149,7 @@ class FoldMonitorService : Service() {
         shizukuWatchdogJob?.cancel()
         shizukuWatchdogJob = scope.launch {
             var previousState: String? = null
-            var lastProcessProbeAt = 0L
+            var binderUnavailableSince = 0L
 
             while (true) {
                 val mainBinder = ShizukuCommandRunner.mainBinderAvailable()
@@ -167,28 +163,37 @@ class FoldMonitorService : Service() {
                     else -> "READY"
                 }
 
-                if (mainBinder) {
-                    lastRecoveryAttemptAt = 0L
-                }
-
                 val now = SystemClock.elapsedRealtime()
 
-                if (now - lastProcessProbeAt >= 30_000L) {
-                    lastProcessProbeAt = now
-                    logShizukuProcessProbe()
+                if (mainBinder) {
+                    lastRecoveryAttemptAt = 0L
+                    binderUnavailableSince = 0L
+                } else if (binderUnavailableSince == 0L) {
+                    binderUnavailableSince = now
                 }
 
-                if (state == "MAIN_BINDER_DEAD" &&
+                val recoveryInterval = if (
+                    binderUnavailableSince == 0L ||
+                    now - binderUnavailableSince < 60_000L
+                ) {
+                    10_000L
+                } else {
+                    60_000L
+                }
+
+                if (
+                    state == "MAIN_BINDER_DEAD" &&
                     !actionInFlight &&
-                    (lastRecoveryAttemptAt == 0L ||
-                        now - lastRecoveryAttemptAt >= recoveryRetryIntervalMs)
+                    (
+                        lastRecoveryAttemptAt == 0L ||
+                        now - lastRecoveryAttemptAt >= recoveryInterval
+                    )
                 ) {
                     launchRecoveryAction()
                 }
 
                 if (state != previousState) {
-                    val diagnostic = ShizukuCommandRunner.connectionDiagnostic()
-                    Log.i(TAG, "SHIZUKU STATE: $state; $diagnostic")
+                    Log.i(TAG, "Состояние Shizuku: $state")
 
                     val message = when (state) {
                         "MAIN_BINDER_DEAD" ->
@@ -215,17 +220,14 @@ class FoldMonitorService : Service() {
                     previousState = state
                 }
 
-                // Если основной Binder уже вернулся, но UserService ещё нет,
-                // восстанавливаем соединение независимо от смены экрана.
                 if (mainBinder && permission && !userService) {
-                    Log.i(TAG, "WATCHDOG: попытка восстановления UserService")
                     val result = ShizukuCommandRunner.reconnect()
                     if (result.isSuccess) {
-                        Log.i(TAG, "WATCHDOG: UserService восстановлен")
+                        Log.i(TAG, "UserService восстановлен")
                     } else {
                         Log.w(
                             TAG,
-                            "WATCHDOG: восстановление не удалось: " +
+                            "Не удалось восстановить UserService: " +
                                 (result.exceptionOrNull()?.message ?: "неизвестная ошибка")
                         )
                     }
@@ -233,59 +235,6 @@ class FoldMonitorService : Service() {
 
                 delay(3_000L)
             }
-        }
-    }
-
-    private fun logShizukuProcessProbe() {
-        try {
-            val activityManager =
-                getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-
-            val shellUid = Process.getUidForName("shell")
-            val processes = activityManager.runningAppProcesses.orEmpty()
-
-            val matches = processes.filter {
-                it.processName.contains("shizuku", ignoreCase = true)
-            }
-
-            val processInfo = matches.joinToString {
-                "${it.processName}(pid=${it.pid},uid=${it.uid})"
-            }.ifEmpty { "none" }
-
-            Log.i(
-                TAG,
-                "PROCESS PROBE: visible=${processes.size}; " +
-                    "shizuku=$processInfo; shellUid=$shellUid"
-            )
-
-            val appOps =
-                getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-            val mode = appOps.checkOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                packageName
-            )
-            val usageAccess = mode == AppOpsManager.MODE_ALLOWED
-
-            val importanceResult = try {
-                val method = ActivityManager::class.java.getMethod(
-                    "getUidImportance",
-                    Integer.TYPE
-                )
-                method.invoke(activityManager, shellUid).toString()
-            } catch (e: Exception) {
-                val cause = e.cause ?: e
-                "ERROR:${cause.javaClass.simpleName}:${cause.message}"
-            }
-
-            Log.i(
-                TAG,
-                "UID PROBE: shellUid=$shellUid; " +
-                    "usageAccess=$usageAccess; appOpMode=$mode; " +
-                    "getUidImportance=$importanceResult"
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "PROCESS PROBE failed: ${e.message}", e)
         }
     }
 
