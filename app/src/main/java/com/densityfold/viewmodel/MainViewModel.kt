@@ -80,9 +80,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun loadSettingsInternal() {
-        val active = DisplayUtils.getActiveDisplay(getApplication())
-        val innerShortPx = DisplayUtils.getInnerShortPx(active)
-        val outerShortPx = DisplayUtils.getOuterShortPx(active)
         val innerDpi = preferences.getInnerDpi()
         val outerDpi = preferences.getOuterDpi()
         val monitorEnabled = preferences.isFoldMonitorEnabled()
@@ -92,10 +89,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             it.copy(
                 innerDpi = innerDpi,
                 outerDpi = outerDpi,
-                innerShortPx = innerShortPx,
-                outerShortPx = outerShortPx,
-                innerSizeEstimated = active == null || active.isExternal,
-                outerSizeEstimated = active == null || !active.isExternal,
                 isFoldMonitorEnabled = monitorEnabled,
                 isAutoStartEnabled = autoStartEnabled,
                 isShizukuAvailable = ShizukuManager.isShizukuAvailable()

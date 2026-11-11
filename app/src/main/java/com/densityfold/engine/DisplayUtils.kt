@@ -52,12 +52,6 @@ object DisplayUtils {
     fun getOuterShortPx(active: DisplayInfo?): Int =
         if (active != null && active.isExternal) active.shortPx else FALLBACK_OUTER_SHORT_PX
 
-    fun getInnerShortPx(context: Context): Int =
-        getInnerShortPx(getActiveDisplay(context))
-
-    fun getOuterShortPx(context: Context): Int =
-        getOuterShortPx(getActiveDisplay(context))
-
     fun dpToDpi(dp: Int, shortPx: Int): Int? {
         if (dp <= 0 || shortPx <= 0) return null
         return (shortPx * 160f / dp).toInt().coerceIn(72, 2000)
