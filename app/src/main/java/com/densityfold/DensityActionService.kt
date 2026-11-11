@@ -47,6 +47,7 @@ class DensityActionService : Service() {
             var succeeded = false
             var applied: DensityApplyResult? = null
             var failureMessage: String? = null
+            var cancelled = false
 
             try {
 
@@ -79,17 +80,20 @@ class DensityActionService : Service() {
                     }
                 )
             } catch (e: CancellationException) {
+                cancelled = true
                 throw e
             } catch (e: Exception) {
                 failureMessage = reportFailure(e, profile, fromMonitor)
             } finally {
-                sendCompletionBroadcast(
-                    fromMonitor = fromMonitor,
-                    success = succeeded,
-                    applied = applied,
-                    error = failureMessage,
-                    expectedExternal = profile == DensityProfile.OUTER
-                )
+                if (!cancelled) {
+                    sendCompletionBroadcast(
+                        fromMonitor = fromMonitor,
+                        success = succeeded,
+                        applied = applied,
+                        error = failureMessage,
+                        expectedExternal = profile == DensityProfile.OUTER
+                    )
+                }
                 stopSelf(startId)
             }
         }
