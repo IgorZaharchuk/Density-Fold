@@ -107,11 +107,7 @@ fun MainScreen(
                 title = {
                     Column {
                         Text("Density Fold", fontWeight = FontWeight.Bold)
-                        Text(
-                            "Galaxy Z Fold 7",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+
                     }
                 }
             )
@@ -161,7 +157,7 @@ fun MainScreen(
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text("Текущий DPI")
                         Text(
@@ -176,7 +172,7 @@ fun MainScreen(
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text("Логическая ширина")
                         Text(
