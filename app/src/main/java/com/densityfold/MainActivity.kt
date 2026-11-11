@@ -23,6 +23,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
@@ -478,6 +480,17 @@ private fun DensitySettingCard(
                 Button(
                     onClick = onApply,
                     enabled = enabled,
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(
+                        1.dp,
+                        Color(0xFF4AD9FF).copy(alpha = if (enabled) 0.85f else 0.25f)
+                    ),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF123FAD),
+                        contentColor = Color(0xFFDBFAFF),
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                 ) {
                     Text("Применить", maxLines = 1)
@@ -513,8 +526,11 @@ private fun DensitySettingCard(
                     valueRange = safeMin.toFloat()..safeMax.toFloat(),
                     modifier = Modifier.weight(1f),
                     colors = SliderDefaults.colors(
-                        activeTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                        inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                        thumbColor = Color(0xFF4AD9FF),
+                        activeTrackColor = Color(0xFF4A90D9),
+                        inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                        activeTickColor = Color.Transparent,
+                        inactiveTickColor = Color.Transparent
                     ),
                     enabled = enabled
                 )
@@ -559,7 +575,15 @@ private fun SettingSwitch(
         }
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color(0xFFDBFAFF),
+                checkedTrackColor = Color(0xFF123FAD),
+                checkedBorderColor = Color(0xFF4AD9FF),
+                uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                uncheckedBorderColor = MaterialTheme.colorScheme.outline
+            )
         )
     }
 }
