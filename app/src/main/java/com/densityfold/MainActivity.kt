@@ -128,8 +128,9 @@ fun MainScreen(
                         )
                         Text(
                             if (uiState.isShizukuAvailable) "Shizuku"
-                            else "Нет связи",
-                            fontSize = 12.sp,
+                            else "Shizuku: нет связи",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
                             color = if (uiState.isShizukuAvailable)
                                 MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.error
