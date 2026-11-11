@@ -1,5 +1,8 @@
 package com.densityfold
 
+import android.app.ActivityManager
+import android.app.AppOpsManager
+import android.os.Process
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -150,6 +153,7 @@ class FoldMonitorService : Service() {
         shizukuWatchdogJob?.cancel()
         shizukuWatchdogJob = scope.launch {
             var previousState: String? = null
+            var lastProcessProbeAt = 0L
 
             while (true) {
                 val mainBinder = ShizukuCommandRunner.mainBinderAvailable()
@@ -168,6 +172,12 @@ class FoldMonitorService : Service() {
                 }
 
                 val now = SystemClock.elapsedRealtime()
+
+                if (now - lastProcessProbeAt >= 30_000L) {
+                    lastProcessProbeAt = now
+                    logShizukuProcessProbe()
+                }
+
                 if (state == "MAIN_BINDER_DEAD" &&
                     !actionInFlight &&
                     (lastRecoveryAttemptAt == 0L ||
@@ -223,6 +233,59 @@ class FoldMonitorService : Service() {
 
                 delay(3_000L)
             }
+        }
+    }
+
+    private fun logShizukuProcessProbe() {
+        try {
+            val activityManager =
+                getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+
+            val shellUid = Process.getUidForName("shell")
+            val processes = activityManager.runningAppProcesses.orEmpty()
+
+            val matches = processes.filter {
+                it.processName.contains("shizuku", ignoreCase = true)
+            }
+
+            val processInfo = matches.joinToString {
+                "${it.processName}(pid=${it.pid},uid=${it.uid})"
+            }.ifEmpty { "none" }
+
+            Log.i(
+                TAG,
+                "PROCESS PROBE: visible=${processes.size}; " +
+                    "shizuku=$processInfo; shellUid=$shellUid"
+            )
+
+            val appOps =
+                getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+            val mode = appOps.checkOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                packageName
+            )
+            val usageAccess = mode == AppOpsManager.MODE_ALLOWED
+
+            val importanceResult = try {
+                val method = ActivityManager::class.java.getMethod(
+                    "getUidImportance",
+                    Integer.TYPE
+                )
+                method.invoke(activityManager, shellUid).toString()
+            } catch (e: Exception) {
+                val cause = e.cause ?: e
+                "ERROR:${cause.javaClass.simpleName}:${cause.message}"
+            }
+
+            Log.i(
+                TAG,
+                "UID PROBE: shellUid=$shellUid; " +
+                    "usageAccess=$usageAccess; appOpMode=$mode; " +
+                    "getUidImportance=$importanceResult"
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "PROCESS PROBE failed: ${e.message}", e)
         }
     }
 
