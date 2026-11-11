@@ -112,22 +112,32 @@ fun MainScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text("Density Fold", fontWeight = FontWeight.Bold)
+                    Text("Density Fold", fontWeight = FontWeight.Bold)
+                },
+                actions = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
                         Text(
-                            if (uiState.isShizukuAvailable) "Shizuku подключён"
-                            else "Ожидание Shizuku",
+                            "●",
+                            fontSize = 11.sp,
+                            color = if (uiState.isShizukuAvailable)
+                                MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            if (uiState.isShizukuAvailable) "Shizuku"
+                            else "Нет связи",
                             fontSize = 12.sp,
                             color = if (uiState.isShizukuAvailable)
                                 MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.error
                         )
-                    }
-                },
-                actions = {
-                    if (!uiState.isShizukuAvailable) {
-                        TextButton(onClick = viewModel::requestShizukuPermission) {
-                            Text("Подключить")
+                        if (!uiState.isShizukuAvailable) {
+                            TextButton(onClick = viewModel::requestShizukuPermission) {
+                                Text("Подключить")
+                            }
                         }
                     }
                 }
@@ -138,9 +148,9 @@ fun MainScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             uiState.errorMessage?.let {
                 Card(
@@ -194,12 +204,31 @@ fun MainScreen(
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold
                     )
-                    Text(
-                        if (display != null) "${display.width} × ${display.height} px"
-                        else "Разрешение недоступно",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 13.sp
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            if (display != null) "${display.width} × ${display.height} px"
+                            else "Разрешение недоступно",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 13.sp,
+                            maxLines = 1
+                        )
+                        if (display != null && display.density > 0) {
+                            val actualDpi = display.density
+                            val actualDp = com.densityfold.engine.DisplayUtils.dpiToDp(
+                                actualDpi, display.shortPx
+                            )
+                            Text(
+                                "$actualDp dp · $actualDpi DPI",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 13.sp,
+                                maxLines = 1
+                            )
+                        }
+                    }
                 }
             }
 
