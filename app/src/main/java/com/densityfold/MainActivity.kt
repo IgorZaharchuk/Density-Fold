@@ -368,10 +368,12 @@ private fun DensitySettingCard(
     onApply: () -> Unit,
     enabled: Boolean
 ) {
+    val currentValue = value.toIntOrNull()?.coerceIn(200, 1200) ?: 200
+
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(title, fontWeight = FontWeight.Bold)
 
@@ -380,10 +382,11 @@ private fun DensitySettingCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Text("Плотность:")
+
                 OutlinedTextField(
                     value = value,
                     onValueChange = onValueChange,
-                    label = { Text("Ширина, dp") },
                     modifier = Modifier.weight(1f),
                     singleLine = true
                 )
@@ -393,6 +396,35 @@ private fun DensitySettingCard(
                     enabled = enabled
                 ) {
                     Text("Применить")
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(
+                    onClick = {
+                        onValueChange((currentValue - 10).coerceAtLeast(200).toString())
+                    }
+                ) {
+                    Text("−", fontSize = 22.sp)
+                }
+
+                Slider(
+                    value = currentValue.toFloat(),
+                    onValueChange = { onValueChange(it.toInt().toString()) },
+                    valueRange = 200f..1200f,
+                    steps = 99,
+                    modifier = Modifier.weight(1f)
+                )
+
+                TextButton(
+                    onClick = {
+                        onValueChange((currentValue + 10).coerceAtMost(1200).toString())
+                    }
+                ) {
+                    Text("+", fontSize = 22.sp)
                 }
             }
         }
