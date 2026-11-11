@@ -11,7 +11,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*\nimport androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -277,14 +278,14 @@ fun MainScreen(
                                 checked = uiState.isFoldMonitorEnabled,
                                 onCheckedChange = viewModel::setFoldMonitorEnabled
                             )
-                            HorizontalDivider()
+                            Divider()
                             SettingSwitch(
                                 title = "Автозапуск при загрузке",
                                 description = "Запускать монитор после перезагрузки",
                                 checked = uiState.isAutoStartEnabled,
                                 onCheckedChange = viewModel::setAutoStartEnabled
                             )
-                            HorizontalDivider()
+                            Divider()
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
