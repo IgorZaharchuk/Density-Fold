@@ -20,7 +20,7 @@ class DensityPreferences(private val context: Context) {
         val AUTO_START_ENABLED = booleanPreferencesKey("auto_start_enabled")
 
         const val DEFAULT_INNER_DP = 900
-        const val DEFAULT_OUTER_DP = 411
+        const val DEFAULT_OUTER_DPI = 440
         const val DEFAULT_MONITOR_ENABLED = false
         const val DEFAULT_AUTO_START_ENABLED = false
 
@@ -38,10 +38,7 @@ class DensityPreferences(private val context: Context) {
 
     suspend fun getOuterDpi(): Int {
         val stored = context.dataStore.data.first()[OUTER_DPI]
-        return stored ?: DisplayUtils.dpToDpi(
-            DEFAULT_OUTER_DP,
-            DisplayUtils.getOuterShortPx(context)
-        ) ?: 420
+        return stored ?: DEFAULT_OUTER_DPI
     }
 
     suspend fun isFoldMonitorEnabled(): Boolean =

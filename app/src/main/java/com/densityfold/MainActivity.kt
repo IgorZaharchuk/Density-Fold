@@ -94,6 +94,9 @@ fun MainScreen(
     onRequestOverlayPermission: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val shizukuError = uiState.errorMessage?.takeIf {
+        it.contains("Shizuku", ignoreCase = true)
+    }
     var automationExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.errorMessage, uiState.successMessage) {
@@ -123,7 +126,9 @@ fun MainScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            uiState.errorMessage?.let {
+            uiState.errorMessage?.takeIf {
+                !it.contains("Shizuku", ignoreCase = true)
+            }?.let {
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer
@@ -160,11 +165,39 @@ fun MainScreen(
                     modifier = Modifier.padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        "Активный экран",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Активный экран",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                "●",
+                                fontSize = 10.sp,
+                                color = if (uiState.isShizukuAvailable)
+                                    MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                                if (uiState.isShizukuAvailable)
+                                    "Shizuku" else "Нет связи с Shizuku",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (uiState.isShizukuAvailable)
+                                    MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.error,
+                                maxLines = 1
+                            )
+                        }
+                    }
                     val display = uiState.activeDisplay
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -194,33 +227,19 @@ fun MainScreen(
                                 maxLines = 1
                             )
                         }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        shizukuError?.let {
+                            Text(
+                                it,
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 12.sp
+                            )
+                        }
+                        if (!uiState.isShizukuAvailable) {
                             Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
                             ) {
-                                Text(
-                                    "●",
-                                    fontSize = 10.sp,
-                                    color = if (uiState.isShizukuAvailable)
-                                        MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.error
-                                )
-                                Text(
-                                    if (uiState.isShizukuAvailable) "Shizuku" else "Нет связи с Shizuku",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (uiState.isShizukuAvailable)
-                                        MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.error,
-                                    maxLines = 1
-                                )
-                            }
-                            Spacer(modifier = Modifier.weight(1f))
-                            if (!uiState.isShizukuAvailable) {
                                 TextButton(
                                     onClick = viewModel::requestShizukuPermission,
                                     contentPadding = PaddingValues(horizontal = 6.dp)
@@ -454,13 +473,13 @@ private fun DensitySettingCard(
                     },
                     modifier = Modifier
                         .width(72.dp)
-                        .height(40.dp)
+                        .height(36.dp)
                         .border(
                             1.dp,
                             Color(0xFF4AD9FF).copy(alpha = 0.85f),
                             RoundedCornerShape(8.dp)
                         )
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
                     singleLine = true,
                     enabled = enabled,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
