@@ -92,7 +92,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-        updateFoldMonitorService(monitorEnabled)
+        updateFoldMonitorService(settings.foldMonitorEnabled)
     }
 
     private fun updateFoldMonitorService(enabled: Boolean) {
