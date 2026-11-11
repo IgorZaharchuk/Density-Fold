@@ -11,6 +11,13 @@ import kotlinx.coroutines.flow.first
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "density_prefs")
 
+data class DensitySettings(
+    val innerDpi: Int,
+    val outerDpi: Int,
+    val foldMonitorEnabled: Boolean,
+    val autoStartEnabled: Boolean
+)
+
 class DensityPreferences(private val context: Context) {
     companion object {
         val INNER_DPI = intPreferencesKey("inner_dpi")
@@ -27,6 +34,16 @@ class DensityPreferences(private val context: Context) {
         const val MAX_DPI = 2000
     }
 
+    suspend fun getSettings(): DensitySettings {
+        val values = context.dataStore.data.first()
+        return DensitySettings(
+            innerDpi = values[INNER_DPI] ?: DEFAULT_INNER_DPI,
+            outerDpi = values[OUTER_DPI] ?: DEFAULT_OUTER_DPI,
+            foldMonitorEnabled = values[FOLD_MONITOR_ENABLED] ?: DEFAULT_MONITOR_ENABLED,
+            autoStartEnabled = values[AUTO_START_ENABLED] ?: DEFAULT_AUTO_START_ENABLED
+        )
+    }
+
     private suspend fun getDpi(
         key: Preferences.Key<Int>,
         default: Int
@@ -35,12 +52,6 @@ class DensityPreferences(private val context: Context) {
     suspend fun getInnerDpi(): Int = getDpi(INNER_DPI, DEFAULT_INNER_DPI)
 
     suspend fun getOuterDpi(): Int = getDpi(OUTER_DPI, DEFAULT_OUTER_DPI)
-
-    suspend fun isFoldMonitorEnabled(): Boolean =
-        context.dataStore.data.first()[FOLD_MONITOR_ENABLED] ?: DEFAULT_MONITOR_ENABLED
-
-    suspend fun isAutoStartEnabled(): Boolean =
-        context.dataStore.data.first()[AUTO_START_ENABLED] ?: DEFAULT_AUTO_START_ENABLED
 
     private suspend fun setDpi(key: Preferences.Key<Int>, dpi: Int) {
         context.dataStore.edit {

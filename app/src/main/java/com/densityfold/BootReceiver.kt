@@ -28,11 +28,9 @@ class BootReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
                 val prefs = DensityPreferences(appContext)
-                val monitorEnabled = prefs.isFoldMonitorEnabled()
-                val autoStartEnabled = prefs.isAutoStartEnabled()
+                val settings = prefs.getSettings()
 
-
-                if (monitorEnabled && autoStartEnabled) {
+                if (settings.foldMonitorEnabled && settings.autoStartEnabled) {
                     appContext.startService(
                         Intent(appContext, FoldMonitorService::class.java)
                     )
