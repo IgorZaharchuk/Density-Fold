@@ -457,7 +457,7 @@ private fun DensitySettingCard(
                         .height(40.dp)
                         .border(
                             1.dp,
-                            MaterialTheme.colorScheme.outline,
+                            Color(0xFF4AD9FF).copy(alpha = 0.85f),
                             RoundedCornerShape(8.dp)
                         )
                         .padding(horizontal = 8.dp, vertical = 6.dp),
@@ -486,7 +486,7 @@ private fun DensitySettingCard(
                         Color(0xFF4AD9FF).copy(alpha = if (enabled) 0.85f else 0.25f)
                     ),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF123FAD),
+                        containerColor = Color(0xFF0B2B68),
                         contentColor = Color(0xFFDBFAFF),
                         disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                         disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
