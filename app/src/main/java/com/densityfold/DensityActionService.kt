@@ -12,6 +12,7 @@ import androidx.core.app.NotificationCompat
 import com.densityfold.engine.DensityApplyResult
 import com.densityfold.engine.DensityExecutor
 import com.densityfold.engine.DensityProfile
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -77,6 +78,8 @@ class DensityActionService : Service() {
                         failureMessage = reportFailure(error, profile, fromMonitor)
                     }
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 failureMessage = reportFailure(e, profile, fromMonitor)
             } finally {
