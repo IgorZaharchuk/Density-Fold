@@ -14,6 +14,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -185,7 +188,7 @@ fun MainScreen(
                                 else MaterialTheme.colorScheme.error
                             )
                             Text(
-                                if (uiState.isShizukuAvailable) "Shizuku" else "Нет связи",
+                                if (uiState.isShizukuAvailable) "Shizuku" else "Нет связи с Shizuku",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = if (uiState.isShizukuAvailable)
@@ -398,7 +401,7 @@ private fun DensitySettingCard(
             ) {
                 Text("DPI:", fontWeight = FontWeight.SemiBold)
 
-                OutlinedTextField(
+                BasicTextField(
                     value = value,
                     onValueChange = {
                         value = it.filter(Char::isDigit).take(4)
@@ -406,10 +409,20 @@ private fun DensitySettingCard(
                             number in safeMin..safeMax
                         }?.let(onDpiChange)
                     },
-                    modifier = Modifier.width(82.dp),
+                    modifier = Modifier
+                        .width(72.dp)
+                        .height(40.dp)
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outline,
+                            RoundedCornerShape(8.dp)
+                        )
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
                     singleLine = true,
                     enabled = enabled,
-                    textStyle = MaterialTheme.typography.bodyLarge
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 )
 
                 Text(
