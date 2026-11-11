@@ -20,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -108,44 +109,9 @@ fun MainScreen(
     val outerMax = (com.densityfold.engine.DisplayUtils.dpToDpi(200, uiState.outerShortPx) ?: 2000)
         .coerceAtMost(2000)
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                modifier = Modifier.height(56.dp),
-                title = {
-                    Text("Density Fold", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                },
-                actions = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Text(
-                            "●",
-                            fontSize = 11.sp,
-                            color = if (uiState.isShizukuAvailable)
-                                MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.error
-                        )
-                        Text(
-                            if (uiState.isShizukuAvailable) "Shizuku"
-                            else "Shizuku: нет связи",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = if (uiState.isShizukuAvailable)
-                                MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.error
-                        )
-                        if (!uiState.isShizukuAvailable) {
-                            TextButton(onClick = viewModel::requestShizukuPermission) {
-                                Text("Подключить")
-                            }
-                        }
-                    }
-                }
-            )
-        }
-    ) { padding ->
+    val uriHandler = LocalUriHandler.current
+
+    Scaffold { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -197,15 +163,49 @@ fun MainScreen(
                         fontWeight = FontWeight.Bold
                     )
                     val display = uiState.activeDisplay
-                    Text(
-                        when {
-                            display == null -> "Экран не определён"
-                            display.isExternal -> "Внешний экран"
-                            else -> "Внутренний экран"
-                        },
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            when {
+                                display == null -> "Экран не определён"
+                                display.isExternal -> "Внешний экран"
+                                else -> "Внутренний экран"
+                            },
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                "●",
+                                fontSize = 10.sp,
+                                color = if (uiState.isShizukuAvailable)
+                                    MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                                if (uiState.isShizukuAvailable) "Shizuku" else "Нет связи",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (uiState.isShizukuAvailable)
+                                    MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.error
+                            )
+                            if (!uiState.isShizukuAvailable) {
+                                TextButton(
+                                    onClick = viewModel::requestShizukuPermission,
+                                    contentPadding = PaddingValues(horizontal = 4.dp)
+                                ) {
+                                    Text("Подключить", fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -333,6 +333,15 @@ fun MainScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
+
+                            Text(
+                                "github.com/IgorZaharchuk/Density-Fold",
+                                modifier = Modifier.clickable {
+                                    uriHandler.openUri("https://github.com/IgorZaharchuk/Density-Fold")
+                                },
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
                 }
