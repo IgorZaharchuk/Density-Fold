@@ -17,12 +17,9 @@ object ShizukuManager {
         return ShizukuCommandRunner.execute(command).map { "DPI изменён на $dpi" }
     }
 
-    fun parseDensity(rawOutput: String): Int =
-        DensityOutputParser.parse(rawOutput)
-
     suspend fun getCurrentDensity(): Result<Int> {
         return ShizukuCommandRunner.execute("wm density").mapCatching { rawOutput ->
-            val density = parseDensity(rawOutput)
+            val density = DensityOutputParser.parse(rawOutput)
             if (density > 0) {
                 density
             } else {
