@@ -28,11 +28,13 @@ jobs:
         $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
       
     - name: Build with Gradle
-      run: ./gradlew :app:assembleDebug --stacktrace
-      
+      run: |
+        ./gradlew :app:assembleDebug --stacktrace
+        cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Density-Fold-0.9.0-beta.1.apk
+
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
+        name: Density-Fold-0.9.0-beta.1
+        path: app/build/outputs/apk/debug/Density-Fold-0.9.0-beta.1.apk
         retention-days: 30

@@ -299,6 +299,25 @@ fun MainScreen(
                                 checked = uiState.isAutoStartEnabled,
                                 onCheckedChange = viewModel::setAutoStartEnabled
                             )
+
+                            Divider()
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "Density Fold",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
+                                Text(
+                                    "v${BuildConfig.VERSION_NAME}",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
