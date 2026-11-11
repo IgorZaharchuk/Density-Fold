@@ -162,10 +162,9 @@ fun MainScreen(
                         fontWeight = FontWeight.Bold
                     )
                     val display = uiState.activeDisplay
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         Text(
                             when {
@@ -174,33 +173,41 @@ fun MainScreen(
                                 else -> "Внутренний экран"
                             },
                             color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
                         )
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                "●",
-                                fontSize = 10.sp,
-                                color = if (uiState.isShizukuAvailable)
-                                    MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.error
-                            )
-                            Text(
-                                if (uiState.isShizukuAvailable) "Shizuku" else "Нет связи с Shizuku",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = if (uiState.isShizukuAvailable)
-                                    MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.error
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    "●",
+                                    fontSize = 10.sp,
+                                    color = if (uiState.isShizukuAvailable)
+                                        MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.error
+                                )
+                                Text(
+                                    if (uiState.isShizukuAvailable) "Shizuku" else "Нет связи с Shizuku",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (uiState.isShizukuAvailable)
+                                        MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.error,
+                                    maxLines = 1
+                                )
+                            }
+                            Spacer(modifier = Modifier.weight(1f))
                             if (!uiState.isShizukuAvailable) {
                                 TextButton(
                                     onClick = viewModel::requestShizukuPermission,
-                                    contentPadding = PaddingValues(horizontal = 4.dp)
+                                    contentPadding = PaddingValues(horizontal = 6.dp)
                                 ) {
-                                    Text("Подключить", fontSize = 11.sp)
+                                    Text("Подключить", fontSize = 11.sp, maxLines = 1)
                                 }
                             }
                         }
