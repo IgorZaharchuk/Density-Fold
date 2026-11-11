@@ -12,19 +12,23 @@ import kotlinx.coroutines.launch
 
 class BootReceiver : BroadcastReceiver() {
     private val TAG = "DensityFold-Boot"
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action != Intent.ACTION_BOOT_COMPLETED && 
-            intent?.action != "android.intent.action.QUICKBOOT_POWERON") {
+        if (
+            intent?.action != Intent.ACTION_BOOT_COMPLETED &&
+            intent?.action != "android.intent.action.QUICKBOOT_POWERON"
+        ) {
             return
         }
 
         Log.d(TAG, "Получено событие BOOT_COMPLETED")
 
-        scope.launch {
+        val pendingResult = goAsync()
+        val appContext = context.applicationContext
+
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                val prefs = DensityPreferences(context)
+                val prefs = DensityPreferences(appContext)
                 val monitorEnabled = prefs.isFoldMonitorEnabled()
                 val autoStartEnabled = prefs.isAutoStartEnabled()
 
@@ -32,13 +36,16 @@ class BootReceiver : BroadcastReceiver() {
 
                 if (monitorEnabled && autoStartEnabled) {
                     Log.d(TAG, "Запуск FoldMonitorService")
-                    val serviceIntent = Intent(context, FoldMonitorService::class.java)
-                    context.startService(serviceIntent)
+                    appContext.startService(
+                        Intent(appContext, FoldMonitorService::class.java)
+                    )
                 } else {
                     Log.d(TAG, "FoldMonitorService не запущен (отключён в настройках)")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Ошибка при обработке BOOT_COMPLETED: ${e.message}", e)
+            } finally {
+                pendingResult.finish()
             }
         }
     }

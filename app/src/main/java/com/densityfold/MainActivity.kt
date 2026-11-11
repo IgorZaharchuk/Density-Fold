@@ -28,11 +28,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import com.densityfold.ui.theme.DensityFoldTheme
 import com.densityfold.viewmodel.MainViewModel
-import rikka.shizuku.Shizuku
 
 class MainActivity : ComponentActivity() {
     private lateinit var mainViewModel: MainViewModel
-    private val shizukuPermissionListener = Shizuku.OnRequestPermissionResultListener { _, _ -> }
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -50,7 +48,6 @@ class MainActivity : ComponentActivity() {
         }
 
         mainViewModel = ViewModelProvider(this)[MainViewModel::class.java]
-        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
 
         setContent {
             DensityFoldTheme {
@@ -79,7 +76,6 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener)
         super.onDestroy()
     }
 }

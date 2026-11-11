@@ -123,13 +123,6 @@ object ShizukuCommandRunner {
         return current != null && isUserServiceAlive(current)
     }
 
-    fun connectionDiagnostic(): String {
-        return "pid=${android.os.Process.myPid()} " +
-            "mainBinder=${mainBinderAvailable()} " +
-            "permission=${permissionGranted()} " +
-            "userService=${userServiceAvailable()}"
-    }
-
     private fun scheduleReconnect() {
         Log.i(TAG, "RECONNECT requested ${mainBinderState()}")
         scope.launch {

@@ -13,16 +13,6 @@ object ShizukuManager {
         }
     }
 
-    fun requestPermission(requestCode: Int) {
-        try {
-            if (Shizuku.getUid() != -1) {
-                Shizuku.requestPermission(requestCode)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
     suspend fun awaitShizukuReady(timeoutMs: Long = 10_000L): Result<Unit> {
         return ShizukuCommandRunner.awaitReady(timeoutMs)
     }

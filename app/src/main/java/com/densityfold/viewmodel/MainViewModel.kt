@@ -18,8 +18,6 @@ import rikka.shizuku.Shizuku
 
 data class UiState(
     val activeDisplay: DisplayInfo? = null,
-    val currentDensity: Int = 0,
-    val currentDp: Int = 0,
     val innerDpi: Int = 350,
     val outerDpi: Int = 420,
     val innerShortPx: Int = 1968,
@@ -49,8 +47,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val shizukuBinderDeadListener = Shizuku.OnBinderDeadListener {
         _uiState.value = _uiState.value.copy(
             isShizukuAvailable = false,
-            currentDensity = 0,
-            currentDp = 0,
             isLoading = false,
             errorMessage = "Shizuku отключён. Автоприменение приостановлено."
         )
@@ -106,15 +102,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun refreshDisplaysInternal() {
         val context = getApplication<Application>().applicationContext
         val active = DisplayUtils.getActiveDisplay(context)
-        val currentDpi = ShizukuManager.getCurrentDensity().getOrNull() ?: 0
-        val currentDp = if (currentDpi > 0 && active != null) {
-            DisplayUtils.dpiToDp(currentDpi, active.shortPx)
-        } else 0
 
         _uiState.value = _uiState.value.copy(
             activeDisplay = active,
-            currentDensity = currentDpi,
-            currentDp = currentDp,
             innerShortPx = DisplayUtils.getInnerShortPx(context),
             outerShortPx = DisplayUtils.getOuterShortPx(context),
             isShizukuAvailable = ShizukuManager.isShizukuAvailable(),
@@ -199,8 +189,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val freshDpi = freshDpiResult.getOrNull()
         if (freshDpi != null && freshDpi == targetDpi) {
             _uiState.value = state.copy(
-                currentDensity = targetDpi,
-                currentDp = DisplayUtils.dpiToDp(targetDpi, active.shortPx),
                 successMessage = bypassMessage(targetDpi),
                 isLoading = false
             )
@@ -213,8 +201,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         result.fold(
             onSuccess = {
                 _uiState.value = _uiState.value.copy(
-                    currentDensity = targetDpi,
-                    currentDp = DisplayUtils.dpiToDp(targetDpi, active.shortPx),
                     successMessage = successMessage(targetDpi),
                     isLoading = false
                 )

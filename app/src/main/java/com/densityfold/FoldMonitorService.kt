@@ -452,8 +452,6 @@ class FoldMonitorService : Service() {
                 if (actionInFlight) {
                     actionInFlight = false
                     retryPending = true
-                    if (!ShizukuCommandRunner.mainBinderAvailable()) {
-                        }
                     Log.w(TAG, "Тайм-аут ожидания результата действия")
                     updateMonitorNotification("Нет ответа от сервиса · повторная попытка")
                     scheduleRetry()

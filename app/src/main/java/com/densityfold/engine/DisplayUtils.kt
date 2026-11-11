@@ -44,28 +44,6 @@ object DisplayUtils {
         )
     }
 
-    fun getAllDisplays(context: Context): List<DisplayInfo> {
-        val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager ?: return emptyList()
-        return displayManager.displays.map { display ->
-            val size = Point()
-            display.getRealSize(size)
-            val metrics = DisplayMetrics()
-            display.getRealMetrics(metrics)
-            val shortPx = minOf(size.x, size.y)
-            val isInner = shortPx >= INNER_THRESHOLD_PX
-
-            DisplayInfo(
-                displayId = display.displayId,
-                name = if (isInner) "Внутренний экран" else "Внешний экран",
-                width = size.x,
-                height = size.y,
-                density = metrics.densityDpi,
-                isDefault = display.displayId == Display.DEFAULT_DISPLAY,
-                isExternal = !isInner
-            )
-        }
-    }
-
     fun getInnerShortPx(context: Context): Int {
         val active = getActiveDisplay(context)
         return if (active != null && !active.isExternal) active.shortPx else 1968
