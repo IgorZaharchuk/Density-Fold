@@ -101,6 +101,33 @@ object ShizukuCommandRunner {
             "mainBinderPing=$ping permission=$permission"
     }
 
+    fun currentState(): ShizukuRuntimeState {
+        val mainBinder = try {
+            Shizuku.pingBinder()
+        } catch (_: Exception) {
+            false
+        }
+
+        val permission = if (mainBinder) {
+            try {
+                Shizuku.checkSelfPermission() ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+            } catch (_: Exception) {
+                false
+            }
+        } else {
+            false
+        }
+
+        val userService = userServiceAvailable()
+
+        return ShizukuRuntimeState(
+            mainBinder = mainBinder,
+            permission = permission,
+            userService = userService
+        )
+    }
+
     fun mainBinderAvailable(): Boolean {
         return try {
             Shizuku.pingBinder()

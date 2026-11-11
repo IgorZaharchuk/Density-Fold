@@ -45,8 +45,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    private var innerDpiSaveJob: Job? = null
-    private var outerDpiSaveJob: Job? = null
+    private val dpiSaveJobs = mutableMapOf<DensityProfile, Job>()
     private companion object {
         const val DPI_SAVE_DEBOUNCE_MS = 300L
     }
@@ -154,11 +153,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             DensityPreferences.MAX_DPI
         )
         _uiState.update { it.copy(innerDpi = value) }
-        innerDpiSaveJob?.cancel()
-        innerDpiSaveJob = viewModelScope.launch {
-            delay(DPI_SAVE_DEBOUNCE_MS)
-            preferences.setInnerDpi(value)
-        }
+        scheduleDpiSave(DensityProfile.INNER, value)
     }
 
     fun setOuterDpi(dpi: Int) {
@@ -167,26 +162,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             DensityPreferences.MAX_DPI
         )
         _uiState.update { it.copy(outerDpi = value) }
-        outerDpiSaveJob?.cancel()
-        outerDpiSaveJob = viewModelScope.launch {
+        scheduleDpiSave(DensityProfile.OUTER, value)
+    }
+
+    private fun scheduleDpiSave(profile: DensityProfile, dpi: Int) {
+        dpiSaveJobs[profile]?.cancel()
+        dpiSaveJobs[profile] = viewModelScope.launch {
             delay(DPI_SAVE_DEBOUNCE_MS)
-            preferences.setOuterDpi(value)
+            saveDpiPreference(profile, dpi)
+        }
+    }
+
+    private suspend fun saveDpiPreference(profile: DensityProfile, dpi: Int) {
+        when (profile) {
+            DensityProfile.INNER -> preferences.setInnerDpi(dpi)
+            DensityProfile.OUTER -> preferences.setOuterDpi(dpi)
         }
     }
 
     private suspend fun flushDpiPreference(profile: DensityProfile) {
-        when (profile) {
-            DensityProfile.INNER -> {
-                innerDpiSaveJob?.cancelAndJoin()
-                innerDpiSaveJob = null
-                preferences.setInnerDpi(_uiState.value.innerDpi)
-            }
-            DensityProfile.OUTER -> {
-                outerDpiSaveJob?.cancelAndJoin()
-                outerDpiSaveJob = null
-                preferences.setOuterDpi(_uiState.value.outerDpi)
-            }
+        dpiSaveJobs.remove(profile)?.cancelAndJoin()
+        val dpi = when (profile) {
+            DensityProfile.INNER -> _uiState.value.innerDpi
+            DensityProfile.OUTER -> _uiState.value.outerDpi
         }
+        saveDpiPreference(profile, dpi)
     }
 
     fun applyInnerDensity() {

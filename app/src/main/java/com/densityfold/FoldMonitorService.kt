@@ -1,8 +1,5 @@
 package com.densityfold
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -16,7 +13,6 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import android.view.Display
-import androidx.core.app.NotificationCompat
 import com.densityfold.engine.DisplayUtils
 import com.densityfold.engine.ShizukuCommandRunner
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +26,7 @@ import kotlinx.coroutines.launch
 
 class FoldMonitorService : Service() {
     private val TAG = "DensityFold-Monitor"
+    private val notifications by lazy { MonitorNotificationHelper(this) }
     // Все поля состояния монитора обслуживаются последовательно на Main.
     // BroadcastReceiver и DisplayListener также вызываются на главном потоке.
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -91,11 +88,11 @@ class FoldMonitorService : Service() {
                 )
 
                 if (shortPx > 0 && actualDpi > 0) {
-                    updateMonitorNotification(
-                        formatDisplayStatus(isExternal, shortPx, actualDpi)
+                    notifications.update(
+                        notifications.formatDisplayStatus(isExternal, shortPx, actualDpi)
                     )
                 } else {
-                    updateMonitorNotification("Мониторинг складывания активен")
+                    notifications.update("Мониторинг складывания активен")
                 }
 
                 Log.i(TAG, "Действие подтверждено монитором")
@@ -109,7 +106,7 @@ class FoldMonitorService : Service() {
                 retryPending = true
                 val error = intent.getStringExtra(DensityActionService.EXTRA_ERROR)
                 Log.w(TAG, "Действие не выполнено: ${error ?: "неизвестная ошибка"}")
-                updateMonitorNotification("Shizuku недоступен · ожидание восстановления")
+                notifications.update("Shizuku недоступен · ожидание восстановления")
                 scheduleRetry()
             }
         }
@@ -152,16 +149,11 @@ class FoldMonitorService : Service() {
             var binderUnavailableSince = 0L
 
             while (true) {
-                val mainBinder = ShizukuCommandRunner.mainBinderAvailable()
-                val permission = ShizukuCommandRunner.permissionGranted()
-                val userService = ShizukuCommandRunner.userServiceAvailable()
-
-                val state = when {
-                    !mainBinder -> "MAIN_BINDER_DEAD"
-                    !permission -> "PERMISSION_DENIED"
-                    !userService -> "USER_SERVICE_DISCONNECTED"
-                    else -> "READY"
-                }
+                val runtimeState = ShizukuCommandRunner.currentState()
+                val mainBinder = runtimeState.mainBinder
+                val permission = runtimeState.permission
+                val userService = runtimeState.userService
+                val state = runtimeState.label
 
                 val now = SystemClock.elapsedRealtime()
 
@@ -205,7 +197,7 @@ class FoldMonitorService : Service() {
                         else -> {
                             val active = DisplayUtils.getActiveDisplay(applicationContext)
                             if (active != null && active.density > 0) {
-                                formatDisplayStatus(
+                                notifications.formatDisplayStatus(
                                     active.isExternal,
                                     active.shortPx,
                                     active.density
@@ -216,7 +208,7 @@ class FoldMonitorService : Service() {
                         }
                     }
 
-                    updateMonitorNotification(message)
+                    notifications.update(message)
                     previousState = state
                 }
 
@@ -233,7 +225,7 @@ class FoldMonitorService : Service() {
         lastRecoveryAttemptAt = SystemClock.elapsedRealtime()
         if (!Settings.canDrawOverlays(this)) {
             Log.w(TAG, "SHIZUKU RECOVERY: нет SYSTEM_ALERT_WINDOW")
-            updateMonitorNotification("Разрешите фоновый запуск для восстановления Shizuku")
+            notifications.update("Разрешите фоновый запуск для восстановления Shizuku")
             return false
         }
 
@@ -279,7 +271,7 @@ class FoldMonitorService : Service() {
                     actionInFlight = false
                     retryPending = true
                     Log.w(TAG, "SHIZUKU RECOVERY: тайм-аут штатного действия")
-                    updateMonitorNotification(
+                    notifications.update(
                         "Нет ответа от Shizuku · повторная попытка"
                     )
                     scheduleRetry()
@@ -293,81 +285,6 @@ class FoldMonitorService : Service() {
             Log.e(TAG, "SHIZUKU RECOVERY: ошибка запуска $screenName", e)
             false
         }
-    }
-
-    private fun createOpenAppPendingIntent(): PendingIntent {
-        val intent = Intent(this, MainActivity::class.java)
-        return PendingIntent.getActivity(
-            this,
-            0,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-    }
-
-    private fun startForegroundSafely() {
-        val channelId = "fold_monitor_channel"
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(
-                NotificationChannel(
-                    channelId,
-                    "Монитор складывания",
-                    NotificationManager.IMPORTANCE_LOW
-                )
-            )
-        }
-
-        val active = DisplayUtils.getActiveDisplay(applicationContext)
-        val initialMessage = if (active != null && active.density > 0) {
-            formatDisplayStatus(active.isExternal, active.shortPx, active.density)
-        } else {
-            "Мониторинг складывания активен"
-        }
-
-        val notification = buildMonitorNotification(initialMessage)
-
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(
-                    1,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-                )
-            } else {
-                startForeground(1, notification)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Ошибка запуска Foreground: ${e.message}", e)
-            stopSelf()
-        }
-    }
-
-    private fun buildMonitorNotification(message: String): android.app.Notification {
-        return NotificationCompat.Builder(this, "fold_monitor_channel")
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Density Fold")
-            .setContentText(message)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true)
-            .setContentIntent(createOpenAppPendingIntent())
-            .build()
-    }
-
-    private fun formatDisplayStatus(
-        isExternal: Boolean,
-        shortPx: Int,
-        dpi: Int
-    ): String {
-        val logicalWidthDp = DisplayUtils.dpiToDp(dpi, shortPx)
-        val screenName = if (isExternal) "Внешний" else "Внутренний"
-        return "$screenName экран · $dpi DPI · $logicalWidthDp dp"
-    }
-
-    private fun updateMonitorNotification(message: String) {
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(1, buildMonitorNotification(message))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -388,8 +305,8 @@ class FoldMonitorService : Service() {
 
         val isExternal = active.isExternal
 
-        updateMonitorNotification(
-            formatDisplayStatus(isExternal, active.shortPx, active.density)
+        notifications.update(
+            notifications.formatDisplayStatus(isExternal, active.shortPx, active.density)
         )
 
         if (actionInFlight) {
@@ -398,7 +315,7 @@ class FoldMonitorService : Service() {
 
         if (!ShizukuCommandRunner.mainBinderAvailable()) {
             retryPending = true
-            updateMonitorNotification(
+            notifications.update(
                 "Shizuku Binder недоступен · восстановление"
             )
             return
@@ -429,7 +346,7 @@ class FoldMonitorService : Service() {
                     actionInFlight = false
                     retryPending = true
                     Log.w(TAG, "Тайм-аут ожидания результата действия")
-                    updateMonitorNotification("Нет ответа от сервиса · повторная попытка")
+                    notifications.update("Нет ответа от сервиса · повторная попытка")
                     scheduleRetry()
                 }
             }
@@ -439,7 +356,7 @@ class FoldMonitorService : Service() {
             actionInFlight = false
             retryPending = true
             Log.e(TAG, "Не удалось запустить сервис: ${e.message}", e)
-            updateMonitorNotification("Не удалось запустить действие · повторная попытка")
+            notifications.update("Не удалось запустить действие · повторная попытка")
             scheduleRetry()
         }
     }

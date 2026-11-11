@@ -36,7 +36,6 @@ class BootReceiver : BroadcastReceiver() {
                     appContext.startService(
                         Intent(appContext, FoldMonitorService::class.java)
                     )
-                } else {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Ошибка при обработке BOOT_COMPLETED: ${e.message}", e)

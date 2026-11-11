@@ -27,15 +27,14 @@ class DensityPreferences(private val context: Context) {
         const val MAX_DPI = 2000
     }
 
-    suspend fun getInnerDpi(): Int {
-        val stored = context.dataStore.data.first()[INNER_DPI]
-        return stored ?: DEFAULT_INNER_DPI
-    }
+    private suspend fun getDpi(
+        key: Preferences.Key<Int>,
+        default: Int
+    ): Int = context.dataStore.data.first()[key] ?: default
 
-    suspend fun getOuterDpi(): Int {
-        val stored = context.dataStore.data.first()[OUTER_DPI]
-        return stored ?: DEFAULT_OUTER_DPI
-    }
+    suspend fun getInnerDpi(): Int = getDpi(INNER_DPI, DEFAULT_INNER_DPI)
+
+    suspend fun getOuterDpi(): Int = getDpi(OUTER_DPI, DEFAULT_OUTER_DPI)
 
     suspend fun isFoldMonitorEnabled(): Boolean =
         context.dataStore.data.first()[FOLD_MONITOR_ENABLED] ?: DEFAULT_MONITOR_ENABLED
@@ -43,17 +42,15 @@ class DensityPreferences(private val context: Context) {
     suspend fun isAutoStartEnabled(): Boolean =
         context.dataStore.data.first()[AUTO_START_ENABLED] ?: DEFAULT_AUTO_START_ENABLED
 
-    suspend fun setInnerDpi(dpi: Int) {
+    private suspend fun setDpi(key: Preferences.Key<Int>, dpi: Int) {
         context.dataStore.edit {
-            it[INNER_DPI] = dpi.coerceIn(MIN_DPI, MAX_DPI)
+            it[key] = dpi.coerceIn(MIN_DPI, MAX_DPI)
         }
     }
 
-    suspend fun setOuterDpi(dpi: Int) {
-        context.dataStore.edit {
-            it[OUTER_DPI] = dpi.coerceIn(MIN_DPI, MAX_DPI)
-        }
-    }
+    suspend fun setInnerDpi(dpi: Int) = setDpi(INNER_DPI, dpi)
+
+    suspend fun setOuterDpi(dpi: Int) = setDpi(OUTER_DPI, dpi)
 
     suspend fun setFoldMonitorEnabled(enabled: Boolean) {
         context.dataStore.edit { it[FOLD_MONITOR_ENABLED] = enabled }
