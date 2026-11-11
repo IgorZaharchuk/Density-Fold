@@ -9,6 +9,8 @@ import com.densityfold.FoldMonitorService
 import com.densityfold.data.DensityPreferences
 import com.densityfold.engine.DisplayInfo
 import com.densityfold.engine.DisplayUtils
+import com.densityfold.engine.DensityExecutor
+import com.densityfold.engine.DensityProfile
 import com.densityfold.engine.ShizukuManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -134,8 +136,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun applyInnerDensity() {
         viewModelScope.launch {
             applyDensity(
-                targetDpi = _uiState.value.innerDpi,
-                isInner = true,
+                profile = DensityProfile.INNER,
                 successMessage = { "Внутренний экран: установлено $it DPI" },
                 bypassMessage = { "Внутренний экран: уже $it DPI" },
                 wrongScreenMessage = "Для применения настроек внутреннего экрана раскройте телефон"
@@ -146,8 +147,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun applyOuterDensity() {
         viewModelScope.launch {
             applyDensity(
-                targetDpi = _uiState.value.outerDpi,
-                isInner = false,
+                profile = DensityProfile.OUTER,
                 successMessage = { "Внешний экран: установлено $it DPI" },
                 bypassMessage = { "Внешний экран: уже $it DPI" },
                 wrongScreenMessage = "Для применения настроек внешнего экрана закройте телефон"
@@ -156,8 +156,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun applyDensity(
-        targetDpi: Int,
-        isInner: Boolean,
+        profile: DensityProfile,
         successMessage: (Int) -> String,
         bypassMessage: (Int) -> String,
         wrongScreenMessage: String
@@ -167,47 +166,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val active = DisplayUtils.getActiveDisplay(context)
 
         if (active == null) {
-            _uiState.value = state.copy(errorMessage = "Не удалось определить активный экран")
+            _uiState.value = state.copy(
+                errorMessage = "Не удалось определить активный экран",
+                isLoading = false
+            )
             return
         }
+
         if (active.isExternal == isInner) {
-            _uiState.value = state.copy(errorMessage = wrongScreenMessage)
-            return
-        }
-
-        val freshDpiResult = ShizukuManager.getCurrentDensity()
-        if (freshDpiResult.isFailure) {
             _uiState.value = state.copy(
-                isShizukuAvailable = ShizukuManager.isShizukuAvailable(),
-                errorMessage = freshDpiResult.exceptionOrNull()?.message
-                    ?: "Не удалось связаться с Shizuku",
+                errorMessage = wrongScreenMessage,
                 isLoading = false
             )
             return
         }
 
-        val freshDpi = freshDpiResult.getOrNull()
-        if (freshDpi != null && freshDpi == targetDpi) {
-            _uiState.value = state.copy(
-                successMessage = bypassMessage(targetDpi),
-                isLoading = false
-            )
-            return
-        }
+        _uiState.value = state.copy(
+            isLoading = true,
+            errorMessage = null,
+            successMessage = null
+        )
 
-        _uiState.value = state.copy(isLoading = true, errorMessage = null, successMessage = null)
-        val result = ShizukuManager.setDensity(targetDpi)
+        val result = DensityExecutor.apply(
+            context = context,
+            profile = profile,
+            requireProfileMatch = true
+        )
 
         result.fold(
-            onSuccess = {
+            onSuccess = { applied ->
+                val message = if (applied.alreadyApplied) {
+                    bypassMessage(applied.targetDpi)
+                } else {
+                    successMessage(applied.targetDpi)
+                }
+
                 _uiState.value = _uiState.value.copy(
-                    successMessage = successMessage(targetDpi),
+                    successMessage = message,
                     isLoading = false
                 )
             },
-            onFailure = {
+            onFailure = { error ->
                 _uiState.value = _uiState.value.copy(
-                    errorMessage = it.message ?: "Не удалось применить DPI",
+                    isShizukuAvailable = ShizukuManager.isShizukuAvailable(),
+                    errorMessage = error.message ?: "Не удалось применить DPI",
                     isLoading = false
                 )
             }
