@@ -3,6 +3,8 @@ package com.densityfold.engine
 import android.content.Context
 import com.densityfold.data.DensityPreferences
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 enum class DensityProfile {
     INNER,
@@ -20,12 +22,15 @@ data class DensityApplyResult(
 
 object DensityExecutor {
 
+    private val applyMutex = Mutex()
+
     suspend fun apply(
         context: Context,
         profile: DensityProfile,
         timeoutMs: Long = 10_000L
     ): Result<DensityApplyResult> {
-        return try {
+        return applyMutex.withLock {
+            try {
             val active = DisplayUtils.getActiveDisplay(context)
                 ?: throw IllegalStateException("Не удалось определить активный экран")
 
@@ -86,8 +91,9 @@ object DensityExecutor {
             )
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
-            Result.failure(e)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
         }
     }
 

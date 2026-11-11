@@ -11,8 +11,8 @@ android {
         applicationId = "com.densityfold"
         minSdk = 26
         targetSdk = 34
-        versionCode = 7
-        versionName = "0.9.0-beta.6"
+        versionCode = 8
+        versionName = "0.9.0-beta.7"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

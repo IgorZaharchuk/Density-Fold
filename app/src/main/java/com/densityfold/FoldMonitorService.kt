@@ -30,7 +30,9 @@ import kotlinx.coroutines.launch
 
 class FoldMonitorService : Service() {
     private val TAG = "DensityFold-Monitor"
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Все поля состояния монитора обслуживаются последовательно на Main.
+    // BroadcastReceiver и DisplayListener также вызываются на главном потоке.
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var displayManager: DisplayManager? = null
 
     private val checkChannel = Channel<Unit>(Channel.CONFLATED)

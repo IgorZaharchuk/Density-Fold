@@ -15,6 +15,9 @@ import com.densityfold.engine.ShizukuManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import rikka.shizuku.Shizuku
@@ -22,7 +25,7 @@ import rikka.shizuku.Shizuku
 data class UiState(
     val activeDisplay: DisplayInfo? = null,
     val innerDpi: Int = 350,
-    val outerDpi: Int = 420,
+    val outerDpi: Int = 440,
     val innerShortPx: Int = 1968,
     val outerShortPx: Int = 1080,
     val isFoldMonitorEnabled: Boolean = false,
@@ -38,6 +41,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val preferences = DensityPreferences(application)
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    private var innerDpiSaveJob: Job? = null
+    private var outerDpiSaveJob: Job? = null
+    private companion object {
+        const val DPI_SAVE_DEBOUNCE_MS = 300L
+    }
 
     private val shizukuBinderReceivedListener = Shizuku.OnBinderReceivedListener {
         _uiState.update {
@@ -133,16 +142,43 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setInnerDpi(dpi: Int) {
-        viewModelScope.launch {
-            preferences.setInnerDpi(dpi)
-            _uiState.update { it.copy(innerDpi = dpi) }
+        val value = dpi.coerceIn(
+            DensityPreferences.MIN_DPI,
+            DensityPreferences.MAX_DPI
+        )
+        _uiState.update { it.copy(innerDpi = value) }
+        innerDpiSaveJob?.cancel()
+        innerDpiSaveJob = viewModelScope.launch {
+            delay(DPI_SAVE_DEBOUNCE_MS)
+            preferences.setInnerDpi(value)
         }
     }
 
     fun setOuterDpi(dpi: Int) {
-        viewModelScope.launch {
-            preferences.setOuterDpi(dpi)
-            _uiState.update { it.copy(outerDpi = dpi) }
+        val value = dpi.coerceIn(
+            DensityPreferences.MIN_DPI,
+            DensityPreferences.MAX_DPI
+        )
+        _uiState.update { it.copy(outerDpi = value) }
+        outerDpiSaveJob?.cancel()
+        outerDpiSaveJob = viewModelScope.launch {
+            delay(DPI_SAVE_DEBOUNCE_MS)
+            preferences.setOuterDpi(value)
+        }
+    }
+
+    private suspend fun flushDpiPreference(profile: DensityProfile) {
+        when (profile) {
+            DensityProfile.INNER -> {
+                innerDpiSaveJob?.cancelAndJoin()
+                innerDpiSaveJob = null
+                preferences.setInnerDpi(_uiState.value.innerDpi)
+            }
+            DensityProfile.OUTER -> {
+                outerDpiSaveJob?.cancelAndJoin()
+                outerDpiSaveJob = null
+                preferences.setOuterDpi(_uiState.value.outerDpi)
+            }
         }
     }
 
@@ -180,6 +216,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 successMessage = null
             )
         }
+
+        flushDpiPreference(profile)
 
         val result = DensityExecutor.apply(
             context = context,
