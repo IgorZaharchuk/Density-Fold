@@ -21,19 +21,15 @@ object ShizukuManager {
         DensityOutputParser.parse(rawOutput)
 
     suspend fun getCurrentDensity(): Result<Int> {
-        val command = "wm density"
-        return ShizukuCommandRunner.execute(command).fold(
-            onSuccess = { rawOutput ->
-                val density = parseDensity(rawOutput)
-                if (density > 0) {
-                    Result.success(density)
-                } else {
-                    Result.failure(Exception("Не удалось определить плотность. Вывод: $rawOutput"))
-                }
-            },
-            onFailure = { error ->
-                Result.failure(error)
+        return ShizukuCommandRunner.execute("wm density").mapCatching { rawOutput ->
+            val density = parseDensity(rawOutput)
+            if (density > 0) {
+                density
+            } else {
+                throw IllegalStateException(
+                    "Не удалось определить плотность. Вывод: $rawOutput"
+                )
             }
-        )
+        }
     }
 }
