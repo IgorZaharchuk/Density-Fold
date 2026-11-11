@@ -5,7 +5,6 @@ import com.densityfold.data.DensityPreferences
 import kotlinx.coroutines.CancellationException
 
 enum class DensityProfile {
-    AUTO,
     INNER,
     OUTER
 }
@@ -24,20 +23,15 @@ object DensityExecutor {
     suspend fun apply(
         context: Context,
         profile: DensityProfile,
-        timeoutMs: Long = 10_000L,
-        requireProfileMatch: Boolean = false
+        timeoutMs: Long = 10_000L
     ): Result<DensityApplyResult> {
         return try {
             val active = DisplayUtils.getActiveDisplay(context)
                 ?: throw IllegalStateException("Не удалось определить активный экран")
 
-            val isExternal = when (profile) {
-                DensityProfile.AUTO -> active.isExternal
-                DensityProfile.INNER -> false
-                DensityProfile.OUTER -> true
-            }
+            val isExternal = profile == DensityProfile.OUTER
 
-            if (requireProfileMatch && active.isExternal != isExternal) {
+            if (active.isExternal != isExternal) {
                 throw IllegalStateException(
                     if (isExternal) {
                         "Для применения настроек внешнего экрана закройте телефон"
@@ -47,11 +41,7 @@ object DensityExecutor {
                 )
             }
 
-            val shortPx = when {
-                active.isExternal == isExternal -> active.shortPx
-                isExternal -> DisplayUtils.getOuterShortPx(context)
-                else -> DisplayUtils.getInnerShortPx(context)
-            }
+            val shortPx = active.shortPx
 
             val preferences = DensityPreferences(context)
             val targetDpi = if (isExternal) {
@@ -64,17 +54,13 @@ object DensityExecutor {
 
             ShizukuManager.awaitShizukuReady(timeoutMs).getOrThrow()
 
-            ensureDisplayUnchanged(
-                context, active, isExternal, requireProfileMatch
-            )
+            ensureDisplayUnchanged(context, active)
 
             val currentDpi = ShizukuManager.getCurrentDensity().getOrThrow()
             val alreadyApplied = currentDpi == targetDpi
 
             if (!alreadyApplied) {
-                ensureDisplayUnchanged(
-                    context, active, isExternal, requireProfileMatch
-                )
+                ensureDisplayUnchanged(context, active)
                 ShizukuManager.setDensity(targetDpi).getOrThrow()
             }
 
@@ -86,9 +72,7 @@ object DensityExecutor {
                 )
             }
 
-            ensureDisplayUnchanged(
-                context, active, isExternal, requireProfileMatch
-            )
+            ensureDisplayUnchanged(context, active)
 
             Result.success(
                 DensityApplyResult(
@@ -109,17 +93,13 @@ object DensityExecutor {
 
     private fun ensureDisplayUnchanged(
         context: Context,
-        initial: DisplayInfo,
-        expectedExternal: Boolean,
-        enforceProfile: Boolean
+        initial: DisplayInfo
     ) {
-        if (!enforceProfile && initial.isExternal != expectedExternal) return
-
         val current = DisplayUtils.getActiveDisplay(context)
             ?: throw IllegalStateException("Не удалось определить активный экран")
 
         if (
-            current.isExternal != expectedExternal ||
+            current.isExternal != initial.isExternal ||
             current.shortPx != initial.shortPx
         ) {
             throw IllegalStateException(

@@ -183,8 +183,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         val result = DensityExecutor.apply(
             context = context,
-            profile = profile,
-            requireProfileMatch = true
+            profile = profile
         )
 
         result.fold(
