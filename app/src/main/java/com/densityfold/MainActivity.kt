@@ -12,6 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -91,6 +92,7 @@ fun MainScreen(
 
     var innerDpText by remember { mutableStateOf(uiState.innerDp.toString()) }
     var outerDpText by remember { mutableStateOf(uiState.outerDp.toString()) }
+    var automationExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.innerDp) {
         innerDpText = uiState.innerDp.toString()
@@ -246,31 +248,63 @@ fun MainScreen(
             )
 
             Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        "Автоматизация",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { automationExpanded = !automationExpanded }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Автоматизация",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                if (uiState.isFoldMonitorEnabled) {
+                                    "Автоприменение включено"
+                                } else {
+                                    "Автоприменение выключено"
+                                },
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            if (automationExpanded) "⌃" else "⌄",
+                            fontSize = 22.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
-                    SettingSwitch(
-                        title = "Автоприменение при складывании",
-                        description = "Менять плотность при смене экрана",
-                        checked = uiState.isFoldMonitorEnabled,
-                        onCheckedChange = viewModel::setFoldMonitorEnabled
-                    )
+                    if (automationExpanded) {
+                        Column(
+                            modifier = Modifier.padding(
+                                start = 16.dp,
+                                end = 16.dp,
+                                bottom = 16.dp
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            SettingSwitch(
+                                title = "Автоприменение при складывании",
+                                description = "Менять плотность при смене экрана",
+                                checked = uiState.isFoldMonitorEnabled,
+                                onCheckedChange = viewModel::setFoldMonitorEnabled
+                            )
 
-                    Divider()
+                            Divider()
 
-                    SettingSwitch(
-                        title = "Автозапуск при загрузке",
-                        description = "Запускать монитор после перезагрузки",
-                        checked = uiState.isAutoStartEnabled,
-                        onCheckedChange = viewModel::setAutoStartEnabled
-                    )
+                            SettingSwitch(
+                                title = "Автозапуск при загрузке",
+                                description = "Запускать монитор после перезагрузки",
+                                checked = uiState.isAutoStartEnabled,
+                                onCheckedChange = viewModel::setAutoStartEnabled
+                            )
+                        }
+                    }
                 }
             }
 
@@ -345,21 +379,25 @@ private fun DensitySettingCard(
         ) {
             Text(title, fontWeight = FontWeight.Bold)
 
-            OutlinedTextField(
-                value = value,
-                onValueChange = onValueChange,
-                label = { Text("Целевая ширина, dp") },
-                supportingText = { Text("Допустимо: 200–1200 dp") },
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            Button(
-                onClick = onApply,
-                enabled = enabled,
-                modifier = Modifier.fillMaxWidth()
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Применить")
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    label = { Text("Ширина, dp") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true
+                )
+
+                Button(
+                    onClick = onApply,
+                    enabled = enabled
+                ) {
+                    Text("Применить")
+                }
             }
         }
     }
