@@ -29,12 +29,18 @@ jobs:
       
     - name: Build with Gradle
       run: |
+        VERSION_NAME=$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)
+        if [ -z "$VERSION_NAME" ]; then
+          echo "Не удалось определить versionName из app/build.gradle.kts"
+          exit 1
+        fi
+        echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
         ./gradlew :app:assembleDebug --stacktrace
-        cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Density-Fold-0.9.0-beta.1.apk
+        cp app/build/outputs/apk/debug/app-debug.apk "app/build/outputs/apk/debug/Density-Fold-$VERSION_NAME.apk"
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: Density-Fold-0.9.0-beta.1
-        path: app/build/outputs/apk/debug/Density-Fold-0.9.0-beta.1.apk
+        name: Density-Fold-${{ env.VERSION_NAME }}
+        path: app/build/outputs/apk/debug/Density-Fold-${{ env.VERSION_NAME }}.apk
         retention-days: 30
