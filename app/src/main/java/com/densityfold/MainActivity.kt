@@ -222,10 +222,19 @@ fun MainScreen(
                                     display.isExternal -> "Внешний экран"
                                     else -> "Внутренний экран"
                                 },
+                                modifier = Modifier.weight(1f),
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1
                             )
+                            if (!uiState.isShizukuAvailable) {
+                                TextButton(
+                                    onClick = viewModel::requestShizukuPermission,
+                                    contentPadding = PaddingValues(horizontal = 6.dp)
+                                ) {
+                                    Text("Подключить", fontSize = 11.sp, maxLines = 1)
+                                }
+                            }
                         }
                         shizukuError?.let {
                             Text(
@@ -234,19 +243,6 @@ fun MainScreen(
                                 color = MaterialTheme.colorScheme.error,
                                 fontSize = 12.sp
                             )
-                        }
-                        if (!uiState.isShizukuAvailable) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                TextButton(
-                                    onClick = viewModel::requestShizukuPermission,
-                                    contentPadding = PaddingValues(horizontal = 6.dp)
-                                ) {
-                                    Text("Подключить", fontSize = 11.sp, maxLines = 1)
-                                }
-                            }
                         }
                     }
                     Row(
