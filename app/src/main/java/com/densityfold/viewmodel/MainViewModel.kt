@@ -37,7 +37,7 @@ data class UiState(
     val isFoldMonitorEnabled: Boolean = false,
     val isAutoStartEnabled: Boolean = false,
     val isRootBackendEnabled: Boolean = false,
-    val isShizukuBackendEnabled: Boolean = true,
+    val isShizukuBackendEnabled: Boolean = false,
     val isShizukuAvailable: Boolean = false,
     val isRootAvailable: Boolean? = null,
     val isShizukuBackendAvailable: Boolean? = null,
@@ -47,7 +47,8 @@ data class UiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val successMessage: String? = null,
-    val isOverlayPermissionGranted: Boolean = false
+    val isOverlayPermissionGranted: Boolean = false,
+    val overlayPermissionRequestPending: Boolean = false
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -65,6 +66,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     @Volatile
     private var pendingShizukuPermissionRequest = false
+
+    @Volatile
+    private var pendingOverlayPermissionRequest = false
 
     private val shizukuPermissionResultListener =
         Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
@@ -179,19 +183,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun loadSettingsInternal() {
         val settings = preferences.getSettings()
+        val context = getApplication<Application>()
+        val overlayGranted = Settings.canDrawOverlays(context)
+        val monitorEnabled = settings.foldMonitorEnabled && overlayGranted
+
+        if (settings.foldMonitorEnabled && !overlayGranted) {
+            preferences.setFoldMonitorEnabled(false)
+        }
 
         _uiState.update {
             it.copy(
                 innerDpi = settings.innerDpi,
                 outerDpi = settings.outerDpi,
-                isFoldMonitorEnabled = settings.foldMonitorEnabled,
+                isFoldMonitorEnabled = monitorEnabled,
                 isAutoStartEnabled = settings.autoStartEnabled,
                 isRootBackendEnabled = settings.rootBackendEnabled,
                 isShizukuBackendEnabled = settings.shizukuBackendEnabled,
+                isOverlayPermissionGranted = overlayGranted,
+                errorMessage = if (settings.foldMonitorEnabled && !overlayGranted) {
+                    "Автоматизация отключена: отсутствует разрешение «Поверх других окон»."
+                } else {
+                    it.errorMessage
+                }
             )
         }
 
-        updateFoldMonitorService(settings.foldMonitorEnabled)
+        updateFoldMonitorService(monitorEnabled)
 
         if (settings.shizukuBackendEnabled) {
             _uiState.update { it.copy(isShizukuPermissionPending = true) }
@@ -227,11 +244,72 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setFoldMonitorEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            preferences.setFoldMonitorEnabled(enabled)
-            _uiState.update { it.copy(isFoldMonitorEnabled = enabled) }
-            updateFoldMonitorService(enabled)
+        if (!enabled) {
+            pendingOverlayPermissionRequest = false
+            viewModelScope.launch {
+                preferences.setFoldMonitorEnabled(false)
+                _uiState.update {
+                    it.copy(
+                        isFoldMonitorEnabled = false,
+                        overlayPermissionRequestPending = false
+                    )
+                }
+                updateFoldMonitorService(false)
+            }
+            return
         }
+
+        val context = getApplication<Application>()
+        if (!Settings.canDrawOverlays(context)) {
+            pendingOverlayPermissionRequest = true
+            _uiState.update {
+                it.copy(
+                    overlayPermissionRequestPending = true,
+                    errorMessage = null
+                )
+            }
+            return
+        }
+
+        viewModelScope.launch { enableFoldMonitor() }
+    }
+
+    fun consumeOverlayPermissionRequest() {
+        _uiState.update { it.copy(overlayPermissionRequestPending = false) }
+    }
+
+    fun onOverlayPermissionSettingsReturned() {
+        if (!pendingOverlayPermissionRequest) return
+        pendingOverlayPermissionRequest = false
+
+        viewModelScope.launch {
+            val granted = Settings.canDrawOverlays(getApplication<Application>())
+            _uiState.update { it.copy(isOverlayPermissionGranted = granted) }
+
+            if (granted) {
+                enableFoldMonitor()
+            } else {
+                preferences.setFoldMonitorEnabled(false)
+                _uiState.update {
+                    it.copy(
+                        isFoldMonitorEnabled = false,
+                        errorMessage = "Автоматизация не включена: разрешение «Поверх других окон» не предоставлено."
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun enableFoldMonitor() {
+        preferences.setFoldMonitorEnabled(true)
+        _uiState.update {
+            it.copy(
+                isFoldMonitorEnabled = true,
+                isOverlayPermissionGranted = true,
+                errorMessage = null
+            )
+        }
+        updateFoldMonitorService(true)
     }
 
     fun setAutoStartEnabled(enabled: Boolean) {
@@ -243,28 +321,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setRootBackendEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            val updated = preferences.setRootBackendEnabled(enabled)
-            if (updated) {
-                _uiState.update { it.copy(isRootBackendEnabled = enabled) }
-                refreshBackendSelection()
-            } else {
-                _uiState.update {
-                    it.copy(errorMessage = "Нельзя отключить оба способа выполнения")
-                }
+            preferences.setRootBackendEnabled(enabled)
+            _uiState.update {
+                it.copy(isRootBackendEnabled = enabled, errorMessage = null)
             }
+            refreshBackendSelection()
         }
     }
 
     fun setShizukuBackendEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            val updated = preferences.setShizukuBackendEnabled(enabled)
-
-            if (!updated) {
-                _uiState.update {
-                    it.copy(errorMessage = "Нельзя отключить оба способа выполнения")
-                }
-                return@launch
-            }
+            preferences.setShizukuBackendEnabled(enabled)
 
             _uiState.update {
                 it.copy(
@@ -282,8 +349,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 } catch (e: Exception) {
                     pendingShizukuPermissionRequest = false
                     _uiState.update {
-                        it.copy(errorMessage = "Не удалось запустить Shizuku: ${e.message}")
+                        it.copy(
+                            isShizukuPermissionPending = false,
+                            errorMessage = "Не удалось запустить Shizuku: ${e.message}"
+                        )
                     }
+                    refreshBackendSelection()
                 }
             } else {
                 pendingShizukuPermissionRequest = false

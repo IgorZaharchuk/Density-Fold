@@ -3,6 +3,7 @@ package com.densityfold
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.provider.Settings
 import android.util.Log
 import com.densityfold.data.DensityPreferences
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +32,12 @@ class BootReceiver : BroadcastReceiver() {
                 val settings = prefs.getSettings()
 
                 if (settings.foldMonitorEnabled && settings.autoStartEnabled) {
+                    if (!Settings.canDrawOverlays(appContext)) {
+                        Log.w(TAG, "Нет разрешения на отображение поверх окон; автозапуск монитора отменён")
+                        prefs.setFoldMonitorEnabled(false)
+                        return@launch
+                    }
+
                     androidx.core.content.ContextCompat.startForegroundService(
                         appContext,
                         Intent(appContext, FoldMonitorService::class.java)

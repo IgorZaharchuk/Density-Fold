@@ -30,7 +30,7 @@ class DensityPreferences(private val context: Context) {
         val SHIZUKU_BACKEND_ENABLED = booleanPreferencesKey("shizuku_backend_enabled")
 
         const val DEFAULT_ROOT_BACKEND_ENABLED = false
-        const val DEFAULT_SHIZUKU_BACKEND_ENABLED = true
+        const val DEFAULT_SHIZUKU_BACKEND_ENABLED = false
 
         const val DEFAULT_INNER_DPI = 350
         const val DEFAULT_OUTER_DPI = 440
@@ -80,39 +80,11 @@ class DensityPreferences(private val context: Context) {
         context.dataStore.edit { it[AUTO_START_ENABLED] = enabled }
     }
 
-    private suspend fun setBackendEnabled(
-        key: Preferences.Key<Boolean>,
-        otherKey: Preferences.Key<Boolean>,
-        enabled: Boolean,
-        otherDefault: Boolean
-    ): Boolean {
-        var updated = false
-
-        context.dataStore.edit { values ->
-            val otherEnabled = values[otherKey] ?: otherDefault
-
-            if (enabled || otherEnabled) {
-                values[key] = enabled
-                updated = true
-            }
-        }
-
-        return updated
+    suspend fun setRootBackendEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[ROOT_BACKEND_ENABLED] = enabled }
     }
 
-    suspend fun setRootBackendEnabled(enabled: Boolean): Boolean =
-        setBackendEnabled(
-            ROOT_BACKEND_ENABLED,
-            SHIZUKU_BACKEND_ENABLED,
-            enabled,
-            DEFAULT_SHIZUKU_BACKEND_ENABLED
-        )
-
-    suspend fun setShizukuBackendEnabled(enabled: Boolean): Boolean =
-        setBackendEnabled(
-            SHIZUKU_BACKEND_ENABLED,
-            ROOT_BACKEND_ENABLED,
-            enabled,
-            DEFAULT_ROOT_BACKEND_ENABLED
-        )
+    suspend fun setShizukuBackendEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[SHIZUKU_BACKEND_ENABLED] = enabled }
+    }
 }

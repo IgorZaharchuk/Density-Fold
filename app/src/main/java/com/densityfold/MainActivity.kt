@@ -75,6 +75,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (::mainViewModel.isInitialized) mainViewModel.refreshDisplays()
+        if (::mainViewModel.isInitialized) mainViewModel.onOverlayPermissionSettingsReturned()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -92,7 +93,14 @@ fun MainScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    var automationExpanded by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState.overlayPermissionRequestPending) {
+        if (uiState.overlayPermissionRequestPending) {
+            viewModel.consumeOverlayPermissionRequest()
+            onRequestOverlayPermission()
+        }
+    }
+
+    var settingsExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.errorMessage, uiState.successMessage) {
         if (uiState.errorMessage != null || uiState.successMessage != null) {
@@ -121,6 +129,32 @@ fun MainScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            val backendWarning = when {
+                !uiState.isRootBackendEnabled && !uiState.isShizukuBackendEnabled ->
+                    "Не выбран способ выполнения. Включите Root или Shizuku в настройках."
+                !uiState.isBackendReady &&
+                    !uiState.isShizukuPermissionPending &&
+                    !uiState.isLoading ->
+                    "Нет доступного движка. Проверьте Root или запустите Shizuku и выдайте разрешение."
+                else -> null
+            }
+
+            backendWarning?.let { message ->
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        message,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+
             uiState.errorMessage?.let {
                 Card(
                     colors = CardDefaults.cardColors(
@@ -274,88 +308,76 @@ fun MainScreen(
             )
 
             Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(
-                        "Способы выполнения",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    SettingSwitch(
-                        title = "Root",
-                        description = when {
-                            uiState.activeBackendName == "Root" -> "Активен"
-                            uiState.isRootAvailable == false ->
-                                "Недоступен — Root-доступ не предоставлен"
-                            uiState.isRootAvailable == true -> "Доступен"
-                            else -> "Приоритетный способ, если доступен"
-                        },
-                        checked = uiState.isRootBackendEnabled,
-                        onCheckedChange = viewModel::setRootBackendEnabled
-                    )
-                    Divider()
-                    SettingSwitch(
-                        title = "Shizuku",
-                        description = when {
-                            uiState.activeBackendName == "Shizuku" -> "Активен"
-                            uiState.isShizukuPermissionPending ->
-                                "Ожидание запуска Shizuku и запроса разрешения"
-                            uiState.activeBackendName == "Root" ->
-                                "Резервный способ — сейчас активен Root"
-                            uiState.isShizukuBackendAvailable == false ->
-                                "Недоступен — Shizuku не запущен или разрешение не выдано"
-                            uiState.isShizukuBackendAvailable == true -> "Доступен"
-                            else -> "Резервный способ, если Root недоступен"
-                        },
-                        checked = uiState.isShizukuBackendEnabled,
-                        onCheckedChange = viewModel::setShizukuBackendEnabled
-                    )
-                }
-            }
-
-            Card(modifier = Modifier.fillMaxWidth()) {
                 Column {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { automationExpanded = !automationExpanded }
+                            .clickable { settingsExpanded = !settingsExpanded }
                             .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Автоматизация",
+                                "Настройки",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 if (uiState.isFoldMonitorEnabled)
                                     "Автоприменение включено"
-                                else "Автоприменение выключено",
+                                else
+                                    "Движки и автоматизация",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Image(
                             painter = painterResource(
-                                if (automationExpanded) R.drawable.ic_expand
+                                if (settingsExpanded) R.drawable.ic_expand
                                 else R.drawable.ic_collapse
                             ),
-                            contentDescription = if (automationExpanded)
-                                "Свернуть" else "Развернуть",
+                            contentDescription = if (settingsExpanded) "Свернуть" else "Развернуть",
                             modifier = Modifier.size(24.dp)
                         )
                     }
 
-                    if (automationExpanded) {
+                    if (settingsExpanded) {
                         Column(
                             modifier = Modifier.padding(
                                 start = 14.dp, end = 14.dp, bottom = 14.dp
                             ),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
+                            SettingSwitch(
+                                title = "Root",
+                                description = when {
+                                    uiState.activeBackendName == "Root" -> "Активен"
+                                    uiState.isRootAvailable == false ->
+                                        "Недоступен — Root-доступ не предоставлен"
+                                    uiState.isRootAvailable == true -> "Доступен"
+                                    else -> "Приоритетный способ, если доступен"
+                                },
+                                checked = uiState.isRootBackendEnabled,
+                                onCheckedChange = viewModel::setRootBackendEnabled
+                            )
+                            Divider()
+                            SettingSwitch(
+                                title = "Shizuku",
+                                description = when {
+                                    uiState.activeBackendName == "Shizuku" -> "Активен"
+                                    uiState.isShizukuPermissionPending ->
+                                        "Ожидание запуска Shizuku и запроса разрешения"
+                                    uiState.activeBackendName == "Root" ->
+                                        "Резервный способ — сейчас активен Root"
+                                    uiState.isShizukuBackendAvailable == false ->
+                                        "Недоступен — Shizuku не запущен или разрешение не выдано"
+                                    uiState.isShizukuBackendAvailable == true -> "Доступен"
+                                    else -> "Резервный способ, если Root недоступен"
+                                },
+                                checked = uiState.isShizukuBackendEnabled,
+                                onCheckedChange = viewModel::setShizukuBackendEnabled
+                            )
+                            Divider()
                             SettingSwitch(
                                 title = "Автоприменение при складывании",
                                 description = "Менять DPI при смене экрана",
@@ -386,7 +408,6 @@ fun MainScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-
                             Text(
                                 "github.com/IgorZaharchuk/Density-Fold",
                                 modifier = Modifier.clickable {
@@ -400,27 +421,6 @@ fun MainScreen(
                 }
             }
 
-            if (!uiState.isOverlayPermissionGranted) {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text("Фоновое восстановление", fontWeight = FontWeight.Bold)
-                        Text(
-                            "Разрешение нужно для восстановления связи с Shizuku в фоне.",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        OutlinedButton(
-                            onClick = onRequestOverlayPermission,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Разрешить фоновый запуск")
-                        }
-                    }
-                }
-            }
         }
     }
 }
