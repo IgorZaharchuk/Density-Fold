@@ -36,6 +36,7 @@ class FoldMonitorService : Service() {
 
     private var lastRequestedExternal: Boolean? = null
     private var actionInFlight = false
+    private var activeRequestId: Long? = null
     private var retryPending = false
     private var retryJob: Job? = null
     private var actionTimeoutJob: Job? = null
@@ -61,8 +62,18 @@ class FoldMonitorService : Service() {
                 )
             ) return
 
+            val requestId = intent.getLongExtra(
+                DensityActionService.EXTRA_MONITOR_REQUEST_ID,
+                0L
+            )
+            if (requestId == 0L || activeRequestId != requestId) {
+                Log.d(TAG, "Игнорируется устаревший ответ монитора: id=$requestId")
+                return
+            }
+
             actionTimeoutJob?.cancel()
             actionTimeoutJob = null
+            activeRequestId = null
             actionInFlight = false
 
             val success = intent.getBooleanExtra(
@@ -243,6 +254,7 @@ class FoldMonitorService : Service() {
         }
 
         val screenName = if (isExternal) "Внешний" else "Внутренний"
+        val requestId = SystemClock.elapsedRealtimeNanos()
 
         return try {
             val intent = Intent(this, activityClass).apply {
@@ -251,10 +263,12 @@ class FoldMonitorService : Service() {
                         Intent.FLAG_ACTIVITY_NO_ANIMATION
                 )
                 putExtra(DensityActionService.EXTRA_MONITOR_REQUEST, true)
+                putExtra(DensityActionService.EXTRA_MONITOR_REQUEST_ID, requestId)
             }
 
             lastRequestedExternal = isExternal
             retryPending = false
+            activeRequestId = requestId
             actionInFlight = true
 
             Log.i(
@@ -265,14 +279,18 @@ class FoldMonitorService : Service() {
             startActivity(intent)
 
             startActionTimeout(
+                requestId = requestId,
                 logMessage = "SHIZUKU RECOVERY: тайм-аут штатного действия",
                 notificationMessage = "Нет ответа от Shizuku · повторная попытка"
             )
 
             true
         } catch (e: Exception) {
-            actionInFlight = false
-            retryPending = true
+            if (activeRequestId == requestId) {
+                activeRequestId = null
+                actionInFlight = false
+                retryPending = true
+            }
             Log.e(TAG, "SHIZUKU RECOVERY: ошибка запуска $screenName", e)
             false
         }
@@ -349,6 +367,8 @@ class FoldMonitorService : Service() {
 
         lastRequestedExternal = isExternal
         retryPending = false
+        val requestId = SystemClock.elapsedRealtimeNanos()
+        activeRequestId = requestId
         actionInFlight = true
 
         val actionName = if (isExternal) "Внешний" else "Внутренний"
@@ -356,20 +376,32 @@ class FoldMonitorService : Service() {
 
         try {
             if (isExternal) {
-                DensityActionService.startClosed(this, fromMonitor = true)
+                DensityActionService.startClosed(
+                    this,
+                    fromMonitor = true,
+                    requestId = requestId
+                )
             } else {
-                DensityActionService.startOpen(this, fromMonitor = true)
+                DensityActionService.startOpen(
+                    this,
+                    fromMonitor = true,
+                    requestId = requestId
+                )
             }
 
             startActionTimeout(
+                requestId = requestId,
                 logMessage = "Тайм-аут ожидания результата действия",
                 notificationMessage = "Нет ответа от сервиса · повторная попытка"
             )
         } catch (e: Exception) {
-            actionTimeoutJob?.cancel()
-            actionTimeoutJob = null
-            actionInFlight = false
-            retryPending = true
+            if (activeRequestId == requestId) {
+                actionTimeoutJob?.cancel()
+                actionTimeoutJob = null
+                activeRequestId = null
+                actionInFlight = false
+                retryPending = true
+            }
             Log.e(TAG, "Не удалось запустить сервис: ${e.message}", e)
             notifications.update("Не удалось запустить действие · повторная попытка")
             scheduleRetry()
@@ -377,13 +409,15 @@ class FoldMonitorService : Service() {
     }
 
     private fun startActionTimeout(
+        requestId: Long,
         logMessage: String,
         notificationMessage: String
     ) {
         actionTimeoutJob?.cancel()
         actionTimeoutJob = scope.launch {
             delay(20_000L)
-            if (actionInFlight) {
+            if (actionInFlight && activeRequestId == requestId) {
+                activeRequestId = null
                 actionInFlight = false
                 retryPending = true
                 Log.w(TAG, logMessage)

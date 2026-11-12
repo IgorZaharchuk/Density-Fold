@@ -42,6 +42,11 @@ class DensityActionService : Service() {
         }
 
         val fromMonitor = intent.getBooleanExtra(EXTRA_MONITOR_REQUEST, false)
+        val monitorRequestId = if (fromMonitor) {
+            intent.getLongExtra(EXTRA_MONITOR_REQUEST_ID, 0L)
+        } else {
+            0L
+        }
 
         scope.launch {
             var succeeded = false
@@ -83,7 +88,8 @@ class DensityActionService : Service() {
                         success = succeeded,
                         applied = applied,
                         error = failureMessage,
-                        expectedExternal = profile == DensityProfile.OUTER
+                        expectedExternal = profile == DensityProfile.OUTER,
+                        monitorRequestId = monitorRequestId
                     )
                 }
                 stopSelf(startId)
@@ -119,11 +125,13 @@ class DensityActionService : Service() {
         success: Boolean,
         applied: DensityApplyResult?,
         error: String?,
-        expectedExternal: Boolean
+        expectedExternal: Boolean,
+        monitorRequestId: Long
     ) {
         val intent = Intent(ACTION_COMPLETED).apply {
             setPackage(packageName)
             putExtra(EXTRA_MONITOR_REQUEST, fromMonitor)
+            putExtra(EXTRA_MONITOR_REQUEST_ID, monitorRequestId)
             putExtra(EXTRA_SUCCESS, success)
             putExtra(EXTRA_IS_EXTERNAL, applied?.isExternal ?: expectedExternal)
             putExtra(EXTRA_SHORT_PX, applied?.shortPx ?: 0)
@@ -182,6 +190,7 @@ class DensityActionService : Service() {
         const val ACTION_COMPLETED = "com.densityfold.ACTION_COMPLETED"
 
         const val EXTRA_MONITOR_REQUEST = "com.densityfold.EXTRA_MONITOR_REQUEST"
+        const val EXTRA_MONITOR_REQUEST_ID = "com.densityfold.EXTRA_MONITOR_REQUEST_ID"
         const val EXTRA_SUCCESS = "com.densityfold.EXTRA_SUCCESS"
         const val EXTRA_IS_EXTERNAL = "com.densityfold.EXTRA_IS_EXTERNAL"
         const val EXTRA_SHORT_PX = "com.densityfold.EXTRA_SHORT_PX"
@@ -191,20 +200,28 @@ class DensityActionService : Service() {
         private fun startAction(
             context: Context,
             action: String,
-            fromMonitor: Boolean
+            fromMonitor: Boolean,
+            requestId: Long? = null
         ) {
             context.startService(
                 Intent(context, DensityActionService::class.java).apply {
                     this.action = action
                     putExtra(EXTRA_MONITOR_REQUEST, fromMonitor)
+                    requestId?.let { putExtra(EXTRA_MONITOR_REQUEST_ID, it) }
                 }
             )
         }
 
-        fun startOpen(context: Context, fromMonitor: Boolean = false) =
-            startAction(context, ACTION_OPEN, fromMonitor)
+        fun startOpen(
+            context: Context,
+            fromMonitor: Boolean = false,
+            requestId: Long? = null
+        ) = startAction(context, ACTION_OPEN, fromMonitor, requestId)
 
-        fun startClosed(context: Context, fromMonitor: Boolean = false) =
-            startAction(context, ACTION_CLOSED, fromMonitor)
+        fun startClosed(
+            context: Context,
+            fromMonitor: Boolean = false,
+            requestId: Long? = null
+        ) = startAction(context, ACTION_CLOSED, fromMonitor, requestId)
     }
 }

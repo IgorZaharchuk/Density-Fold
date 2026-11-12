@@ -29,6 +29,15 @@ abstract class BaseActionActivity : Activity() {
         startService(Intent(this, DensityActionService::class.java).apply {
             this.action = this@BaseActionActivity.action
             putExtra(DensityActionService.EXTRA_MONITOR_REQUEST, fromMonitor)
+            if (fromMonitor) {
+                putExtra(
+                    DensityActionService.EXTRA_MONITOR_REQUEST_ID,
+                    intent.getLongExtra(
+                        DensityActionService.EXTRA_MONITOR_REQUEST_ID,
+                        0L
+                    )
+                )
+            }
         })
 
         // Немедленно завершаем Activity, чтобы минимизировать потерю фокуса
