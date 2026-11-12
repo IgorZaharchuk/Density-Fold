@@ -15,6 +15,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -41,6 +43,11 @@ object ShizukuCommandRunner {
     // Обе ссылки изменяются только под stateLock.
     private var service: IShizukuService? = null
     private var connection: ServiceConnection? = null
+
+    private data class BoundSession(
+        val service: IShizukuService,
+        val connection: ServiceConnection
+    )
 
     // Сериализует bind и полную очистку подключения.
     private val bindMutex = Mutex()
@@ -236,6 +243,7 @@ object ShizukuCommandRunner {
 
             Result.success(Unit)
         } catch (e: TimeoutCancellationException) {
+            currentCoroutineContext().ensureActive()
             Result.failure(
                 IllegalStateException(
                     "Таймаут ожидания Shizuku (${timeoutMs}ms). " +
@@ -262,22 +270,30 @@ object ShizukuCommandRunner {
         .version(2)
 
     suspend fun execute(command: String): Result<String> {
+        var expectedConnection: ServiceConnection? = null
+
         return try {
             ensureBound()
 
-            val currentService = synchronized(stateLock) {
-                service
-            } ?: run {
-                resetConnection()
-                return Result.failure(
-                    IllegalStateException("Service is null after binding")
-                )
-            }
+            val session = synchronized(stateLock) {
+                val currentService = service
+                val currentConnection = connection
 
-            val binder = currentService.asBinder()
+                if (currentService != null && currentConnection != null) {
+                    BoundSession(currentService, currentConnection)
+                } else {
+                    null
+                }
+            } ?: return Result.failure(
+                IllegalStateException("Service session is missing after binding")
+            )
+
+            expectedConnection = session.connection
+
+            val binder = session.service.asBinder()
 
             if (!binder.isBinderAlive || !binder.pingBinder()) {
-                resetConnection()
+                resetConnection(session.connection)
                 return Result.failure(
                     IllegalStateException("UserService binder is dead")
                 )
@@ -285,11 +301,11 @@ object ShizukuCommandRunner {
 
             // Синхронный Binder-вызов не должен блокировать главный поток.
             val rawResult = withContext(Dispatchers.IO) {
-                currentService.executeCommand(command)
+                session.service.executeCommand(command)
             }
 
             if (rawResult == null) {
-                resetConnection()
+                resetConnection(session.connection)
                 Result.failure(
                     IllegalStateException("UserService returned null")
                 )
@@ -301,13 +317,13 @@ object ShizukuCommandRunner {
             throw e
 
         } catch (e: RemoteException) {
-            resetConnection()
+            expectedConnection?.let { resetConnection(it) }
             Result.failure(
                 Exception("RemoteException: ${e.message ?: "binder died"}", e)
             )
 
         } catch (e: Exception) {
-            resetConnection()
+            expectedConnection?.let { resetConnection(it) }
             Result.failure(e)
         }
     }
@@ -733,9 +749,9 @@ object ShizukuCommandRunner {
     /**
      * Полный сброс сериализован с новым bind.
      */
-    private suspend fun resetConnection() {
+    private suspend fun resetConnection(expected: ServiceConnection) {
         bindMutex.withLock {
-            detachConnection()?.let { unbindQuietly(it) }
+            detachConnection(expected)?.let { unbindQuietly(it) }
         }
     }
 }
