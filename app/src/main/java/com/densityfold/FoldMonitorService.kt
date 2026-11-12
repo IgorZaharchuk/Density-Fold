@@ -35,7 +35,6 @@ class FoldMonitorService : Service() {
     private val checkChannel = Channel<Unit>(Channel.CONFLATED)
 
     private var lastRequestedExternal: Boolean? = null
-    private var actionInFlight = false
     private var activeRequestId: Long? = null
     private var retryPending = false
     private var retryJob: Job? = null
@@ -74,7 +73,6 @@ class FoldMonitorService : Service() {
             actionTimeoutJob?.cancel()
             actionTimeoutJob = null
             activeRequestId = null
-            actionInFlight = false
 
             val success = intent.getBooleanExtra(
                 DensityActionService.EXTRA_SUCCESS,
@@ -186,7 +184,7 @@ class FoldMonitorService : Service() {
 
                 if (
                     state == "MAIN_BINDER_DEAD" &&
-                    !actionInFlight &&
+                    activeRequestId == null &&
                     (
                         lastRecoveryAttemptAt == 0L ||
                         now - lastRecoveryAttemptAt >= recoveryInterval
@@ -269,7 +267,6 @@ class FoldMonitorService : Service() {
             lastRequestedExternal = isExternal
             retryPending = false
             activeRequestId = requestId
-            actionInFlight = true
 
             Log.i(
                 TAG,
@@ -288,8 +285,7 @@ class FoldMonitorService : Service() {
         } catch (e: Exception) {
             if (activeRequestId == requestId) {
                 activeRequestId = null
-                actionInFlight = false
-                retryPending = true
+                                retryPending = true
             }
             Log.e(TAG, "SHIZUKU RECOVERY: ошибка запуска $screenName", e)
             false
@@ -349,7 +345,7 @@ class FoldMonitorService : Service() {
             notifications.formatDisplayStatus(isExternal, active.shortPx, active.density)
         )
 
-        if (actionInFlight) {
+        if (activeRequestId != null) {
             return
         }
 
@@ -369,7 +365,6 @@ class FoldMonitorService : Service() {
         retryPending = false
         val requestId = SystemClock.elapsedRealtimeNanos()
         activeRequestId = requestId
-        actionInFlight = true
 
         val actionName = if (isExternal) "Внешний" else "Внутренний"
         Log.i(TAG, "Запуск действия: $actionName")
@@ -399,8 +394,7 @@ class FoldMonitorService : Service() {
                 actionTimeoutJob?.cancel()
                 actionTimeoutJob = null
                 activeRequestId = null
-                actionInFlight = false
-                retryPending = true
+                                retryPending = true
             }
             Log.e(TAG, "Не удалось запустить сервис: ${e.message}", e)
             notifications.update("Не удалось запустить действие · повторная попытка")
@@ -416,10 +410,9 @@ class FoldMonitorService : Service() {
         actionTimeoutJob?.cancel()
         actionTimeoutJob = scope.launch {
             delay(20_000L)
-            if (actionInFlight && activeRequestId == requestId) {
+            if (activeRequestId == requestId) {
                 activeRequestId = null
-                actionInFlight = false
-                retryPending = true
+                                retryPending = true
                 Log.w(TAG, logMessage)
                 notifications.update(notificationMessage)
                 scheduleRetry()
@@ -432,7 +425,7 @@ class FoldMonitorService : Service() {
 
         retryJob = scope.launch {
             delay(5_000L)
-            if (retryPending && !actionInFlight) {
+            if (retryPending && activeRequestId == null) {
                 Log.i(TAG, "Повторный запуск действия для текущего экрана")
                 scheduleDensityCheck()
             }
