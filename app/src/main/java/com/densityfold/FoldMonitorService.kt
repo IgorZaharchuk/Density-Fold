@@ -28,6 +28,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class FoldMonitorService : Service() {
+    companion object {
+        const val ACTION_NOTIFICATION_MINUS =
+            "com.densityfold.NOTIFICATION_MINUS"
+        const val ACTION_NOTIFICATION_PLUS =
+            "com.densityfold.NOTIFICATION_PLUS"
+        const val ACTION_NOTIFICATION_PROFILE =
+            "com.densityfold.NOTIFICATION_PROFILE"
+    }
+
     private val TAG = "DensityFold-Monitor"
     private val notifications by lazy { MonitorNotificationHelper(this) }
     // Все поля состояния монитора обслуживаются последовательно на Main.
@@ -37,6 +46,8 @@ class FoldMonitorService : Service() {
 
     private val checkChannel = Channel<Unit>(Channel.CONFLATED)
     private var notificationBaseMessage = "Мониторинг складывания активен"
+    private var notificationControlsAvailable = false
+    private var notificationProfileDpi: Int? = null
 
     private var lastRequestedExternal: Boolean? = null
     private var activeRequestId: Long? = null
@@ -98,13 +109,8 @@ class FoldMonitorService : Service() {
                     0
                 )
 
-                if (shortPx > 0 && actualDpi > 0) {
-                    updateNotification(
-                        notifications.formatDisplayStatus(isExternal, shortPx, actualDpi)
-                    )
-                } else {
-                    updateNotification("Мониторинг складывания активен")
-                }
+                refreshNotificationProfileDpi()
+                updateNotification("Мониторинг складывания активен")
 
                 Log.i(TAG, "Действие подтверждено монитором")
 
@@ -145,8 +151,30 @@ class FoldMonitorService : Service() {
                 DensityBackendManager.selectedBackend,
                 DensityBackendManager.availability,
                 ShizukuMonitor.runtimeState
-            ) { _, _, _ -> Unit }.collect {
-                updateNotification(notificationBaseMessage)
+            ) { backend, availability, shizukuState ->
+                when (backend) {
+                    com.densityfold.backend.root.RootBackend ->
+                        availability.rootEnabled &&
+                            availability.rootAvailable == true
+
+                    com.densityfold.backend.shizuku.ShizukuBackend ->
+                        availability.shizukuEnabled &&
+                            availability.shizukuAvailable == true &&
+                            shizukuState?.mainBinder == true &&
+                            shizukuState.permission &&
+                            shizukuState.userService
+
+                    else -> false
+                }
+            }.collect { available ->
+                notificationControlsAvailable = available
+                updateNotification(
+                    if (available) {
+                        notificationBaseMessage
+                    } else {
+                        "Управление DPI недоступно"
+                    }
+                )
             }
         }
 
@@ -173,22 +201,14 @@ class FoldMonitorService : Service() {
     private fun startForegroundSafely() {
         notifications.ensureChannel()
 
-        val active = DisplayUtils.getActiveDisplay(applicationContext)
-        val initialMessage = if (active != null && active.density > 0) {
-            notifications.formatDisplayStatus(
-                active.isExternal,
-                active.shortPx,
-                active.density
-            )
-        } else {
-            "Мониторинг складывания активен"
-        }
-
+        val initialMessage = "Мониторинг складывания активен"
         notificationBaseMessage = initialMessage
 
         try {
             val notification = notifications.build(
-                withBackendWarning(initialMessage)
+                withBackendWarning(initialMessage),
+                controlsAvailable = false,
+                centerLabel = "Профиль"
             )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 startForeground(
@@ -206,6 +226,16 @@ class FoldMonitorService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_NOTIFICATION_MINUS,
+            ACTION_NOTIFICATION_PLUS,
+            ACTION_NOTIFICATION_PROFILE -> {
+                val action = intent?.action ?: return START_STICKY
+                executeNotificationAction(action)
+                return START_STICKY
+            }
+        }
+
         scope.launch {
             try {
                 val settings = DensityPreferences(applicationContext).getSettings()
@@ -222,6 +252,14 @@ class FoldMonitorService : Service() {
                     return@launch
                 }
 
+                refreshNotificationProfileDpi()
+                updateNotification(
+                    if (notificationControlsAvailable) {
+                        notificationBaseMessage
+                    } else {
+                        "Управление DPI недоступно"
+                    }
+                )
                 scheduleDensityCheck()
             } catch (e: Exception) {
                 Log.e(TAG, "Не удалось проверить настройки монитора", e)
@@ -244,9 +282,8 @@ class FoldMonitorService : Service() {
 
         val isExternal = active.isExternal
 
-        updateNotification(
-            notifications.formatDisplayStatus(isExternal, active.shortPx, active.density)
-        )
+        refreshNotificationProfileDpi(active)
+        updateNotification("Мониторинг складывания активен")
 
         if (activeRequestId != null) {
             return
@@ -326,7 +363,93 @@ class FoldMonitorService : Service() {
 
     private fun updateNotification(message: String) {
         notificationBaseMessage = message
-        notifications.update(withBackendWarning(message))
+        val displayMessage = if (notificationControlsAvailable) {
+            message
+        } else {
+            "Управление DPI недоступно"
+        }
+        notifications.update(
+            withBackendWarning(displayMessage),
+            controlsAvailable = notificationControlsAvailable,
+            centerLabel = notificationCenterLabel()
+        )
+    }
+
+    private fun notificationCenterLabel(): String =
+        notificationProfileDpi?.let { "$it DPI" } ?: "Профиль"
+
+    private suspend fun refreshNotificationProfileDpi(
+        activeDisplay: com.densityfold.engine.DisplayInfo? =
+            DisplayUtils.getActiveDisplay(applicationContext)
+    ) {
+        if (activeDisplay == null) {
+            notificationProfileDpi = null
+            return
+        }
+
+        val preferences = DensityPreferences(applicationContext)
+        notificationProfileDpi = if (activeDisplay.isExternal) {
+            preferences.getOuterDpi()
+        } else {
+            preferences.getInnerDpi()
+        }
+    }
+
+    private fun executeNotificationAction(action: String) {
+        scope.launch {
+            try {
+                if (!notificationControlsAvailable) {
+                    updateNotification("Управление DPI недоступно")
+                    return@launch
+                }
+
+                val active = DisplayUtils.getActiveDisplay(applicationContext)
+                    ?: throw IllegalStateException("Не удалось определить активный экран")
+
+                val result = when (action) {
+                    ACTION_NOTIFICATION_MINUS ->
+                        com.densityfold.engine.DensityExecutor.adjustCurrent(
+                            applicationContext,
+                            -10
+                        )
+                    ACTION_NOTIFICATION_PLUS ->
+                        com.densityfold.engine.DensityExecutor.adjustCurrent(
+                            applicationContext,
+                            10
+                        )
+                    ACTION_NOTIFICATION_PROFILE ->
+                        com.densityfold.engine.DensityExecutor.apply(
+                            applicationContext,
+                            if (active.isExternal) {
+                                com.densityfold.engine.DensityProfile.OUTER
+                            } else {
+                                com.densityfold.engine.DensityProfile.INNER
+                            }
+                        )
+                    else -> return@launch
+                }
+
+                result.getOrThrow()
+                refreshNotificationProfileDpi()
+                updateNotification(
+                    if (notificationControlsAvailable) {
+                        "Мониторинг складывания активен"
+                    } else {
+                        "Управление DPI недоступно"
+                    }
+                )
+                Log.i(TAG, "Команда DPI из уведомления выполнена: $action")
+            } catch (e: Exception) {
+                Log.e(TAG, "Команда DPI из уведомления не выполнена: ${e.message}", e)
+                updateNotification(
+                    if (notificationControlsAvailable) {
+                        "Мониторинг складывания активен"
+                    } else {
+                        "Управление DPI недоступно"
+                    }
+                )
+            }
+        }
     }
 
     private fun withBackendWarning(message: String): String {

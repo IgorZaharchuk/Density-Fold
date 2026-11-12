@@ -105,6 +105,71 @@ object DensityExecutor {
         }
     }
 
+    suspend fun adjustCurrent(
+        context: Context,
+        delta: Int,
+        timeoutMs: Long = 10_000L
+    ): Result<DensityApplyResult> {
+        require(delta == -10 || delta == 10) {
+            "Поддерживается изменение только на 10 DPI"
+        }
+
+        return applyMutex.withLock {
+            try {
+                val active = DisplayUtils.getActiveDisplay(context)
+                    ?: throw IllegalStateException("Не удалось определить активный экран")
+
+                val preferences = DensityPreferences(context)
+                val settings = preferences.getSettings()
+
+                val result = DensityBackendManager.withBackend(
+                    rootEnabled = settings.rootBackendEnabled,
+                    shizukuEnabled = settings.shizukuBackendEnabled,
+                    timeoutMs = timeoutMs
+                ) { backend ->
+                    backend.awaitReady(timeoutMs).getBackendOrThrow()
+                    ensureDisplayUnchanged(context, active)
+
+                    val currentDpi = backend.getCurrentDensity().getBackendOrThrow()
+                    val targetDpi = (currentDpi + delta).coerceIn(
+                        DensityPreferences.MIN_DPI,
+                        DensityPreferences.MAX_DPI
+                    )
+
+                    val alreadyApplied = targetDpi == currentDpi
+
+                    if (!alreadyApplied) {
+                        ensureDisplayUnchanged(context, active)
+                        backend.setDensity(targetDpi).getBackendOrThrow()
+                    }
+
+                    val actualDpi = backend.getCurrentDensity().getBackendOrThrow()
+                    if (actualDpi != targetDpi) {
+                        throw IllegalStateException(
+                            "Проверка DPI не пройдена: целевой=$targetDpi, фактический=$actualDpi"
+                        )
+                    }
+
+                    ensureDisplayUnchanged(context, active)
+
+                    DensityApplyResult(
+                        isExternal = active.isExternal,
+                        shortPx = active.shortPx,
+                        targetDp = DisplayUtils.dpiToDp(targetDpi, active.shortPx),
+                        targetDpi = targetDpi,
+                        actualDpi = actualDpi,
+                        alreadyApplied = alreadyApplied
+                    )
+                }
+                Result.success(result)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
     private fun ensureDisplayUnchanged(
         context: Context,
         initial: DisplayInfo
