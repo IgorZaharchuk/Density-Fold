@@ -1,18 +1,21 @@
 package com.densityfold.viewmodel
 
 import android.app.Application
+import android.content.pm.PackageManager
 import android.content.Intent
 import android.provider.Settings
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.densityfold.FoldMonitorService
+import com.densityfold.backend.DensityBackendManager
 import com.densityfold.data.DensityPreferences
 import com.densityfold.engine.DisplayInfo
 import com.densityfold.engine.DisplayUtils
 import com.densityfold.engine.DensityExecutor
 import com.densityfold.engine.DensityProfile
 import com.densityfold.backend.shizuku.ShizukuManager
+import com.densityfold.backend.shizuku.ShizukuMonitor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,7 +36,11 @@ data class UiState(
     val outerSizeEstimated: Boolean = true,
     val isFoldMonitorEnabled: Boolean = false,
     val isAutoStartEnabled: Boolean = false,
+    val isRootBackendEnabled: Boolean = false,
+    val isShizukuBackendEnabled: Boolean = true,
     val isShizukuAvailable: Boolean = false,
+    val activeBackendName: String? = null,
+    val isBackendReady: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val successMessage: String? = null,
@@ -50,31 +57,102 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         java.util.concurrent.atomic.AtomicInteger(0)
     private companion object {
         const val DPI_SAVE_DEBOUNCE_MS = 300L
+        const val SHIZUKU_PERMISSION_REQUEST_CODE = 1001
     }
 
-    private val shizukuBinderReceivedListener = Shizuku.OnBinderReceivedListener {
-        _uiState.update {
-            it.copy(
-                isShizukuAvailable = ShizukuManager.isShizukuAvailable(),
-                errorMessage = null
-            )
-        }
-        viewModelScope.launch { refreshDisplaysInternal() }
-    }
+    @Volatile
+    private var pendingShizukuPermissionRequest = false
 
-    private val shizukuBinderDeadListener = Shizuku.OnBinderDeadListener {
-        _uiState.update {
-            it.copy(
-                isShizukuAvailable = false,
-                isLoading = activeDensityOperations.get() > 0,
-                errorMessage = "Shizuku отключён. Автоприменение приостановлено."
-            )
+    private val shizukuPermissionResultListener =
+        Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
+            if (requestCode == SHIZUKU_PERMISSION_REQUEST_CODE) {
+                pendingShizukuPermissionRequest = false
+
+                if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                    viewModelScope.launch {
+                        refreshBackendSelection()
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(errorMessage = "Разрешение Shizuku не выдано")
+                    }
+                }
+            }
         }
-    }
+
+    private val shizukuBinderReceivedListener =
+        Shizuku.OnBinderReceivedListener {
+            if (pendingShizukuPermissionRequest) {
+                requestShizukuPermissionIfReady()
+            }
+            viewModelScope.launch {
+                refreshDisplaysInternal()
+            }
+        }
+
+    private val shizukuBinderDeadListener =
+        Shizuku.OnBinderDeadListener {
+            _uiState.update {
+                it.copy(
+                    isShizukuAvailable = false,
+                    isBackendReady = if (it.activeBackendName == "Shizuku") {
+                        false
+                    } else {
+                        it.isBackendReady
+                    },
+                    isLoading = activeDensityOperations.get() > 0,
+                    errorMessage = "Shizuku отключён. Автоприменение приостановлено."
+                )
+            }
+        }
 
     init {
+        viewModelScope.launch {
+            DensityBackendManager.selectedBackend.collect { backend ->
+                val shizukuReady = ShizukuMonitor.runtimeState.value?.let {
+                    it.mainBinder && it.permission && it.userService
+                } ?: false
+
+                _uiState.update {
+                    it.copy(
+                        activeBackendName = when (backend?.name) {
+                            "ROOT" -> "Root"
+                            "SHIZUKU" -> "Shizuku"
+                            else -> null
+                        },
+                        isBackendReady = when (backend?.name) {
+                            "ROOT" -> true
+                            "SHIZUKU" -> shizukuReady
+                            else -> false
+                        }
+                    )
+                }
+            }
+        }
+
+
         Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener)
         Shizuku.addBinderDeadListener(shizukuBinderDeadListener)
+        Shizuku.addRequestPermissionResultListener(shizukuPermissionResultListener)
+
+        viewModelScope.launch {
+            ShizukuMonitor.runtimeState.collect { state ->
+                val ready = state?.let {
+                    it.mainBinder && it.permission && it.userService
+                } ?: false
+
+                _uiState.update {
+                    it.copy(
+                        isShizukuAvailable = ready,
+                        isBackendReady = if (it.activeBackendName == "Shizuku") {
+                            ready
+                        } else {
+                            it.isBackendReady
+                        }
+                    )
+                }
+            }
+        }
         viewModelScope.launch {
             loadSettingsInternal()
             refreshDisplaysInternal()
@@ -90,7 +168,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 outerDpi = settings.outerDpi,
                 isFoldMonitorEnabled = settings.foldMonitorEnabled,
                 isAutoStartEnabled = settings.autoStartEnabled,
-                isShizukuAvailable = ShizukuManager.isShizukuAvailable()
+                isRootBackendEnabled = settings.rootBackendEnabled,
+                isShizukuBackendEnabled = settings.shizukuBackendEnabled,
             )
         }
 
@@ -124,6 +203,85 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setRootBackendEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            val updated = preferences.setRootBackendEnabled(enabled)
+            if (updated) {
+                _uiState.update { it.copy(isRootBackendEnabled = enabled) }
+                refreshBackendSelection()
+            } else {
+                _uiState.update {
+                    it.copy(errorMessage = "Нельзя отключить оба способа выполнения")
+                }
+            }
+        }
+    }
+
+    fun setShizukuBackendEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            val updated = preferences.setShizukuBackendEnabled(enabled)
+
+            if (!updated) {
+                _uiState.update {
+                    it.copy(errorMessage = "Нельзя отключить оба способа выполнения")
+                }
+                return@launch
+            }
+
+            _uiState.update {
+                it.copy(
+                    isShizukuBackendEnabled = enabled,
+                    errorMessage = null
+                )
+            }
+
+            if (enabled) {
+                pendingShizukuPermissionRequest = true
+                try {
+                    ShizukuManager.start()
+                    requestShizukuPermissionIfReady()
+                } catch (e: Exception) {
+                    pendingShizukuPermissionRequest = false
+                    _uiState.update {
+                        it.copy(errorMessage = "Не удалось запустить Shizuku: ${e.message}")
+                    }
+                }
+            } else {
+                pendingShizukuPermissionRequest = false
+                refreshBackendSelection()
+            }
+        }
+    }
+
+    private suspend fun refreshBackendSelection() {
+        try {
+            val settings = preferences.getSettings()
+
+            DensityBackendManager.selectBackend(
+                rootEnabled = settings.rootBackendEnabled,
+                shizukuEnabled = settings.shizukuBackendEnabled
+            ).onSuccess {
+                _uiState.update { it.copy(errorMessage = null) }
+            }.onFailure { error ->
+                _uiState.update {
+                    it.copy(
+                        errorMessage = "Не удалось выбрать способ выполнения: " +
+                            (error.message ?: "backend недоступен")
+                    )
+                }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _uiState.update {
+                it.copy(
+                    errorMessage = "Ошибка переключения backend: " +
+                        (e.message ?: "неизвестная ошибка")
+                )
+            }
+        }
+    }
+
     private suspend fun refreshDisplaysInternal() {
         val context = getApplication<Application>().applicationContext
         val active = DisplayUtils.getActiveDisplay(context)
@@ -135,7 +293,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 outerShortPx = DisplayUtils.getOuterShortPx(active),
                 innerSizeEstimated = active == null || active.isExternal,
                 outerSizeEstimated = active == null || !active.isExternal,
-                isShizukuAvailable = ShizukuManager.isShizukuAvailable(),
                 isOverlayPermissionGranted = Settings.canDrawOverlays(context)
             )
         }
@@ -236,7 +393,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: Exception) {
             _uiState.update {
                 it.copy(
-                    isShizukuAvailable = ShizukuManager.isShizukuAvailable(),
                     errorMessage = e.message ?: "Не удалось применить DPI"
                 )
             }
@@ -258,16 +414,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         Shizuku.removeBinderReceivedListener(shizukuBinderReceivedListener)
         Shizuku.removeBinderDeadListener(shizukuBinderDeadListener)
+        Shizuku.removeRequestPermissionResultListener(shizukuPermissionResultListener)
         super.onCleared()
     }
 
     fun requestShizukuPermission() {
+        pendingShizukuPermissionRequest = true
         try {
-            if (Shizuku.getUid() != -1) {
-                Shizuku.requestPermission(1001)
+            ShizukuManager.start()
+            requestShizukuPermissionIfReady()
+        } catch (e: Exception) {
+            pendingShizukuPermissionRequest = false
+            Log.w("DensityFold-UI", "Не удалось запустить Shizuku", e)
+        }
+    }
+
+    private fun requestShizukuPermissionIfReady() {
+        if (!pendingShizukuPermissionRequest) return
+        if (!Shizuku.pingBinder()) return
+
+        try {
+            if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                pendingShizukuPermissionRequest = false
+                viewModelScope.launch {
+                    refreshBackendSelection()
+                }
+            } else {
+                pendingShizukuPermissionRequest = false
+                Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST_CODE)
             }
         } catch (e: Exception) {
+            pendingShizukuPermissionRequest = false
             Log.w("DensityFold-UI", "Не удалось запросить разрешение Shizuku", e)
+            _uiState.update {
+                it.copy(errorMessage = "Ошибка запроса разрешения Shizuku: ${e.message}")
+            }
         }
     }
 }

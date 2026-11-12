@@ -15,7 +15,9 @@ data class DensitySettings(
     val innerDpi: Int,
     val outerDpi: Int,
     val foldMonitorEnabled: Boolean,
-    val autoStartEnabled: Boolean
+    val autoStartEnabled: Boolean,
+    val rootBackendEnabled: Boolean,
+    val shizukuBackendEnabled: Boolean
 )
 
 class DensityPreferences(private val context: Context) {
@@ -24,6 +26,11 @@ class DensityPreferences(private val context: Context) {
         val OUTER_DPI = intPreferencesKey("outer_dpi")
         val FOLD_MONITOR_ENABLED = booleanPreferencesKey("fold_monitor_enabled")
         val AUTO_START_ENABLED = booleanPreferencesKey("auto_start_enabled")
+        val ROOT_BACKEND_ENABLED = booleanPreferencesKey("root_backend_enabled")
+        val SHIZUKU_BACKEND_ENABLED = booleanPreferencesKey("shizuku_backend_enabled")
+
+        const val DEFAULT_ROOT_BACKEND_ENABLED = false
+        const val DEFAULT_SHIZUKU_BACKEND_ENABLED = true
 
         const val DEFAULT_INNER_DPI = 350
         const val DEFAULT_OUTER_DPI = 440
@@ -40,7 +47,9 @@ class DensityPreferences(private val context: Context) {
             innerDpi = values[INNER_DPI] ?: DEFAULT_INNER_DPI,
             outerDpi = values[OUTER_DPI] ?: DEFAULT_OUTER_DPI,
             foldMonitorEnabled = values[FOLD_MONITOR_ENABLED] ?: DEFAULT_MONITOR_ENABLED,
-            autoStartEnabled = values[AUTO_START_ENABLED] ?: DEFAULT_AUTO_START_ENABLED
+            autoStartEnabled = values[AUTO_START_ENABLED] ?: DEFAULT_AUTO_START_ENABLED,
+            rootBackendEnabled = values[ROOT_BACKEND_ENABLED] ?: DEFAULT_ROOT_BACKEND_ENABLED,
+            shizukuBackendEnabled = values[SHIZUKU_BACKEND_ENABLED] ?: DEFAULT_SHIZUKU_BACKEND_ENABLED
         )
     }
 
@@ -70,4 +79,40 @@ class DensityPreferences(private val context: Context) {
     suspend fun setAutoStartEnabled(enabled: Boolean) {
         context.dataStore.edit { it[AUTO_START_ENABLED] = enabled }
     }
+
+    private suspend fun setBackendEnabled(
+        key: Preferences.Key<Boolean>,
+        otherKey: Preferences.Key<Boolean>,
+        enabled: Boolean,
+        otherDefault: Boolean
+    ): Boolean {
+        var updated = false
+
+        context.dataStore.edit { values ->
+            val otherEnabled = values[otherKey] ?: otherDefault
+
+            if (enabled || otherEnabled) {
+                values[key] = enabled
+                updated = true
+            }
+        }
+
+        return updated
+    }
+
+    suspend fun setRootBackendEnabled(enabled: Boolean): Boolean =
+        setBackendEnabled(
+            ROOT_BACKEND_ENABLED,
+            SHIZUKU_BACKEND_ENABLED,
+            enabled,
+            DEFAULT_SHIZUKU_BACKEND_ENABLED
+        )
+
+    suspend fun setShizukuBackendEnabled(enabled: Boolean): Boolean =
+        setBackendEnabled(
+            SHIZUKU_BACKEND_ENABLED,
+            ROOT_BACKEND_ENABLED,
+            enabled,
+            DEFAULT_ROOT_BACKEND_ENABLED
+        )
 }

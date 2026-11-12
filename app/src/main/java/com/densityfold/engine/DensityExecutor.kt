@@ -1,6 +1,7 @@
 package com.densityfold.engine
 
-import com.densityfold.backend.shizuku.ShizukuManager
+import com.densityfold.backend.DensityBackendManager
+import com.densityfold.backend.getBackendOrThrow
 
 import android.content.Context
 import com.densityfold.data.DensityPreferences
@@ -59,30 +60,33 @@ object DensityExecutor {
 
                 val targetDp = DisplayUtils.dpiToDp(targetDpi, shortPx)
 
-                ShizukuManager.awaitShizukuReady(timeoutMs).getOrThrow()
-
-                ensureDisplayUnchanged(context, active)
-
-                val currentDpi = ShizukuManager.getCurrentDensity().getOrThrow()
-                val alreadyApplied = currentDpi == targetDpi
-
-                val actualDpi = if (alreadyApplied) {
-                    currentDpi
-                } else {
+                val settings = preferences.getSettings()
+                val result = DensityBackendManager.withBackend(
+                    rootEnabled = settings.rootBackendEnabled,
+                    shizukuEnabled = settings.shizukuBackendEnabled,
+                    timeoutMs = timeoutMs
+                ) { backend ->
+                    backend.awaitReady(timeoutMs).getBackendOrThrow()
                     ensureDisplayUnchanged(context, active)
-                    ShizukuManager.setDensity(targetDpi).getOrThrow()
-                    ShizukuManager.getCurrentDensity().getOrThrow()
-                }
 
-                if (actualDpi != targetDpi) {
-                    throw IllegalStateException(
-                        "Проверка DPI не пройдена: целевой=$targetDpi, фактический=$actualDpi"
-                    )
-                }
+                    val currentDpi = backend.getCurrentDensity().getBackendOrThrow()
+                    val alreadyApplied = currentDpi == targetDpi
 
-                ensureDisplayUnchanged(context, active)
+                    val actualDpi = if (alreadyApplied) {
+                        currentDpi
+                    } else {
+                        ensureDisplayUnchanged(context, active)
+                        backend.setDensity(targetDpi).getBackendOrThrow()
+                        backend.getCurrentDensity().getBackendOrThrow()
+                    }
 
-                Result.success(
+                    if (actualDpi != targetDpi) {
+                        throw IllegalStateException(
+                            "Проверка DPI не пройдена: целевой=$targetDpi, фактический=$actualDpi"
+                        )
+                    }
+
+                    ensureDisplayUnchanged(context, active)
                     DensityApplyResult(
                         isExternal = isExternal,
                         shortPx = shortPx,
@@ -91,7 +95,8 @@ object DensityExecutor {
                         actualDpi = actualDpi,
                         alreadyApplied = alreadyApplied
                     )
-                )
+                }
+                Result.success(result)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

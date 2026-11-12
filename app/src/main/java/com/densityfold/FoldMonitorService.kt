@@ -10,11 +10,9 @@ import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
-import android.provider.Settings
 import android.util.Log
 import android.view.Display
 import com.densityfold.engine.DisplayUtils
-import com.densityfold.backend.shizuku.ShizukuCommandRunner
 import com.densityfold.data.DensityPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,8 +38,6 @@ class FoldMonitorService : Service() {
     private var retryPending = false
     private var retryJob: Job? = null
     private var actionTimeoutJob: Job? = null
-    private var shizukuWatchdogJob: Job? = null
-    private var lastRecoveryAttemptAt = 0L
 
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
@@ -116,7 +112,7 @@ class FoldMonitorService : Service() {
                 retryPending = true
                 val error = intent.getStringExtra(DensityActionService.EXTRA_ERROR)
                 Log.w(TAG, "Действие не выполнено: ${error ?: "неизвестная ошибка"}")
-                notifications.update("Shizuku недоступен · ожидание восстановления")
+                notifications.update("Не удалось выполнить действие · повторная попытка")
                 scheduleRetry()
             }
         }
@@ -151,149 +147,12 @@ class FoldMonitorService : Service() {
     }
 
 
-    private fun startShizukuWatchdog() {
-        shizukuWatchdogJob?.cancel()
-        shizukuWatchdogJob = scope.launch {
-            var previousState: String? = null
-            var binderUnavailableSince = 0L
-
-            while (true) {
-                val runtimeState = ShizukuCommandRunner.currentState()
-                val mainBinder = runtimeState.mainBinder
-                val permission = runtimeState.permission
-                val userService = runtimeState.userService
-                val state = runtimeState.label
-
-                val now = SystemClock.elapsedRealtime()
-
-                if (mainBinder) {
-                    lastRecoveryAttemptAt = 0L
-                    binderUnavailableSince = 0L
-                } else if (binderUnavailableSince == 0L) {
-                    binderUnavailableSince = now
-                }
-
-                val recoveryInterval = if (
-                    binderUnavailableSince == 0L ||
-                    now - binderUnavailableSince < 60_000L
-                ) {
-                    10_000L
-                } else {
-                    60_000L
-                }
-
-                if (
-                    state == "MAIN_BINDER_DEAD" &&
-                    activeRequestId == null &&
-                    (
-                        lastRecoveryAttemptAt == 0L ||
-                        now - lastRecoveryAttemptAt >= recoveryInterval
-                    )
-                ) {
-                    launchRecoveryAction()
-                }
-
-                if (state != previousState) {
-                    Log.i(TAG, "Состояние Shizuku: $state")
-
-                    val message = when (state) {
-                        "MAIN_BINDER_DEAD" ->
-                            "Shizuku Binder недоступен · ожидание запуска"
-                        "PERMISSION_DENIED" ->
-                            "Shizuku запущен · нет разрешения"
-                        "USER_SERVICE_DISCONNECTED" ->
-                            "Shizuku Binder работает · восстановление UserService"
-                        else -> {
-                            val active = DisplayUtils.getActiveDisplay(applicationContext)
-                            if (active != null && active.density > 0) {
-                                notifications.formatDisplayStatus(
-                                    active.isExternal,
-                                    active.shortPx,
-                                    active.density
-                                )
-                            } else {
-                                "Мониторинг складывания активен"
-                            }
-                        }
-                    }
-
-                    notifications.update(message)
-                    previousState = state
-                }
-
-                if (mainBinder && permission && !userService) {
-                    ShizukuCommandRunner.requestReconnect()
-                }
-
-                delay(3_000L)
-            }
-        }
-    }
-
     private fun beginRequest(isExternal: Boolean): Long {
         val requestId = SystemClock.elapsedRealtimeNanos()
         lastRequestedExternal = isExternal
         retryPending = false
         activeRequestId = requestId
         return requestId
-    }
-
-    private fun launchRecoveryAction(): Boolean {
-        lastRecoveryAttemptAt = SystemClock.elapsedRealtime()
-        if (!Settings.canDrawOverlays(this)) {
-            Log.w(TAG, "SHIZUKU RECOVERY: нет SYSTEM_ALERT_WINDOW")
-            notifications.update("Разрешите фоновый запуск для восстановления Shizuku")
-            return false
-        }
-
-        val active = DisplayUtils.getActiveDisplay(applicationContext)
-        if (active == null) {
-            Log.w(TAG, "SHIZUKU RECOVERY: активный экран не определён")
-            return false
-        }
-
-        val isExternal = active.isExternal
-        val activityClass = if (isExternal) {
-            ClosedActionActivity::class.java
-        } else {
-            OpenActionActivity::class.java
-        }
-
-        val screenName = if (isExternal) "Внешний" else "Внутренний"
-        val requestId = beginRequest(isExternal)
-
-        return try {
-            val intent = Intent(this, activityClass).apply {
-                addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_NO_ANIMATION
-                )
-                putExtra(DensityActionService.EXTRA_MONITOR_REQUEST, true)
-                putExtra(DensityActionService.EXTRA_MONITOR_REQUEST_ID, requestId)
-            }
-
-            Log.i(
-                TAG,
-                "SHIZUKU RECOVERY: запуск штатного действия $screenName"
-            )
-
-            startActivity(intent)
-
-            startActionTimeout(
-                requestId = requestId,
-                logMessage = "SHIZUKU RECOVERY: тайм-аут штатного действия",
-                notificationMessage = "Нет ответа от Shizuku · повторная попытка"
-            )
-
-            true
-        } catch (e: Exception) {
-            if (activeRequestId == requestId) {
-                activeRequestId = null
-                retryPending = true
-            }
-            Log.e(TAG, "SHIZUKU RECOVERY: ошибка запуска $screenName", e)
-            false
-        }
     }
 
     private fun startForegroundSafely() {
@@ -336,10 +195,7 @@ class FoldMonitorService : Service() {
                     stopSelf(startId)
                     return@launch
                 }
-                if (shizukuWatchdogJob?.isActive != true) {
-                    startShizukuWatchdog()
-                }
-                scheduleDensityCheck()
+scheduleDensityCheck()
             } catch (e: Exception) {
                 Log.e(TAG, "Не удалось проверить настройки монитора", e)
                 stopSelf(startId)
@@ -369,15 +225,7 @@ class FoldMonitorService : Service() {
             return
         }
 
-        if (!ShizukuCommandRunner.mainBinderAvailable()) {
-            retryPending = true
-            notifications.update(
-                "Shizuku Binder недоступен · восстановление"
-            )
-            return
-        }
-
-        if (lastRequestedExternal == isExternal && !retryPending) {
+if (lastRequestedExternal == isExternal && !retryPending) {
             return
         }
 
@@ -454,7 +302,6 @@ class FoldMonitorService : Service() {
         displayManager?.unregisterDisplayListener(displayListener)
         retryJob?.cancel()
         actionTimeoutJob?.cancel()
-        shizukuWatchdogJob?.cancel()
 
         try {
             unregisterReceiver(actionCompletedReceiver)

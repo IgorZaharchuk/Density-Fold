@@ -91,9 +91,7 @@ fun MainScreen(
     onRequestOverlayPermission: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val shizukuError = uiState.errorMessage?.takeIf {
-        it.contains("Shizuku", ignoreCase = true)
-    }
+
     var automationExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.errorMessage, uiState.successMessage) {
@@ -123,9 +121,7 @@ fun MainScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            uiState.errorMessage?.takeIf {
-                !it.contains("Shizuku", ignoreCase = true)
-            }?.let {
+            uiState.errorMessage?.let {
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer
@@ -172,25 +168,12 @@ fun MainScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.weight(1f))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
+                        uiState.activeBackendName?.let { backendName ->
                             Text(
-                                "●",
-                                fontSize = 10.sp,
-                                color = if (uiState.isShizukuAvailable)
-                                    MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.error
-                            )
-                            Text(
-                                if (uiState.isShizukuAvailable)
-                                    "Shizuku" else "Нет связи с Shizuku",
+                                backendName,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = if (uiState.isShizukuAvailable)
-                                    MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.error,
+                                color = MaterialTheme.colorScheme.primary,
                                 maxLines = 1
                             )
                         }
@@ -223,22 +206,6 @@ fun MainScreen(
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1
-                            )
-                            if (!uiState.isShizukuAvailable) {
-                                TextButton(
-                                    onClick = viewModel::requestShizukuPermission,
-                                    contentPadding = PaddingValues(horizontal = 6.dp)
-                                ) {
-                                    Text("Подключить", fontSize = 11.sp, maxLines = 1)
-                                }
-                            }
-                        }
-                        shizukuError?.let {
-                            Text(
-                                it,
-                                modifier = Modifier.fillMaxWidth(),
-                                color = MaterialTheme.colorScheme.error,
-                                fontSize = 12.sp
                             )
                         }
                     }
@@ -288,7 +255,7 @@ fun MainScreen(
                 referenceShortPx = uiState.innerShortPx,
                 onDpiChange = viewModel::setInnerDpi,
                 onApply = viewModel::applyInnerDensity,
-                enabled = uiState.isShizukuAvailable && !uiState.isLoading
+                enabled = uiState.isBackendReady && !uiState.isLoading
             )
 
             DensitySettingCard(
@@ -303,8 +270,34 @@ fun MainScreen(
                 referenceShortPx = uiState.outerShortPx,
                 onDpiChange = viewModel::setOuterDpi,
                 onApply = viewModel::applyOuterDensity,
-                enabled = uiState.isShizukuAvailable && !uiState.isLoading
+                enabled = uiState.isBackendReady && !uiState.isLoading
             )
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        "Способы выполнения",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    SettingSwitch(
+                        title = "Root",
+                        description = "Приоритетный способ, если доступен",
+                        checked = uiState.isRootBackendEnabled,
+                        onCheckedChange = viewModel::setRootBackendEnabled
+                    )
+                    Divider()
+                    SettingSwitch(
+                        title = "Shizuku",
+                        description = "Резервный способ, если Root недоступен",
+                        checked = uiState.isShizukuBackendEnabled,
+                        onCheckedChange = viewModel::setShizukuBackendEnabled
+                    )
+                }
+            }
 
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column {
