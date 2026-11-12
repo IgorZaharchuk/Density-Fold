@@ -31,7 +31,8 @@ class BootReceiver : BroadcastReceiver() {
                 val settings = prefs.getSettings()
 
                 if (settings.foldMonitorEnabled && settings.autoStartEnabled) {
-                    appContext.startService(
+                    androidx.core.content.ContextCompat.startForegroundService(
+                        appContext,
                         Intent(appContext, FoldMonitorService::class.java)
                     )
                 }
