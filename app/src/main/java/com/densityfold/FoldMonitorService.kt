@@ -230,6 +230,14 @@ class FoldMonitorService : Service() {
         }
     }
 
+    private fun beginRequest(isExternal: Boolean): Long {
+        val requestId = SystemClock.elapsedRealtimeNanos()
+        lastRequestedExternal = isExternal
+        retryPending = false
+        activeRequestId = requestId
+        return requestId
+    }
+
     private fun launchRecoveryAction(): Boolean {
         lastRecoveryAttemptAt = SystemClock.elapsedRealtime()
         if (!Settings.canDrawOverlays(this)) {
@@ -252,7 +260,7 @@ class FoldMonitorService : Service() {
         }
 
         val screenName = if (isExternal) "Внешний" else "Внутренний"
-        val requestId = SystemClock.elapsedRealtimeNanos()
+        val requestId = beginRequest(isExternal)
 
         return try {
             val intent = Intent(this, activityClass).apply {
@@ -263,10 +271,6 @@ class FoldMonitorService : Service() {
                 putExtra(DensityActionService.EXTRA_MONITOR_REQUEST, true)
                 putExtra(DensityActionService.EXTRA_MONITOR_REQUEST_ID, requestId)
             }
-
-            lastRequestedExternal = isExternal
-            retryPending = false
-            activeRequestId = requestId
 
             Log.i(
                 TAG,
@@ -285,7 +289,7 @@ class FoldMonitorService : Service() {
         } catch (e: Exception) {
             if (activeRequestId == requestId) {
                 activeRequestId = null
-                                retryPending = true
+                retryPending = true
             }
             Log.e(TAG, "SHIZUKU RECOVERY: ошибка запуска $screenName", e)
             false
@@ -361,10 +365,7 @@ class FoldMonitorService : Service() {
             return
         }
 
-        lastRequestedExternal = isExternal
-        retryPending = false
-        val requestId = SystemClock.elapsedRealtimeNanos()
-        activeRequestId = requestId
+        val requestId = beginRequest(isExternal)
 
         val actionName = if (isExternal) "Внешний" else "Внутренний"
         Log.i(TAG, "Запуск действия: $actionName")
@@ -394,7 +395,7 @@ class FoldMonitorService : Service() {
                 actionTimeoutJob?.cancel()
                 actionTimeoutJob = null
                 activeRequestId = null
-                                retryPending = true
+                retryPending = true
             }
             Log.e(TAG, "Не удалось запустить сервис: ${e.message}", e)
             notifications.update("Не удалось запустить действие · повторная попытка")
@@ -412,7 +413,7 @@ class FoldMonitorService : Service() {
             delay(20_000L)
             if (activeRequestId == requestId) {
                 activeRequestId = null
-                                retryPending = true
+                retryPending = true
                 Log.w(TAG, logMessage)
                 notifications.update(notificationMessage)
                 scheduleRetry()
