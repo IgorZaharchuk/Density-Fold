@@ -285,14 +285,30 @@ fun MainScreen(
                     )
                     SettingSwitch(
                         title = "Root",
-                        description = "Приоритетный способ, если доступен",
+                        description = when {
+                            uiState.activeBackendName == "Root" -> "Активен"
+                            uiState.isRootAvailable == false ->
+                                "Недоступен — Root-доступ не предоставлен"
+                            uiState.isRootAvailable == true -> "Доступен"
+                            else -> "Приоритетный способ, если доступен"
+                        },
                         checked = uiState.isRootBackendEnabled,
                         onCheckedChange = viewModel::setRootBackendEnabled
                     )
                     Divider()
                     SettingSwitch(
                         title = "Shizuku",
-                        description = "Резервный способ, если Root недоступен",
+                        description = when {
+                            uiState.activeBackendName == "Shizuku" -> "Активен"
+                            uiState.isShizukuPermissionPending ->
+                                "Ожидание запуска Shizuku и запроса разрешения"
+                            uiState.activeBackendName == "Root" ->
+                                "Резервный способ — сейчас активен Root"
+                            uiState.isShizukuBackendAvailable == false ->
+                                "Недоступен — Shizuku не запущен или разрешение не выдано"
+                            uiState.isShizukuBackendAvailable == true -> "Доступен"
+                            else -> "Резервный способ, если Root недоступен"
+                        },
                         checked = uiState.isShizukuBackendEnabled,
                         onCheckedChange = viewModel::setShizukuBackendEnabled
                     )

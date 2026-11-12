@@ -13,6 +13,9 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.Display
 import com.densityfold.engine.DisplayUtils
+import com.densityfold.backend.DensityBackendManager
+import com.densityfold.backend.shizuku.ShizukuMonitor
+import kotlinx.coroutines.flow.combine
 import com.densityfold.data.DensityPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +35,7 @@ class FoldMonitorService : Service() {
     private var displayManager: DisplayManager? = null
 
     private val checkChannel = Channel<Unit>(Channel.CONFLATED)
+    private var notificationBaseMessage = "Мониторинг складывания активен"
 
     private var lastRequestedExternal: Boolean? = null
     private var activeRequestId: Long? = null
@@ -94,11 +98,11 @@ class FoldMonitorService : Service() {
                 )
 
                 if (shortPx > 0 && actualDpi > 0) {
-                    notifications.update(
+                    updateNotification(
                         notifications.formatDisplayStatus(isExternal, shortPx, actualDpi)
                     )
                 } else {
-                    notifications.update("Мониторинг складывания активен")
+                    updateNotification("Мониторинг складывания активен")
                 }
 
                 Log.i(TAG, "Действие подтверждено монитором")
@@ -112,7 +116,7 @@ class FoldMonitorService : Service() {
                 retryPending = true
                 val error = intent.getStringExtra(DensityActionService.EXTRA_ERROR)
                 Log.w(TAG, "Действие не выполнено: ${error ?: "неизвестная ошибка"}")
-                notifications.update("Не удалось выполнить действие · повторная попытка")
+                updateNotification("Не удалось выполнить действие · повторная попытка")
                 scheduleRetry()
             }
         }
@@ -134,6 +138,16 @@ class FoldMonitorService : Service() {
         }
 
         startForegroundSafely()
+
+        scope.launch {
+            combine(
+                DensityBackendManager.selectedBackend,
+                DensityBackendManager.availability,
+                ShizukuMonitor.runtimeState
+            ) { _, _, _ -> Unit }.collect {
+                updateNotification(notificationBaseMessage)
+            }
+        }
 
         scope.launch {
             for (event in checkChannel) {
@@ -169,8 +183,12 @@ class FoldMonitorService : Service() {
             "Мониторинг складывания активен"
         }
 
+        notificationBaseMessage = initialMessage
+
         try {
-            val notification = notifications.build(initialMessage)
+            val notification = notifications.build(
+                withBackendWarning(initialMessage)
+            )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 startForeground(
                     1,
@@ -217,7 +235,7 @@ scheduleDensityCheck()
 
         val isExternal = active.isExternal
 
-        notifications.update(
+        updateNotification(
             notifications.formatDisplayStatus(isExternal, active.shortPx, active.density)
         )
 
@@ -262,7 +280,7 @@ if (lastRequestedExternal == isExternal && !retryPending) {
                 retryPending = true
             }
             Log.e(TAG, "Не удалось запустить сервис: ${e.message}", e)
-            notifications.update("Не удалось запустить действие · повторная попытка")
+            updateNotification("Не удалось запустить действие · повторная попытка")
             scheduleRetry()
         }
     }
@@ -279,7 +297,7 @@ if (lastRequestedExternal == isExternal && !retryPending) {
                 activeRequestId = null
                 retryPending = true
                 Log.w(TAG, logMessage)
-                notifications.update(notificationMessage)
+                updateNotification(notificationMessage)
                 scheduleRetry()
             }
         }
@@ -295,6 +313,57 @@ if (lastRequestedExternal == isExternal && !retryPending) {
                 scheduleDensityCheck()
             }
         }
+    }
+
+    private fun updateNotification(message: String) {
+        notificationBaseMessage = message
+        notifications.update(withBackendWarning(message))
+    }
+
+    private fun withBackendWarning(message: String): String {
+        val selected = DensityBackendManager.selectedBackend.value?.name
+        val availability = DensityBackendManager.availability.value
+        val runtime = ShizukuMonitor.runtimeState.value
+
+        val shizukuRuntimeUnavailable = runtime?.let {
+            !(it.mainBinder && it.permission && it.userService)
+        } == true
+
+        val warning = when (selected) {
+            "ROOT" -> null
+
+            "SHIZUKU" -> {
+                if (
+                    availability.shizukuAvailable == false ||
+                    shizukuRuntimeUnavailable
+                ) "Shizuku недоступен" else null
+            }
+
+            else -> {
+                val rootUnavailable =
+                    availability.rootEnabled &&
+                    availability.rootAvailable == false
+
+                val shizukuUnavailable =
+                    availability.shizukuEnabled &&
+                    (
+                        availability.shizukuAvailable == false ||
+                        shizukuRuntimeUnavailable
+                    )
+
+                when {
+                    rootUnavailable && shizukuUnavailable ->
+                        "Root и Shizuku недоступны"
+                    shizukuUnavailable ->
+                        "Shizuku недоступен"
+                    rootUnavailable ->
+                        "Root недоступен"
+                    else -> null
+                }
+            }
+        }
+
+        return if (warning == null) message else "$message · $warning"
     }
 
     override fun onDestroy() {
