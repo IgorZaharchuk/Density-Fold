@@ -223,6 +223,103 @@ class FoldMonitorService : Service() {
                 }
 
                 scheduleDensityCheck()
+            } catch (e: Exception) {
+                Log.e(TAG, "Не удалось проверить настройки монитора", e)
+                stopSelf(startId)
+            }
+        }
+        return START_STICKY
+    }
+
+    private fun scheduleDensityCheck() {
+        checkChannel.trySend(Unit)
+    }
+
+    private suspend fun performDensityCheck() {
+        val active = DisplayUtils.getActiveDisplay(applicationContext)
+        if (active == null) {
+            Log.w(TAG, "Активный дисплей не определён")
+            return
+        }
+
+        val isExternal = active.isExternal
+
+        updateNotification(
+            notifications.formatDisplayStatus(isExternal, active.shortPx, active.density)
+        )
+
+        if (activeRequestId != null) {
+            return
+        }
+
+        if (lastRequestedExternal == isExternal && !retryPending) {
+            return
+        }
+
+        val requestId = beginRequest(isExternal)
+
+        val actionName = if (isExternal) "Внешний" else "Внутренний"
+        Log.i(TAG, "Запуск действия: $actionName")
+
+        try {
+            if (isExternal) {
+                DensityActionService.startClosed(
+                    this,
+                    fromMonitor = true,
+                    requestId = requestId
+                )
+            } else {
+                DensityActionService.startOpen(
+                    this,
+                    fromMonitor = true,
+                    requestId = requestId
+                )
+            }
+
+            startActionTimeout(
+                requestId = requestId,
+                logMessage = "Тайм-аут ожидания результата действия",
+                notificationMessage = "Нет ответа от сервиса · повторная попытка"
+            )
+        } catch (e: Exception) {
+            if (activeRequestId == requestId) {
+                actionTimeoutJob?.cancel()
+                actionTimeoutJob = null
+                activeRequestId = null
+                retryPending = true
+            }
+            Log.e(TAG, "Не удалось запустить сервис: ${e.message}", e)
+            updateNotification("Не удалось запустить действие · повторная попытка")
+            scheduleRetry()
+        }
+    }
+
+    private fun startActionTimeout(
+        requestId: Long,
+        logMessage: String,
+        notificationMessage: String
+    ) {
+        actionTimeoutJob?.cancel()
+        actionTimeoutJob = scope.launch {
+            delay(20_000L)
+            if (activeRequestId == requestId) {
+                activeRequestId = null
+                retryPending = true
+                Log.w(TAG, logMessage)
+                updateNotification(notificationMessage)
+                scheduleRetry()
+            }
+        }
+    }
+
+    private fun scheduleRetry() {
+        if (retryJob?.isActive == true) return
+
+        retryJob = scope.launch {
+            delay(5_000L)
+            if (retryPending && activeRequestId == null) {
+                Log.i(TAG, "Повторный запуск действия для текущего экрана")
+                scheduleDensityCheck()
             }
         }
     }
