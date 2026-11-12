@@ -1,7 +1,13 @@
-package com.densityfold.engine
+package com.densityfold.backend.shizuku
+
+import com.densityfold.engine.DensityOutputParser
 
 
 object ShizukuManager {
+    fun start() = ShizukuCommandRunner.start()
+
+    suspend fun stop() = ShizukuCommandRunner.stop()
+
     fun isShizukuAvailable(): Boolean =
         ShizukuCommandRunner.currentState().isAvailable
 

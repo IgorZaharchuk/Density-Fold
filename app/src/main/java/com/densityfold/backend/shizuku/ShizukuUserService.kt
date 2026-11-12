@@ -1,4 +1,6 @@
-package com.densityfold.engine
+package com.densityfold.backend.shizuku
+
+import com.densityfold.engine.IShizukuService
 
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit

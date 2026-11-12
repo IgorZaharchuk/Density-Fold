@@ -1,4 +1,4 @@
-package com.densityfold.engine
+package com.densityfold.backend.shizuku
 
 data class ShizukuRuntimeState(
     val mainBinder: Boolean,

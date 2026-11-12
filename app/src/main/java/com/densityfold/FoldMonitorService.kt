@@ -14,7 +14,7 @@ import android.provider.Settings
 import android.util.Log
 import android.view.Display
 import com.densityfold.engine.DisplayUtils
-import com.densityfold.engine.ShizukuCommandRunner
+import com.densityfold.backend.shizuku.ShizukuCommandRunner
 import com.densityfold.data.DensityPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

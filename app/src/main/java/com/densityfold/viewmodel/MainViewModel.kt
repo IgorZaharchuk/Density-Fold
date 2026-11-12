@@ -12,7 +12,7 @@ import com.densityfold.engine.DisplayInfo
 import com.densityfold.engine.DisplayUtils
 import com.densityfold.engine.DensityExecutor
 import com.densityfold.engine.DensityProfile
-import com.densityfold.engine.ShizukuManager
+import com.densityfold.backend.shizuku.ShizukuManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

@@ -1,4 +1,6 @@
-package com.densityfold.engine
+package com.densityfold.backend.shizuku
+
+import com.densityfold.engine.IShizukuService
 
 import android.util.Log
 import android.os.Handler
@@ -36,6 +38,13 @@ object ShizukuCommandRunner {
     private const val TAG = "DensityFold-Shizuku"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val operationMutex = Mutex()
+
+    @Volatile
+    private var started = false
+
+    @Volatile
+    private var reconnectJob: Job? = null
 
     private val stateLock = Any()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -57,29 +66,52 @@ object ShizukuCommandRunner {
 
     // Автоматическое восстановление UserService при перезапуске Shizuku.
     private val binderDeadListener = Shizuku.OnBinderDeadListener {
-        Log.w(TAG, "MAIN BINDER DEAD ${mainBinderState()}")
-        detachConnection()
-        Log.i(TAG, "Ссылки UserService очищены после смерти Binder")
+        if (started) {
+            Log.w(TAG, "MAIN BINDER DEAD ${mainBinderState()}")
+            detachConnection()
+            Log.i(TAG, "Ссылки UserService очищены после смерти Binder")
+        }
     }
 
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
-        Log.i(TAG, "MAIN BINDER RECEIVED ${mainBinderState()}")
-        requestReconnect()
+        if (started) {
+            Log.i(TAG, "MAIN BINDER RECEIVED ${mainBinderState()}")
+            requestReconnect()
+        }
     }
 
-    private var lifecycleListenersInstalled = false
-
     @Synchronized
-    fun installLifecycleListeners() {
-        if (lifecycleListenersInstalled) return
-        lifecycleListenersInstalled = true
+    fun start() {
+        if (started) return
+        started = true
 
         Shizuku.addBinderDeadListener(binderDeadListener)
         Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
-        Log.i(
-            TAG,
-            "Слушатели жизненного цикла Shizuku установлены ${mainBinderState()}"
-        )
+
+        Log.i(TAG, "Shizuku backend запущен ${mainBinderState()}")
+    }
+
+    suspend fun stop() {
+        synchronized(this) {
+            if (!started) return
+            started = false
+
+            Shizuku.removeBinderDeadListener(binderDeadListener)
+            Shizuku.removeBinderReceivedListener(binderReceivedListener)
+
+            reconnectJob?.cancel()
+            reconnectJob = null
+            reconnectInProgress.set(false)
+        }
+
+        // Дожидаемся завершения выполняемой команды, затем освобождаем сессию.
+        operationMutex.withLock {
+            bindMutex.withLock {
+                detachConnection()?.let { unbindQuietly(it) }
+            }
+        }
+
+        Log.i(TAG, "Shizuku backend остановлен")
     }
 
     private fun mainBinderState(): String {
@@ -149,10 +181,11 @@ object ShizukuCommandRunner {
     }
 
     fun requestReconnect() {
+        if (!started) return
         if (!reconnectInProgress.compareAndSet(false, true)) return
 
         Log.i(TAG, "RECONNECT requested ${mainBinderState()}")
-        scope.launch {
+        reconnectJob = scope.launch {
             try {
                 for (attempt in 0 until 5) {
                 val binderAlive = try {
@@ -202,11 +235,19 @@ object ShizukuCommandRunner {
      * Ожидает основной Binder Shizuku и готовность UserService.
      */
     suspend fun awaitReady(timeoutMs: Long = 10_000L): Result<Unit> {
+        if (!started) {
+            return Result.failure(
+                IllegalStateException("Shizuku backend остановлен")
+            )
+        }
         var lastError: Exception? = null
 
         return try {
             withTimeout(timeoutMs) {
                 while (true) {
+                    if (!started) {
+                        throw IllegalStateException("Shizuku backend остановлен")
+                    }
                     val binderAlive = try {
                         Shizuku.pingBinder()
                     } catch (_: Exception) {
@@ -261,7 +302,7 @@ object ShizukuCommandRunner {
     private val userServiceArgs = UserServiceArgs(
         ComponentName(
             "com.densityfold",
-            "com.densityfold.engine.ShizukuUserService"
+            "com.densityfold.backend.shizuku.ShizukuUserService"
         )
     )
         .daemon(true)
@@ -269,7 +310,12 @@ object ShizukuCommandRunner {
         .debuggable(false)
         .version(2)
 
-    suspend fun execute(command: String): Result<String> {
+    suspend fun execute(command: String): Result<String> =
+        operationMutex.withLock {
+            executeLocked(command)
+        }
+
+    private suspend fun executeLocked(command: String): Result<String> {
         var expectedConnection: ServiceConnection? = null
 
         return try {
@@ -363,6 +409,9 @@ object ShizukuCommandRunner {
 
     private suspend fun ensureBound() {
         bindMutex.withLock {
+            if (!started) {
+                throw IllegalStateException("Shizuku backend остановлен")
+            }
 
             if (!Shizuku.pingBinder()) {
                 detachConnection()?.let { unbindQuietly(it) }

@@ -79,7 +79,7 @@
         </service>
             
         <service
-            android:name=".engine.ShizukuUserService"
+            android:name=".backend.shizuku.ShizukuUserService"
             android:enabled="true"
             android:exported="false" />
             
