@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Process
 import android.util.Log
 import com.densityfold.backend.DensityBackendManager
+import com.densityfold.backend.shizuku.ShizukuRecovery
 import com.densityfold.data.DensityPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +18,7 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        ShizukuRecovery.initialize(applicationContext)
 
         Log.i("DensityFold", "APP onCreate pid=${Process.myPid()}")
 

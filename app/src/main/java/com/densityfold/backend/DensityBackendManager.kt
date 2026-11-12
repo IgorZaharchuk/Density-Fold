@@ -59,7 +59,6 @@ object DensityBackendManager {
             throw e
         } catch (e: BackendOperationException) {
             if (activeBackend === backend) publishActiveBackend(null)
-            if (backend === ShizukuBackend) ShizukuMonitor.stop()
             throw e
         }
     }
@@ -103,9 +102,9 @@ object DensityBackendManager {
         if (shizukuEnabled) {
             try {
                 ShizukuManager.start()
+                ShizukuMonitor.start()
                 val result = ShizukuBackend.awaitReady(timeoutMs)
                 if (result.isSuccess) {
-                    ShizukuMonitor.start()
                     publishActiveBackend(ShizukuBackend)
                     return Result.success(ShizukuBackend)
                 }
@@ -120,7 +119,7 @@ object DensityBackendManager {
         }
 
         publishActiveBackend(null)
-        stopShizukuSafely()
+        if (!shizukuEnabled) stopShizukuSafely()
         val reasons = buildList {
             if (rootEnabled) add("Root: ${rootError?.message ?: "недоступен"}")
             if (shizukuEnabled) add("Shizuku: ${shizukuError?.message ?: "недоступен"}")
