@@ -1,5 +1,7 @@
 package com.densityfold.engine
 
+import com.densityfold.backend.shizuku.ShizukuManager
+
 import android.content.Context
 import com.densityfold.data.DensityPreferences
 import kotlinx.coroutines.CancellationException
