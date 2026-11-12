@@ -11,6 +11,7 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import android.os.RemoteException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -60,7 +61,8 @@ object ShizukuCommandRunner {
 
     // Сериализует bind и полную очистку подключения.
     private val bindMutex = Mutex()
-    private val reconnectInProgress = AtomicBoolean(false)
+    // Изменяется под synchronized(this); отделяет разные циклы start/stop.
+    private var lifecycleGeneration = 0L
 
     private const val BIND_TIMEOUT_MS = 10_000L
 
@@ -83,6 +85,7 @@ object ShizukuCommandRunner {
     @Synchronized
     fun start() {
         if (started) return
+        lifecycleGeneration++
         started = true
 
         Shizuku.addBinderDeadListener(binderDeadListener)
@@ -92,19 +95,21 @@ object ShizukuCommandRunner {
     }
 
     suspend fun stop() {
-        synchronized(this) {
+        val jobToJoin = synchronized(this) {
             if (!started) return
             started = false
+            lifecycleGeneration++
 
             Shizuku.removeBinderDeadListener(binderDeadListener)
             Shizuku.removeBinderReceivedListener(binderReceivedListener)
 
-            reconnectJob?.cancel()
-            reconnectJob = null
-            reconnectInProgress.set(false)
+            reconnectJob.also { reconnectJob = null }
         }
 
-        // Дожидаемся завершения выполняемой команды, затем освобождаем сессию.
+        // Сначала полностью завершаем восстановление.
+        jobToJoin?.cancelAndJoin()
+
+        // Затем дожидаемся команды и освобождаем UserService.
         operationMutex.withLock {
             bindMutex.withLock {
                 detachConnection()?.let { unbindQuietly(it) }
@@ -181,55 +186,70 @@ object ShizukuCommandRunner {
     }
 
     fun requestReconnect() {
-        if (!started) return
-        if (!reconnectInProgress.compareAndSet(false, true)) return
+        synchronized(this) {
+            if (!started || reconnectJob?.isActive == true) return
 
-        Log.i(TAG, "RECONNECT requested ${mainBinderState()}")
-        reconnectJob = scope.launch {
-            try {
-                for (attempt in 0 until 5) {
-                val binderAlive = try {
-                    Shizuku.pingBinder()
-                } catch (_: Exception) {
-                    false
-                }
+            val generation = lifecycleGeneration
 
-                Log.i(
-                    TAG,
-                    "RECONNECT attempt=${attempt + 1}/5 " +
-                        "binderPing=$binderAlive ${mainBinderState()}"
-                )
-
-                if (!binderAlive) {
-                    Log.w(TAG, "RECONNECT stopped: main Binder unavailable")
-                    return@launch
-                }
-
+            val job = scope.launch(start = CoroutineStart.LAZY) {
                 try {
-                    ensureBound()
-                    Log.i(TAG, "RECONNECT UserService success ${mainBinderState()}")
-                    return@launch
-                } catch (e: SecurityException) {
-                    Log.e(TAG, "RECONNECT permission error: ${e.message}", e)
-                    return@launch
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.w(
-                        TAG,
-                        "RECONNECT attempt ${attempt + 1} failed: ${e.message}",
-                        e
-                    )
-                    if (attempt < 4) delay(1_000L * (attempt + 1))
+                    for (attempt in 0 until 5) {
+                        val active = synchronized(this@ShizukuCommandRunner) {
+                            started && lifecycleGeneration == generation
+                        }
+                        if (!active) return@launch
+
+                        val binderAlive = try {
+                            Shizuku.pingBinder()
+                        } catch (_: Exception) {
+                            false
+                        }
+
+                        Log.i(
+                            TAG,
+                            "RECONNECT attempt=${attempt + 1}/5 " +
+                                "binderPing=$binderAlive ${mainBinderState()}"
+                        )
+
+                        if (!binderAlive) {
+                            Log.w(TAG, "RECONNECT stopped: main Binder unavailable")
+                            return@launch
+                        }
+
+                        try {
+                            ensureBound()
+                            Log.i(TAG, "RECONNECT UserService success ${mainBinderState()}")
+                            return@launch
+                        } catch (e: SecurityException) {
+                            Log.e(TAG, "RECONNECT permission error: ${e.message}", e)
+                            return@launch
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.w(
+                                TAG,
+                                "RECONNECT attempt ${attempt + 1} failed: ${e.message}",
+                                e
+                            )
+                            if (attempt < 4) delay(1_000L * (attempt + 1))
+                        }
+                    }
+                    Log.e(TAG, "RECONNECT exhausted all attempts ${mainBinderState()}")
+                } finally {
+                    val currentJob = kotlinx.coroutines.currentCoroutineContext()[Job]
+                    synchronized(this@ShizukuCommandRunner) {
+                        if (reconnectJob === currentJob) {
+                            reconnectJob = null
+                        }
+                    }
                 }
             }
-                Log.e(TAG, "RECONNECT exhausted all attempts ${mainBinderState()}")
-            } finally {
-                reconnectInProgress.set(false)
-            }
+
+            reconnectJob = job
+            job.start()
+            Log.i(TAG, "RECONNECT requested ${mainBinderState()}")
         }
     }
-
 
     /**
      * Ожидает основной Binder Shizuku и готовность UserService.
@@ -535,6 +555,11 @@ object ShizukuCommandRunner {
                                 )
                             )
                         }
+                    } else {
+                        // Callback пришёл от уже устаревшего подключения.
+                        // Освобождаем только его, не затрагивая новую сессию.
+                        Log.w(TAG, "Ignoring stale onServiceConnected callback")
+                        unbindQuietlyDeferred(this)
                     }
                 }
 
