@@ -97,8 +97,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun updateFoldMonitorService(enabled: Boolean) {
         val intent = Intent(getApplication(), FoldMonitorService::class.java)
-        if (enabled) getApplication<Application>().startService(intent)
-        else getApplication<Application>().stopService(intent)
+        if (enabled) {
+            androidx.core.content.ContextCompat.startForegroundService(
+                getApplication<Application>(),
+                intent
+            )
+        } else {
+            getApplication<Application>().stopService(intent)
+        }
     }
 
     fun setFoldMonitorEnabled(enabled: Boolean) {

@@ -15,6 +15,7 @@ import android.util.Log
 import android.view.Display
 import com.densityfold.engine.DisplayUtils
 import com.densityfold.engine.ShizukuCommandRunner
+import com.densityfold.data.DensityPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -137,7 +138,6 @@ class FoldMonitorService : Service() {
         }
 
         startForegroundSafely()
-        startShizukuWatchdog()
 
         scope.launch {
             for (event in checkChannel) {
@@ -328,7 +328,23 @@ class FoldMonitorService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        scheduleDensityCheck()
+        scope.launch {
+            try {
+                val settings = DensityPreferences(applicationContext).getSettings()
+                if (!settings.foldMonitorEnabled) {
+                    Log.i(TAG, "Мониторинг отключён в настройках; остановка сервиса")
+                    stopSelf(startId)
+                    return@launch
+                }
+                if (shizukuWatchdogJob?.isActive != true) {
+                    startShizukuWatchdog()
+                }
+                scheduleDensityCheck()
+            } catch (e: Exception) {
+                Log.e(TAG, "Не удалось проверить настройки монитора", e)
+                stopSelf(startId)
+            }
+        }
         return START_STICKY
     }
 
