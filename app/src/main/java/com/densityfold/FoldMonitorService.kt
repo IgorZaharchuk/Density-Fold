@@ -109,8 +109,10 @@ class FoldMonitorService : Service() {
                     0
                 )
 
-                refreshNotificationProfileDpi()
-                updateNotification("Мониторинг складывания активен")
+                scope.launch {
+                    refreshNotificationProfileDpi()
+                    updateNotification("Мониторинг складывания активен")
+                }
 
                 Log.i(TAG, "Действие подтверждено монитором")
 
