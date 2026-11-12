@@ -23,11 +23,17 @@ class DensityActionService : Service() {
     private val TAG = "DensityFold-Service"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    private val actionLock = Any()
+    private var activeActions = 0
+    private var latestStartId = 0
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        registerAction(startId)
+
         val action = intent?.action ?: run {
-            stopSelf(startId)
+            finishAction()
             return START_NOT_STICKY
         }
 
@@ -36,7 +42,7 @@ class DensityActionService : Service() {
             ACTION_CLOSED -> DensityProfile.OUTER
             else -> {
                 Log.w(TAG, "Unknown action: $action")
-                stopSelf(startId)
+                finishAction()
                 return START_NOT_STICKY
             }
         }
@@ -92,11 +98,29 @@ class DensityActionService : Service() {
                         monitorRequestId = monitorRequestId
                     )
                 }
-                stopSelf(startId)
+                finishAction()
             }
         }
 
         return START_NOT_STICKY
+    }
+
+    private fun registerAction(startId: Int) {
+        synchronized(actionLock) {
+            activeActions++
+            latestStartId = startId
+        }
+    }
+
+    private fun finishAction() {
+        val stopId = synchronized(actionLock) {
+            activeActions--
+            if (activeActions == 0) latestStartId else null
+        }
+
+        if (stopId != null) {
+            stopSelfResult(stopId)
+        }
     }
 
     private fun reportFailure(

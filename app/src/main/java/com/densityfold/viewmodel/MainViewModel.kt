@@ -46,6 +46,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     private val dpiSaveJobs = mutableMapOf<DensityProfile, Job>()
+    private val activeDensityOperations =
+        java.util.concurrent.atomic.AtomicInteger(0)
     private companion object {
         const val DPI_SAVE_DEBOUNCE_MS = 300L
     }
@@ -64,7 +66,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update {
             it.copy(
                 isShizukuAvailable = false,
-                isLoading = false,
+                isLoading = activeDensityOperations.get() > 0,
                 errorMessage = "Shizuku отключён. Автоприменение приостановлено."
             )
         }
@@ -197,6 +199,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun applyDensity(profile: DensityProfile) {
         val context = getApplication<Application>().applicationContext
+        activeDensityOperations.incrementAndGet()
 
         _uiState.update {
             it.copy(
@@ -238,7 +241,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
         } finally {
-            _uiState.update { it.copy(isLoading = false) }
+            val stillLoading = activeDensityOperations.decrementAndGet() > 0
+            _uiState.update { it.copy(isLoading = stillLoading) }
         }
     }
 

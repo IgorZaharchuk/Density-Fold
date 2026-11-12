@@ -64,12 +64,13 @@ object DensityExecutor {
                 val currentDpi = ShizukuManager.getCurrentDensity().getOrThrow()
                 val alreadyApplied = currentDpi == targetDpi
 
-                if (!alreadyApplied) {
+                val actualDpi = if (alreadyApplied) {
+                    currentDpi
+                } else {
                     ensureDisplayUnchanged(context, active)
                     ShizukuManager.setDensity(targetDpi).getOrThrow()
+                    ShizukuManager.getCurrentDensity().getOrThrow()
                 }
-
-                val actualDpi = ShizukuManager.getCurrentDensity().getOrThrow()
 
                 if (actualDpi != targetDpi) {
                     throw IllegalStateException(
