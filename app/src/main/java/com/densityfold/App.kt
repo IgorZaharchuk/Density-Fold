@@ -41,8 +41,9 @@ class App : Application() {
                 }
 
                 DensityBackendManager.selectBackend(
-                    rootEnabled = settings.rootBackendEnabled,
-                    shizukuEnabled = settings.shizukuBackendEnabled
+                    settingsProvider = {
+                        DensityPreferences(applicationContext).getSettings()
+                    }
                 ).onFailure {
                     Log.w("DensityFold", "Не удалось выбрать backend: ${it.message}")
                 }

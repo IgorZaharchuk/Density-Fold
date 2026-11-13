@@ -369,11 +369,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (_uiState.value.isShizukuPermissionPending) return
 
         try {
-            val settings = preferences.getSettings()
-
             DensityBackendManager.selectBackend(
-                rootEnabled = settings.rootBackendEnabled,
-                shizukuEnabled = settings.shizukuBackendEnabled
+                settingsProvider = { preferences.getSettings() }
             ).onSuccess {
                 _uiState.update { it.copy(errorMessage = null) }
             }.onFailure { error ->
