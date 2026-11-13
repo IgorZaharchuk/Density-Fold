@@ -296,7 +296,6 @@ public class RootServiceManager implements Handler.Callback {
                         startRootProcess(key.getName(), action), key.isDaemon());
                 return result;
             }
-        } else {
         }
         return null;
     }

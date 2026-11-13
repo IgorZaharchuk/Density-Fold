@@ -44,7 +44,6 @@ object ShizukuMonitor {
         _runtimeState.value = null
 
         monitorJob = scope.launch {
-            var previousState: ShizukuRuntimeState? = null
             var lastReconnectAt = 0L
 
 
@@ -53,10 +52,6 @@ object ShizukuMonitor {
 
                 _runtimeState.value = state
                 ShizukuRecovery.onRuntimeState(state)
-
-                if (state != previousState) {
-                    previousState = state
-                }
 
                 if (
                     state.mainBinder &&

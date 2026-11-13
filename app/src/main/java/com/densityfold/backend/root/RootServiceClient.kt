@@ -176,7 +176,7 @@ internal object RootServiceClient {
                     }
                 }
             } catch (error: TimeoutCancellationException) {
-                Log.e(TAG, "service: TIMEOUT; connection=${newConnection?.let { System.identityHashCode(it) }}", error)
+                Log.e(TAG, "service: TIMEOUT", error)
                 cleanup(newConnection)
                 val message = if (waitingForSu) {
                     "Таймаут ожидания исполняемого su в PATH; RootService.bind() не вызывался"
@@ -185,7 +185,6 @@ internal object RootServiceClient {
                 }
                 throw IllegalStateException(message, error)
             } catch (error: CancellationException) {
-                Log.w(TAG, "service: CANCELLED", error)
                 cleanup(newConnection)
                 throw error
             } catch (error: Exception) {
@@ -200,7 +199,6 @@ internal object RootServiceClient {
         }
 
     private suspend fun cleanup(connection: ServiceConnection?) {
-        Log.w(TAG, "cleanup: вызван; connection=${connection?.let { System.identityHashCode(it) }}")
         if (connection == null) return
 
         withContext(Dispatchers.Main.immediate) {

@@ -69,7 +69,7 @@ object ShizukuCommandRunner {
     // Автоматическое восстановление UserService при перезапуске Shizuku.
     private val binderDeadListener = Shizuku.OnBinderDeadListener {
         if (started) {
-            Log.w(TAG, "MAIN BINDER DEAD ")
+            Log.w(TAG, "MAIN BINDER DEAD")
             detachConnection()
         }
     }
@@ -198,7 +198,7 @@ object ShizukuCommandRunner {
                             if (attempt < 4) delay(1_000L * (attempt + 1))
                         }
                     }
-                    Log.e(TAG, "RECONNECT exhausted all attempts ")
+                    Log.e(TAG, "RECONNECT exhausted all attempts")
                 } finally {
                     val currentJob = kotlinx.coroutines.currentCoroutineContext()[Job]
                     synchronized(this@ShizukuCommandRunner) {
@@ -444,7 +444,7 @@ object ShizukuCommandRunner {
             Shizuku.checkSelfPermission() !=
             android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
-            Log.e(TAG, "USER SERVICE bind blocked: permission denied ")
+            Log.e(TAG, "USER SERVICE bind blocked: permission denied")
             throw SecurityException(
                 "Shizuku permission not granted"
             )
@@ -540,7 +540,7 @@ object ShizukuCommandRunner {
                         }
                     }
                     if (wasCurrent) {
-                        Log.w(TAG, "USER SERVICE disconnected ")
+                        Log.w(TAG, "USER SERVICE disconnected")
                         requestReconnect()
                     }
                 }
@@ -548,7 +548,7 @@ object ShizukuCommandRunner {
                 override fun onBindingDied(
                     name: ComponentName?
                 ) {
-                    Log.e(TAG, "USER SERVICE onBindingDied ")
+                    Log.e(TAG, "USER SERVICE onBindingDied")
                     var wasCurrent = false
                     var shouldResume = false
 
@@ -579,7 +579,7 @@ object ShizukuCommandRunner {
                 override fun onNullBinding(
                     name: ComponentName?
                 ) {
-                    Log.e(TAG, "USER SERVICE onNullBinding ")
+                    Log.e(TAG, "USER SERVICE onNullBinding")
                     var wasCurrent = false
                     var shouldResume = false
 
@@ -634,7 +634,7 @@ object ShizukuCommandRunner {
                 }
 
                 if (timedOut) {
-                    Log.e(TAG, "USER SERVICE bind timeout ")
+                    Log.e(TAG, "USER SERVICE bind timeout")
                     unbindQuietly(conn)
 
                     cont.resumeWithException(
