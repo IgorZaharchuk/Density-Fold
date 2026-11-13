@@ -8,26 +8,51 @@ internal object WindowManagerDensity {
 
     private const val USER_CURRENT = -2
 
-    private data class Api(
-        val manager: Any,
-        val interfaceClass: Class<*>
+    private data class ReflectionApi(
+        val getService: Method,
+        val asInterface: Method,
+        val getBaseDisplayDensity: Method,
+        val setForcedDisplayDensityForUser: Method
     )
 
-    private fun api(): Api {
+    private val reflection: ReflectionApi by lazy {
         val serviceManager = Class.forName("android.os.ServiceManager")
-        val getService = serviceManager.getMethod("getService", String::class.java)
-        val binder = getService.invoke(null, "window") as? IBinder
-            ?: throw IllegalStateException("Binder службы WindowManager недоступен")
-
         val stub = Class.forName("android.view.IWindowManager\$Stub")
-        val asInterface = stub.getMethod("asInterface", IBinder::class.java)
-        val manager = asInterface.invoke(null, binder)
-            ?: throw IllegalStateException("Не удалось получить IWindowManager")
+        val interfaceClass = Class.forName("android.view.IWindowManager")
 
-        return Api(
-            manager = manager,
-            interfaceClass = Class.forName("android.view.IWindowManager")
+        ReflectionApi(
+            getService = serviceManager.getMethod(
+                "getService",
+                String::class.java
+            ),
+            asInterface = stub.getMethod(
+                "asInterface",
+                IBinder::class.java
+            ),
+            getBaseDisplayDensity = interfaceClass.getMethod(
+                "getBaseDisplayDensity",
+                Int::class.javaPrimitiveType
+            ),
+            setForcedDisplayDensityForUser = interfaceClass.getMethod(
+                "setForcedDisplayDensityForUser",
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType
+            )
         )
+    }
+
+    private fun manager(): Any {
+        val api = reflection
+        val binder = api.getService.invoke(null, "window") as? IBinder
+            ?: throw IllegalStateException(
+                "Binder службы WindowManager недоступен"
+            )
+
+        return api.asInterface.invoke(null, binder)
+            ?: throw IllegalStateException(
+                "Не удалось получить IWindowManager"
+            )
     }
 
     private fun invoke(method: Method, target: Any, vararg args: Any): Any? {
@@ -38,13 +63,15 @@ internal object WindowManagerDensity {
         }
     }
 
-    fun get(displayId: Int): Int {
-        val api = api()
-        val method = api.interfaceClass.getMethod(
-            "getBaseDisplayDensity",
-            Int::class.javaPrimitiveType
-        )
-        val density = invoke(method, api.manager, displayId) as Int
+    private fun readDensity(
+        manager: Any,
+        displayId: Int
+    ): Int {
+        val density = invoke(
+            reflection.getBaseDisplayDensity,
+            manager,
+            displayId
+        ) as Int
 
         if (density <= 0) {
             throw IllegalStateException(
@@ -54,21 +81,35 @@ internal object WindowManagerDensity {
         return density
     }
 
-    fun set(displayId: Int, dpi: Int): Int {
-        require(displayId >= 0) { "Недопустимый ID дисплея: $displayId" }
-        require(dpi in 1..10000) { "Недопустимое значение DPI: $dpi" }
+    fun get(displayId: Int): Int {
+        require(displayId >= 0) {
+            "Недопустимый ID дисплея: $displayId"
+        }
+        return readDensity(manager(), displayId)
+    }
 
-        val api = api()
-        val method = api.interfaceClass.getMethod(
-            "setForcedDisplayDensityForUser",
-            Int::class.javaPrimitiveType,
-            Int::class.javaPrimitiveType,
-            Int::class.javaPrimitiveType
+    fun set(displayId: Int, dpi: Int): Int {
+        require(displayId >= 0) {
+            "Недопустимый ID дисплея: $displayId"
+        }
+        require(dpi in 1..10000) {
+            "Недопустимое значение DPI: $dpi"
+        }
+
+        // Binder получаем заново для каждого вызова.
+        // Сам Binder/proxy не кэшируем.
+        val currentManager = manager()
+
+        invoke(
+            reflection.setForcedDisplayDensityForUser,
+            currentManager,
+            displayId,
+            dpi,
+            USER_CURRENT
         )
 
-        invoke(method, api.manager, displayId, dpi, USER_CURRENT)
-
-        val actual = get(displayId)
+        // Readback выполняем через тот же актуальный proxy.
+        val actual = readDensity(currentManager, displayId)
         if (actual != dpi) {
             throw IllegalStateException(
                 "Проверка не пройдена: задано $dpi, получено $actual"

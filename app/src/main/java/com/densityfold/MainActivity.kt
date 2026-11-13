@@ -351,6 +351,8 @@ fun MainScreen(
                                     uiState.isRootAvailable == false ->
                                         "Недоступен — Root-доступ не предоставлен"
                                     uiState.isRootAvailable == true -> "Доступен"
+                                    uiState.isRootBackendEnabled ->
+                                        "Проверка root-доступа…"
                                     else -> "Приоритетный способ, если доступен"
                                 },
                                 checked = uiState.isRootBackendEnabled,

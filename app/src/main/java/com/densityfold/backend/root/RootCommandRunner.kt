@@ -9,9 +9,12 @@ object RootCommandRunner {
         RootServiceClient.initialize(context)
     }
 
+    suspend fun getProcessUid(): Int =
+        RootServiceClient.getProcessUid()
+
     suspend fun isAvailable(): Boolean {
         return try {
-            RootServiceClient.getProcessUid() == 0
+            getProcessUid() == 0
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
@@ -19,7 +22,7 @@ object RootCommandRunner {
         }
     }
 
-    suspend fun getCurrentDensity(): Result<String> {
+    suspend fun getCurrentDensity(): Result<Int> {
         return try {
             val density = RootServiceClient.getCurrentDensity(0)
             if (density <= 0) {
@@ -27,7 +30,7 @@ object RootCommandRunner {
                     "WindowManager вернул недопустимую плотность: $density"
                 )
             }
-            Result.success("Override density: $density")
+            Result.success(density)
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
@@ -35,7 +38,7 @@ object RootCommandRunner {
         }
     }
 
-    suspend fun setDensity(dpi: Int): Result<String> {
+    suspend fun setDensity(dpi: Int): Result<Int> {
         if (dpi !in 1..10000) {
             return Result.failure(
                 IllegalArgumentException("Недопустимое значение DPI: $dpi")
@@ -44,7 +47,7 @@ object RootCommandRunner {
 
         return try {
             val actual = RootServiceClient.setDensity(0, dpi)
-            Result.success("Override density: $actual")
+            Result.success(actual)
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
