@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
+import android.os.Process
+import java.io.File
 import android.util.Log
 import com.topjohnwu.superuser.ipc.RootService
 import kotlinx.coroutines.CancellationException
@@ -23,6 +25,26 @@ internal object RootServiceClient {
     private const val TAG = "DensityFoldRoot"
     private const val CONNECT_TIMEOUT_MS = 20_000L
 
+    private fun logRootEnvironment(stage: String) {
+        val path = System.getenv("PATH")
+        Log.i(TAG, "ROOT ENV [$stage]: pid=${Process.myPid()}, uid=${Process.myUid()}")
+        Log.i(TAG, "ROOT ENV [$stage]: PATH=${path ?: "<null>"}")
+
+        if (path == null) {
+            Log.w(TAG, "ROOT ENV [$stage]: PATH отсутствует")
+            return
+        }
+
+        path.split(':').forEachIndexed { index, entry ->
+            val directory = if (entry.isEmpty()) "." else entry
+            val su = File(directory, "su")
+            Log.i(
+                TAG,
+                "ROOT ENV [$stage]: PATH[$index]=$directory, suExists=${su.exists()}, suCanExecute=${su.canExecute()}"
+            )
+        }
+    }
+
     @Volatile
     private var appContext: Context? = null
 
@@ -35,6 +57,7 @@ internal object RootServiceClient {
     fun initialize(context: Context) {
         appContext = context.applicationContext
         Log.i(TAG, "initialize: application context установлен")
+        logRootEnvironment("initialize")
     }
 
     suspend fun getProcessUid(): Int = withContext(Dispatchers.IO) {
