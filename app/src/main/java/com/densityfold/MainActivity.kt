@@ -144,9 +144,10 @@ fun MainScreen(
                 ) {
                     Text(
                         message,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                         color = MaterialTheme.colorScheme.onErrorContainer,
-                        fontSize = 13.sp
+                        fontSize = 13.sp,
+                        lineHeight = 17.sp
                     )
                 }
             }
@@ -160,9 +161,10 @@ fun MainScreen(
                 ) {
                     Text(
                         it,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                         color = MaterialTheme.colorScheme.onErrorContainer,
-                        fontSize = 13.sp
+                        fontSize = 13.sp,
+                        lineHeight = 17.sp
                     )
                 }
             }
@@ -176,9 +178,10 @@ fun MainScreen(
                 ) {
                     Text(
                         it,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        fontSize = 13.sp
+                        fontSize = 13.sp,
+                        lineHeight = 17.sp
                     )
                 }
             }

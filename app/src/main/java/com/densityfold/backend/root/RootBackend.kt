@@ -2,8 +2,6 @@ package com.densityfold.backend.root
 
 import com.densityfold.backend.DensityBackend
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.withTimeout
 
 object RootBackend : DensityBackend {
     override val name: String = "ROOT"
@@ -13,22 +11,16 @@ object RootBackend : DensityBackend {
 
     override suspend fun awaitReady(timeoutMs: Long): Result<Unit> {
         return try {
-            withTimeout(timeoutMs.coerceAtLeast(1L)) {
-                val uid = RootCommandRunner.getProcessUid()
-                if (uid != 0) {
-                    throw IllegalStateException(
+            val uid = RootCommandRunner.getProcessUid()
+            if (uid != 0) {
+                Result.failure(
+                    IllegalStateException(
                         "Root недоступен: процесс получил UID $uid вместо UID 0"
                     )
-                }
-            }
-            Result.success(Unit)
-        } catch (error: TimeoutCancellationException) {
-            Result.failure(
-                IllegalStateException(
-                    "Истекло время ожидания привилегированного Root-доступа",
-                    error
                 )
-            )
+            } else {
+                Result.success(Unit)
+            }
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
