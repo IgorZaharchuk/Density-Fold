@@ -48,6 +48,21 @@ class MonitorNotificationHelper(private val context: Context) {
             createOpenAppPendingIntent()
         )
 
+        val normalMessage = "Мониторинг складывания активен"
+        val statusMessage = when {
+            message == normalMessage -> null
+            message.startsWith("$normalMessage · ") ->
+                message.removePrefix("$normalMessage · ")
+            else -> message
+        }
+        views.setViewVisibility(
+            R.id.notification_status,
+            if (statusMessage.isNullOrBlank()) android.view.View.GONE
+            else android.view.View.VISIBLE
+        )
+        if (!statusMessage.isNullOrBlank()) {
+            views.setTextViewText(R.id.notification_status, statusMessage)
+        }
 
         if (controlsAvailable) {
             views.setViewVisibility(R.id.notification_minus, android.view.View.VISIBLE)
