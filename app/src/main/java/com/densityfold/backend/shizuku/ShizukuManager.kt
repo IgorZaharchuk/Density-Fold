@@ -8,9 +8,6 @@ object ShizukuManager {
 
     suspend fun stop() = ShizukuCommandRunner.stop()
 
-    fun isShizukuAvailable(): Boolean =
-        ShizukuCommandRunner.currentState().isAvailable
-
     suspend fun awaitShizukuReady(timeoutMs: Long = 10_000L): Result<Unit> {
         return ShizukuCommandRunner.awaitReady(timeoutMs)
     }

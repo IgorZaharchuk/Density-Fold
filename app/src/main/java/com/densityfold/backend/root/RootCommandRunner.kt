@@ -12,16 +12,6 @@ object RootCommandRunner {
     suspend fun getProcessUid(): Int =
         RootServiceClient.getProcessUid()
 
-    suspend fun isAvailable(): Boolean {
-        return try {
-            getProcessUid() == 0
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            false
-        }
-    }
-
     suspend fun getCurrentDensity(): Result<Int> {
         return try {
             val density = RootServiceClient.getCurrentDensity(0)

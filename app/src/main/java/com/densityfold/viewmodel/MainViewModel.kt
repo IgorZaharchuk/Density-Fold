@@ -38,7 +38,6 @@ data class UiState(
     val isAutoStartEnabled: Boolean = false,
     val isRootBackendEnabled: Boolean = false,
     val isShizukuBackendEnabled: Boolean = false,
-    val isShizukuAvailable: Boolean = false,
     val isRootAvailable: Boolean? = null,
     val isShizukuBackendAvailable: Boolean? = null,
     val isShizukuPermissionPending: Boolean = false,
@@ -105,7 +104,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Shizuku.OnBinderDeadListener {
             _uiState.update {
                 it.copy(
-                    isShizukuAvailable = false,
                     isBackendReady = if (it.activeBackendName == "Shizuku") {
                         false
                     } else {
@@ -169,7 +167,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 _uiState.update {
                     it.copy(
-                        isShizukuAvailable = ready,
                         isBackendReady = if (it.activeBackendName == "Shizuku") {
                             ready
                         } else {
@@ -545,18 +542,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Shizuku.removeBinderDeadListener(shizukuBinderDeadListener)
         Shizuku.removeRequestPermissionResultListener(shizukuPermissionResultListener)
         super.onCleared()
-    }
-
-    fun requestShizukuPermission() {
-        _uiState.update { it.copy(isShizukuPermissionPending = true) }
-        pendingShizukuPermissionRequest = true
-        try {
-            ShizukuManager.start()
-            requestShizukuPermissionIfReady()
-        } catch (e: Exception) {
-            pendingShizukuPermissionRequest = false
-            Log.w("DensityFold-UI", "Не удалось запустить Shizuku", e)
-        }
     }
 
     private fun requestShizukuPermissionIfReady() {

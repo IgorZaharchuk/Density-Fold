@@ -5,7 +5,6 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -78,10 +77,6 @@ class MainActivity : ComponentActivity() {
         if (::mainViewModel.isInitialized) mainViewModel.onOverlayPermissionSettingsReturned()
     }
 
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        if (::mainViewModel.isInitialized) mainViewModel.refreshDisplays()
-    }
 
 }
 

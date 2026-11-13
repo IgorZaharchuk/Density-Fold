@@ -119,11 +119,6 @@ object ShizukuRecovery {
         ) return
 
         lastRecoveryAttemptAt = now
-        Log.i(
-            TAG,
-            "Recovery cadence: unavailable=${unavailableDuration / 1000}s " +
-                "interval=${interval / 1000}s"
-        )
         launchRecoveryActivity()
     }
 

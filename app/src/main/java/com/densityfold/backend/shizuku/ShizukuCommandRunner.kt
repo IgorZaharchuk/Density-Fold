@@ -142,13 +142,6 @@ object ShizukuCommandRunner {
         )
     }
 
-    fun mainBinderAvailable(): Boolean {
-        return try {
-            Shizuku.pingBinder()
-        } catch (_: Exception) {
-            false
-        }
-    }
 
     fun userServiceAvailable(): Boolean {
         val current = synchronized(stateLock) { service }

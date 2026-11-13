@@ -6,9 +6,6 @@ import kotlinx.coroutines.CancellationException
 object RootBackend : DensityBackend {
     override val name: String = "ROOT"
 
-    override suspend fun isAvailable(): Boolean =
-        RootCommandRunner.isAvailable()
-
     override suspend fun awaitReady(timeoutMs: Long): Result<Unit> {
         return try {
             val uid = RootCommandRunner.getProcessUid()

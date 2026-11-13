@@ -168,5 +168,4 @@ object DensityBackendManager {
         }
     }
 
-    fun currentBackend(): DensityBackend? = activeBackend
 }
