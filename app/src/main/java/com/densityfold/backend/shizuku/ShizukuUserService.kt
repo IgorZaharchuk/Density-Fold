@@ -13,11 +13,27 @@ class ShizukuUserService : IShizukuService.Stub() {
         private const val READ_BUFFER_SIZE = 8192
     }
 
-    override fun executeCommand(command: String): String {
+    override fun getCurrentDensity(): String =
+        executeWmDensity(null)
+
+    override fun setDensity(dpi: Int): String {
+        if (dpi !in 1..10000) {
+            return "ERROR:Недопустимое значение DPI: $dpi"
+        }
+        return executeWmDensity(dpi)
+    }
+
+    private fun executeWmDensity(dpi: Int?): String {
         var process: Process? = null
 
         return try {
-            val runningProcess = ProcessBuilder("sh", "-c", command)
+            val command = if (dpi == null) {
+                listOf("wm", "density")
+            } else {
+                listOf("wm", "density", dpi.toString())
+            }
+
+            val runningProcess = ProcessBuilder(command)
                 .redirectErrorStream(true)
                 .start()
             process = runningProcess
@@ -25,7 +41,6 @@ class ShizukuUserService : IShizukuService.Stub() {
             val output = ByteArrayOutputStream()
             val truncated = java.util.concurrent.atomic.AtomicBoolean(false)
 
-            // Поток постоянно вычитывает pipe, но хранит не более 64 KiB.
             val reader = Thread({
                 try {
                     runningProcess.inputStream.use { input ->
@@ -39,16 +54,14 @@ class ShizukuUserService : IShizukuService.Stub() {
                                 if (remaining > 0) {
                                     output.write(buffer, 0, minOf(count, remaining))
                                 }
-                                if (count > remaining) {
-                                    truncated.set(true)
-                                }
+                                if (count > remaining) truncated.set(true)
                             }
                         }
                     }
                 } catch (_: Exception) {
-                    // Процесс мог быть принудительно завершён.
+                    // Поток может закрыться при завершении процесса.
                 }
-            }, "DensityFold-command-output").apply {
+            }, "DensityFold-wm-output").apply {
                 isDaemon = true
                 start()
             }
@@ -59,14 +72,14 @@ class ShizukuUserService : IShizukuService.Stub() {
             )
 
             if (!finished) {
-                process.destroyForcibly()
+                runningProcess.destroyForcibly()
                 runningProcess.waitFor(1, TimeUnit.SECONDS)
                 try {
                     runningProcess.inputStream.close()
                 } catch (_: Exception) {}
                 reader.interrupt()
                 reader.join(500L)
-                return "EXCEPTION:Команда превысила лимит времени (${COMMAND_TIMEOUT_SECONDS} секунд)"
+                return "EXCEPTION:Команда wm превысила лимит времени (${COMMAND_TIMEOUT_SECONDS} секунд)"
             }
 
             reader.join(1_000L)
@@ -74,16 +87,15 @@ class ShizukuUserService : IShizukuService.Stub() {
             val text = synchronized(output) {
                 output.toString(Charsets.UTF_8.name())
             } + if (truncated.get()) {
-                "\n[output truncated: limit 64 KiB]"
+                "\\n[output truncated: limit 64 KiB]"
             } else {
                 ""
             }
 
-            val exitCode = runningProcess.exitValue()
-            if (exitCode == 0) {
+            if (runningProcess.exitValue() == 0) {
                 "SUCCESS:$text"
             } else {
-                "ERROR:$exitCode:$text"
+                "ERROR:${runningProcess.exitValue()}:$text"
             }
         } catch (e: InterruptedException) {
             process?.destroyForcibly()
@@ -92,6 +104,10 @@ class ShizukuUserService : IShizukuService.Stub() {
         } catch (e: Exception) {
             process?.destroyForcibly()
             "EXCEPTION:${e.message ?: e.javaClass.simpleName}"
+        } finally {
+            process?.let {
+                if (it.isAlive) it.destroyForcibly()
+            }
         }
     }
 }

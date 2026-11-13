@@ -20,7 +20,7 @@ object RootBackend : DensityBackend {
     }
 
     override suspend fun getCurrentDensity(): Result<Int> {
-        return RootCommandRunner.execute("wm density").mapCatching { output ->
+        return RootCommandRunner.getCurrentDensity().mapCatching { output ->
             val density = DensityOutputParser.parse(output)
             if (density > 0) {
                 density
@@ -33,13 +33,7 @@ object RootBackend : DensityBackend {
     }
 
     override suspend fun setDensity(dpi: Int): Result<String> {
-        if (dpi <= 0) {
-            return Result.failure(
-                IllegalArgumentException("DPI должен быть положительным: $dpi")
-            )
-        }
-
-        return RootCommandRunner.execute("wm density $dpi")
+        return RootCommandRunner.setDensity(dpi)
             .map { "DPI изменён на $dpi" }
     }
 }

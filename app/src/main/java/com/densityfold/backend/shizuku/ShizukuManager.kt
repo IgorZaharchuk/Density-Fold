@@ -16,15 +16,12 @@ object ShizukuManager {
     }
 
     suspend fun setDensity(dpi: Int): Result<String> {
-        if (dpi <= 0) {
-            return Result.failure(IllegalArgumentException("DPI должен быть положительным: $dpi"))
-        }
-        val command = "wm density $dpi"
-        return ShizukuCommandRunner.execute(command).map { "DPI изменён на $dpi" }
+        return ShizukuCommandRunner.setDensity(dpi)
+            .map { "DPI изменён на $dpi" }
     }
 
     suspend fun getCurrentDensity(): Result<Int> {
-        return ShizukuCommandRunner.execute("wm density").mapCatching { rawOutput ->
+        return ShizukuCommandRunner.getCurrentDensity().mapCatching { rawOutput ->
             val density = DensityOutputParser.parse(rawOutput)
             if (density > 0) {
                 density

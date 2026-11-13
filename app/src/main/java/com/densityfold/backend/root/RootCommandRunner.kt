@@ -15,12 +15,24 @@ object RootCommandRunner {
     private const val READ_BUFFER_SIZE = 8192
 
     suspend fun isAvailable(): Boolean {
-        val result = execute("id")
+        val result = executeFixed("id")
         val output = result.getOrNull() ?: return false
         return Regex("""\buid=0(?:\(|\s)""").containsMatchIn(output)
     }
 
-    suspend fun execute(command: String): Result<String> {
+    suspend fun getCurrentDensity(): Result<String> =
+        executeFixed("wm density")
+
+    suspend fun setDensity(dpi: Int): Result<String> {
+        if (dpi !in 1..10000) {
+            return Result.failure(
+                IllegalArgumentException("Недопустимое значение DPI: $dpi")
+            )
+        }
+        return executeFixed("wm density $dpi")
+    }
+
+    private suspend fun executeFixed(command: String): Result<String> {
         if (command.isBlank()) {
             return Result.failure(
                 IllegalArgumentException("Команда Root не может быть пустой")

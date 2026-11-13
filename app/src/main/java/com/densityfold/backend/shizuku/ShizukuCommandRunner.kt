@@ -328,14 +328,27 @@ object ShizukuCommandRunner {
         .daemon(true)
         .processNameSuffix("shizuku_service")
         .debuggable(false)
-        .version(2)
+        .version(3)
 
-    suspend fun execute(command: String): Result<String> =
+    suspend fun getCurrentDensity(): Result<String> =
         operationMutex.withLock {
-            executeLocked(command)
+            executeLocked { getCurrentDensity() }
         }
 
-    private suspend fun executeLocked(command: String): Result<String> {
+    suspend fun setDensity(dpi: Int): Result<String> {
+        if (dpi !in 1..10000) {
+            return Result.failure(
+                IllegalArgumentException("Недопустимое значение DPI: $dpi")
+            )
+        }
+        return operationMutex.withLock {
+            executeLocked { setDensity(dpi) }
+        }
+    }
+
+    private suspend fun executeLocked(
+        operation: IShizukuService.() -> String
+    ): Result<String> {
         var expectedConnection: ServiceConnection? = null
 
         return try {
@@ -355,7 +368,6 @@ object ShizukuCommandRunner {
             )
 
             expectedConnection = session.connection
-
             val binder = session.service.asBinder()
 
             if (!binder.isBinderAlive || !binder.pingBinder()) {
@@ -365,9 +377,8 @@ object ShizukuCommandRunner {
                 )
             }
 
-            // Синхронный Binder-вызов не должен блокировать главный поток.
             val rawResult = withContext(Dispatchers.IO) {
-                session.service.executeCommand(command)
+                session.service.operation()
             }
 
             if (rawResult == null) {
@@ -378,16 +389,13 @@ object ShizukuCommandRunner {
             } else {
                 parseServiceResult(rawResult)
             }
-
         } catch (e: CancellationException) {
             throw e
-
         } catch (e: RemoteException) {
             expectedConnection?.let { resetConnection(it) }
             Result.failure(
                 Exception("RemoteException: ${e.message ?: "binder died"}", e)
             )
-
         } catch (e: Exception) {
             expectedConnection?.let { resetConnection(it) }
             Result.failure(e)
