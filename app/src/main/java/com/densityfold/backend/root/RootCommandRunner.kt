@@ -21,7 +21,7 @@ object RootCommandRunner {
     }
 
     suspend fun getCurrentDensity(): Result<String> =
-        executeFixed("wm density")
+        executeFixed(helperCommand("get", "0"))
 
     suspend fun setDensity(dpi: Int): Result<String> {
         if (dpi !in 1..10000) {
@@ -29,7 +29,24 @@ object RootCommandRunner {
                 IllegalArgumentException("Недопустимое значение DPI: $dpi")
             )
         }
-        return executeFixed("wm density $dpi")
+        return executeFixed(helperCommand("set", "0", dpi.toString()))
+    }
+
+    /**
+     * Запускает Java helper внутри root app_process.
+     * Изменение плотности выполняется через Binder WindowManager,
+     * а не через shell-команду wm density.
+     */
+    private fun helperCommand(operation: String, vararg args: String): String {
+        require(operation == "get" || operation == "set")
+
+        val arguments = args.joinToString(" ")
+        return "APK_PATH=\"\$(pm path com.densityfold 2>/dev/null | " +
+            "head -n 1 | cut -d: -f2)\"; " +
+            "if [ -z \"\$APK_PATH\" ]; then " +
+            "echo 'APK Density Fold не найден'; exit 20; fi; " +
+            "CLASSPATH=\"\$APK_PATH\" /system/bin/app_process /system/bin " +
+            "com.densityfold.backend.root.RootApiHelper $operation $arguments"
     }
 
     private suspend fun executeFixed(command: String): Result<String> {
@@ -102,7 +119,7 @@ object RootCommandRunner {
                 runningProcess.inputStream.close()
                 reader.join(500)
 
-                return "ERROR:Таймаут выполнения Root-команды " +
+                return "ERROR:Таймаут Root helper " +
                     "(${COMMAND_TIMEOUT_SECONDS}s)"
             }
 
