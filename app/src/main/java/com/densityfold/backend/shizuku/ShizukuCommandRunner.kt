@@ -69,15 +69,13 @@ object ShizukuCommandRunner {
     // Автоматическое восстановление UserService при перезапуске Shizuku.
     private val binderDeadListener = Shizuku.OnBinderDeadListener {
         if (started) {
-            Log.w(TAG, "MAIN BINDER DEAD ${mainBinderState()}")
+            Log.w(TAG, "MAIN BINDER DEAD ")
             detachConnection()
-            Log.i(TAG, "Ссылки UserService очищены после смерти Binder")
         }
     }
 
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
         if (started) {
-            Log.i(TAG, "MAIN BINDER RECEIVED ${mainBinderState()}")
             requestReconnect()
         }
     }
@@ -91,7 +89,6 @@ object ShizukuCommandRunner {
         Shizuku.addBinderDeadListener(binderDeadListener)
         Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
 
-        Log.i(TAG, "Shizuku backend запущен ${mainBinderState()}")
     }
 
     suspend fun stop() {
@@ -116,33 +113,6 @@ object ShizukuCommandRunner {
             }
         }
 
-        Log.i(TAG, "Shizuku backend остановлен")
-    }
-
-    private fun mainBinderState(): String {
-        val ping = try {
-            Shizuku.pingBinder()
-        } catch (e: Exception) {
-            return "pid=${android.os.Process.myPid()} " +
-                "mainBinderPing=error:${e.javaClass.simpleName} " +
-                "permission=not_checked"
-        }
-
-        val permission = if (!ping) {
-            "not_checked"
-        } else {
-            try {
-                if (
-                    Shizuku.checkSelfPermission() ==
-                    android.content.pm.PackageManager.PERMISSION_GRANTED
-                ) "granted" else "denied"
-            } catch (e: Exception) {
-                "error:${e.javaClass.simpleName}"
-            }
-        }
-
-        return "pid=${android.os.Process.myPid()} " +
-            "mainBinderPing=$ping permission=$permission"
     }
 
     fun currentState(): ShizukuRuntimeState {
@@ -205,11 +175,6 @@ object ShizukuCommandRunner {
                             false
                         }
 
-                        Log.i(
-                            TAG,
-                            "RECONNECT attempt=${attempt + 1}/5 " +
-                                "binderPing=$binderAlive ${mainBinderState()}"
-                        )
 
                         if (!binderAlive) {
                             Log.w(TAG, "RECONNECT stopped: main Binder unavailable")
@@ -218,7 +183,6 @@ object ShizukuCommandRunner {
 
                         try {
                             ensureBound()
-                            Log.i(TAG, "RECONNECT UserService success ${mainBinderState()}")
                             return@launch
                         } catch (e: SecurityException) {
                             Log.e(TAG, "RECONNECT permission error: ${e.message}", e)
@@ -234,7 +198,7 @@ object ShizukuCommandRunner {
                             if (attempt < 4) delay(1_000L * (attempt + 1))
                         }
                     }
-                    Log.e(TAG, "RECONNECT exhausted all attempts ${mainBinderState()}")
+                    Log.e(TAG, "RECONNECT exhausted all attempts ")
                 } finally {
                     val currentJob = kotlinx.coroutines.currentCoroutineContext()[Job]
                     synchronized(this@ShizukuCommandRunner) {
@@ -247,7 +211,6 @@ object ShizukuCommandRunner {
 
             reconnectJob = job
             job.start()
-            Log.i(TAG, "RECONNECT requested ${mainBinderState()}")
         }
     }
 
@@ -307,7 +270,7 @@ object ShizukuCommandRunner {
             currentCoroutineContext().ensureActive()
             Result.failure(
                 IllegalStateException(
-                    "Таймаут ожидания Shizuku (${timeoutMs}ms). " +
+                    "Таймаут ожидания Shizuku. " +
                         "Последняя ошибка: ${lastError?.message ?: "Binder недоступен"}",
                     e
                 )
@@ -470,7 +433,6 @@ object ShizukuCommandRunner {
     }
 
     private suspend fun performBind() {
-        Log.i(TAG, "USER SERVICE bind start ${mainBinderState()}")
 
         if (!Shizuku.pingBinder()) {
             throw IllegalStateException(
@@ -482,7 +444,7 @@ object ShizukuCommandRunner {
             Shizuku.checkSelfPermission() !=
             android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
-            Log.e(TAG, "USER SERVICE bind blocked: permission denied ${mainBinderState()}")
+            Log.e(TAG, "USER SERVICE bind blocked: permission denied ")
             throw SecurityException(
                 "Shizuku permission not granted"
             )
@@ -513,11 +475,6 @@ object ShizukuCommandRunner {
                         null
                     }
 
-                    Log.i(
-                        TAG,
-                        "USER SERVICE onServiceConnected " +
-                            "candidate=${candidate != null} ${mainBinderState()}"
-                    )
 
                     var accepted = false
                     var failed = false
@@ -583,7 +540,7 @@ object ShizukuCommandRunner {
                         }
                     }
                     if (wasCurrent) {
-                        Log.w(TAG, "USER SERVICE disconnected ${mainBinderState()}")
+                        Log.w(TAG, "USER SERVICE disconnected ")
                         requestReconnect()
                     }
                 }
@@ -591,7 +548,7 @@ object ShizukuCommandRunner {
                 override fun onBindingDied(
                     name: ComponentName?
                 ) {
-                    Log.e(TAG, "USER SERVICE onBindingDied ${mainBinderState()}")
+                    Log.e(TAG, "USER SERVICE onBindingDied ")
                     var wasCurrent = false
                     var shouldResume = false
 
@@ -622,7 +579,7 @@ object ShizukuCommandRunner {
                 override fun onNullBinding(
                     name: ComponentName?
                 ) {
-                    Log.e(TAG, "USER SERVICE onNullBinding ${mainBinderState()}")
+                    Log.e(TAG, "USER SERVICE onNullBinding ")
                     var wasCurrent = false
                     var shouldResume = false
 
@@ -677,13 +634,12 @@ object ShizukuCommandRunner {
                 }
 
                 if (timedOut) {
-                    Log.e(TAG, "USER SERVICE bind timeout ${mainBinderState()}")
+                    Log.e(TAG, "USER SERVICE bind timeout ")
                     unbindQuietly(conn)
 
                     cont.resumeWithException(
                         Exception(
-                            "Таймаут подключения к Shizuku " +
-                            "(${BIND_TIMEOUT_MS}ms)"
+                            "Таймаут подключения к Shizuku"
                         )
                     )
                 }

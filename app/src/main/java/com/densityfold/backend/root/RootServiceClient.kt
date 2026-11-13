@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
-import android.os.Process
 import java.io.File
 import android.util.Log
 import com.topjohnwu.superuser.ipc.RootService
@@ -26,26 +25,6 @@ internal object RootServiceClient {
     private const val TAG = "DensityFoldRoot"
     private const val CONNECT_TIMEOUT_MS = 20_000L
 
-    private fun logRootEnvironment(stage: String) {
-        val path = System.getenv("PATH")
-        Log.i(TAG, "ROOT ENV [$stage]: pid=${Process.myPid()}, uid=${Process.myUid()}")
-        Log.i(TAG, "ROOT ENV [$stage]: PATH=${path ?: "<null>"}")
-
-        if (path == null) {
-            Log.w(TAG, "ROOT ENV [$stage]: PATH отсутствует")
-            return
-        }
-
-        path.split(':').forEachIndexed { index, entry ->
-            val directory = if (entry.isEmpty()) "." else entry
-            val su = File(directory, "su")
-            Log.i(
-                TAG,
-                "ROOT ENV [$stage]: PATH[$index]=$directory, suExists=${su.exists()}, suCanExecute=${su.canExecute()}"
-            )
-        }
-    }
-
     @Volatile
     private var appContext: Context? = null
 
@@ -57,8 +36,6 @@ internal object RootServiceClient {
 
     fun initialize(context: Context) {
         appContext = context.applicationContext
-        Log.i(TAG, "initialize: application context установлен")
-        logRootEnvironment("initialize")
     }
 
     suspend fun getProcessUid(): Int = withContext(Dispatchers.IO) {
@@ -86,7 +63,6 @@ internal object RootServiceClient {
             }
 
             if (found) {
-                Log.i(TAG, "service: исполняемый su обнаружен в PATH")
                 return
             }
 
@@ -101,9 +77,7 @@ internal object RootServiceClient {
 
     private suspend fun service(): IRootDensityService =
         connectionMutex.withLock {
-            Log.i(TAG, "service: запрос подключения; active=${activeConnection != null}, remote=${remote != null}")
             remote?.let {
-                Log.i(TAG, "service: используем существующий remote Binder")
                 return@withLock it
             }
 
@@ -120,14 +94,12 @@ internal object RootServiceClient {
                     waitingForSu = false
 
                     withContext(Dispatchers.Main.immediate) {
-                        Log.i(TAG, "service: su обнаружен; ожидание Binder")
                         suspendCancellableCoroutine<IRootDensityService> { continuation ->
                             val connection = object : ServiceConnection {
                                 override fun onServiceConnected(
                                     name: ComponentName,
                                     binder: IBinder
                                 ) {
-                                    Log.i(TAG, "onServiceConnected: binderAlive=${binder.isBinderAlive}, connection=${System.identityHashCode(this)}")
                                     if (activeConnection !== this) {
                                         Log.w(TAG, "onServiceConnected: устаревшее соединение")
                                         return
@@ -147,7 +119,6 @@ internal object RootServiceClient {
                                     }
 
                                     remote = service
-                                    Log.i(TAG, "onServiceConnected: remote сохранён, continuationActive=${continuation.isActive}")
                                     if (continuation.isActive) {
                                         continuation.resume(service)
                                     }
@@ -194,16 +165,13 @@ internal object RootServiceClient {
 
                             newConnection = connection
                             activeConnection = connection
-                            Log.i(TAG, "bind: создаём connection=${System.identityHashCode(connection)}")
 
                             val intent = Intent(
                                 context,
                                 RootDensityService::class.java
                             ).addCategory(RootService.CATEGORY_DAEMON_MODE)
 
-                            Log.i(TAG, "bind: вызываем RootService.bind(), component=${intent.component}")
                             RootService.bind(intent, connection)
-                            Log.i(TAG, "bind: RootService.bind() вернулся")
                         }
                     }
                 }
@@ -211,9 +179,9 @@ internal object RootServiceClient {
                 Log.e(TAG, "service: TIMEOUT; connection=${newConnection?.let { System.identityHashCode(it) }}", error)
                 cleanup(newConnection)
                 val message = if (waitingForSu) {
-                    "Таймаут ожидания исполняемого su в PATH (${CONNECT_TIMEOUT_MS} мс); RootService.bind() не вызывался"
+                    "Таймаут ожидания исполняемого su в PATH; RootService.bind() не вызывался"
                 } else {
-                    "Таймаут запуска Root daemon (${CONNECT_TIMEOUT_MS} мс)"
+                    "Таймаут запуска Root daemon"
                 }
                 throw IllegalStateException(message, error)
             } catch (error: CancellationException) {
@@ -226,7 +194,6 @@ internal object RootServiceClient {
                 throw error
             }
 
-            Log.i(TAG, "service: ожидание завершено; remote=${remote != null}")
             remote ?: throw IllegalStateException(
                 "Root daemon подключился без доступного Binder"
             )
@@ -242,9 +209,7 @@ internal object RootServiceClient {
                 remote = null
             }
             try {
-                Log.i(TAG, "cleanup: вызываем RootService.unbind()")
                 RootService.unbind(connection)
-                Log.i(TAG, "cleanup: RootService.unbind() завершён")
             } catch (error: Exception) {
                 Log.e(TAG, "cleanup: unbind завершился ошибкой", error)
                 // Соединение могло не успеть зарегистрироваться.

@@ -47,7 +47,6 @@ object ShizukuMonitor {
             var previousState: ShizukuRuntimeState? = null
             var lastReconnectAt = 0L
 
-            Log.i(TAG, "Монитор Shizuku запущен")
 
             while (isActive) {
                 val state = ShizukuCommandRunner.currentState()
@@ -56,7 +55,6 @@ object ShizukuMonitor {
                 ShizukuRecovery.onRuntimeState(state)
 
                 if (state != previousState) {
-                    Log.i(TAG, "Состояние Shizuku: ${state.label}")
                     previousState = state
                 }
 
@@ -93,6 +91,5 @@ object ShizukuMonitor {
             ShizukuRecovery.reset()
         }
 
-        Log.i(TAG, "Монитор Shizuku остановлен")
     }
 }

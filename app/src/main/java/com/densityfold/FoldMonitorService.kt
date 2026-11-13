@@ -82,7 +82,6 @@ class FoldMonitorService : Service() {
                 0L
             )
             if (requestId == 0L || activeRequestId != requestId) {
-                Log.d(TAG, "Игнорируется устаревший ответ монитора: id=$requestId")
                 return
             }
 
@@ -137,7 +136,6 @@ class FoldMonitorService : Service() {
     override fun onCreate() {
         super.onCreate()
 
-        Log.i(TAG, "MONITOR onCreate")
         displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         displayManager?.registerDisplayListener(displayListener, null)
 
@@ -568,7 +566,6 @@ class FoldMonitorService : Service() {
     }
 
     override fun onDestroy() {
-        Log.d(TAG, "Монитор останавливается")
         displayManager?.unregisterDisplayListener(displayListener)
         retryJob?.cancel()
         actionTimeoutJob?.cancel()

@@ -111,13 +111,11 @@ public abstract class RootService extends ContextWrapper {
             @NonNull Executor executor,
             @NonNull ServiceConnection conn) {
         boolean rootImpossible = Utils.isRootImpossible();
-        Log.i(DIAG_TAG, "RootService.bind: isRootImpossible=" + rootImpossible);
         if (rootImpossible) {
             Log.w(DIAG_TAG, "RootService.bind: выход без callback");
             return;
         }
         Shell.Task task = bindOrTask(intent, executor, conn);
-        Log.i(DIAG_TAG, "RootService.bind: bindOrTask вернул task=" + (task != null));
         if (task != null) {
             Shell.EXECUTOR.execute(asRunnable(task));
         }
@@ -199,15 +197,11 @@ public abstract class RootService extends ContextWrapper {
 
     private static Runnable asRunnable(Shell.Task task) {
         return () -> {
-            Log.i(DIAG_TAG, "asRunnable: получение Shell");
             try {
                 Shell shell = Shell.getShell();
                 boolean root = shell.isRoot();
-                Log.i(DIAG_TAG, "asRunnable: Shell получен, isRoot=" + root);
                 if (root) {
-                    Log.i(DIAG_TAG, "asRunnable: execTask BEGIN");
                     shell.execTask(task);
-                    Log.i(DIAG_TAG, "asRunnable: execTask RETURNED");
                 } else {
                     Log.e(DIAG_TAG, "asRunnable: shell не root, shellDied()");
                     task.shellDied();

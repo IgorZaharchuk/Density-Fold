@@ -2,7 +2,6 @@ package com.densityfold
 
 import android.app.Application
 import android.content.pm.PackageManager
-import android.os.Process
 import android.util.Log
 import com.densityfold.backend.DensityBackendManager
 import com.densityfold.backend.root.RootCommandRunner
@@ -22,7 +21,6 @@ class App : Application() {
         super.onCreate()
         RootCommandRunner.initialize(applicationContext)
         ShizukuRecovery.initialize(applicationContext)
-        Log.i("DensityFold", "APP onCreate pid=${Process.myPid()}")
 
         startupScope.launch {
             try {
@@ -38,7 +36,6 @@ class App : Application() {
                     }
 
                     if (!permissionGranted) {
-                        Log.i("DensityFold", "Backend selection deferred until Shizuku permission flow")
                         return@launch
                     }
                 }
