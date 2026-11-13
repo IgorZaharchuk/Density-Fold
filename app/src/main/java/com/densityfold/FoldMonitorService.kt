@@ -390,7 +390,7 @@ class FoldMonitorService : Service() {
     private fun notificationCenterSubLabel(): String? {
         val current = notificationCurrentDpi ?: return null
         val profile = notificationProfileDpi ?: return null
-        return if (current != profile) "Профиль: $profile" else null
+        return if (current != profile) "Проф. $profile" else null
     }
 
     private suspend fun refreshNotificationDpi(
@@ -440,12 +440,12 @@ class FoldMonitorService : Service() {
                     ACTION_NOTIFICATION_MINUS ->
                         com.densityfold.engine.DensityExecutor.adjustCurrent(
                             applicationContext,
-                            -20
+                            -50
                         )
                     ACTION_NOTIFICATION_PLUS ->
                         com.densityfold.engine.DensityExecutor.adjustCurrent(
                             applicationContext,
-                            20
+                            50
                         )
                     ACTION_NOTIFICATION_PROFILE ->
                         com.densityfold.engine.DensityExecutor.apply(

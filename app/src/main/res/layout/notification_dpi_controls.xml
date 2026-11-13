@@ -15,7 +15,7 @@
         android:layout_margin="2dp"
         android:gravity="center"
         android:background="#30343B"
-        android:text="−20"
+        android:text="−50"
         android:textColor="#FFFFFF"
         android:textSize="14sp"
         android:textStyle="bold" />
@@ -28,6 +28,7 @@
         android:layout_margin="2dp"
         android:gravity="center"
         android:orientation="vertical"
+        android:paddingBottom="6dp"
         android:background="#30343B">
 
         <TextView
@@ -60,7 +61,7 @@
         android:layout_margin="2dp"
         android:gravity="center"
         android:background="#30343B"
-        android:text="+20"
+        android:text="+50"
         android:textColor="#FFFFFF"
         android:textSize="14sp"
         android:textStyle="bold" />

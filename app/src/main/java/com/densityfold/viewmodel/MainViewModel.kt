@@ -112,7 +112,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         it.isBackendReady
                     },
                     isLoading = activeDensityOperations.get() > 0,
-                    errorMessage = "Shizuku отключён. Автоприменение приостановлено."
+                    errorMessage = if (it.activeBackendName == "Shizuku") {
+                        "Shizuku отключён. Автоприменение приостановлено."
+                    } else {
+                        it.errorMessage
+                    }
                 )
             }
         }
