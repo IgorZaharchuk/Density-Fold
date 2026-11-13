@@ -60,7 +60,7 @@ internal object RootServiceClient {
             try {
                 withContext(Dispatchers.Main.immediate) {
                     withTimeout(CONNECT_TIMEOUT_MS) {
-                        suspendCancellableCoroutine { continuation ->
+                        suspendCancellableCoroutine<IRootDensityService> { continuation ->
                             val connection = object : ServiceConnection {
                                 override fun onServiceConnected(
                                     name: ComponentName,
