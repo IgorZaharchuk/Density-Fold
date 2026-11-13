@@ -2,13 +2,22 @@ package com.densityfold.backend.root
 
 import com.densityfold.backend.DensityBackend
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.TimeoutException
 
 object RootBackend : DensityBackend {
     override val name: String = "ROOT"
 
     override suspend fun awaitReady(timeoutMs: Long): Result<Unit> {
         return try {
-            val uid = RootCommandRunner.getProcessUid()
+            val uid = withTimeoutOrNull(timeoutMs) {
+                RootCommandRunner.getProcessUid()
+            } ?: return Result.failure(
+                TimeoutException(
+                    "Проверка Root превысила лимит времени (${timeoutMs} мс)"
+                )
+            )
+
             if (uid != 0) {
                 Result.failure(
                     IllegalStateException(

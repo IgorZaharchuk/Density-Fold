@@ -150,7 +150,6 @@ object DensityBackendManager {
         }
 
         publishActiveBackend(null)
-        if (!shizukuEnabled) stopShizukuSafely()
         val reasons = buildList {
             if (rootEnabled) add("Root: ${rootError?.message ?: "недоступен"}")
             if (shizukuEnabled) add("Shizuku: ${shizukuError?.message ?: "недоступен"}")
