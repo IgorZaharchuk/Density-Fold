@@ -43,10 +43,6 @@ class MonitorNotificationHelper(private val context: Context) {
             R.layout.notification_dpi_controls
         )
 
-        views.setOnClickPendingIntent(
-            R.id.notification_root,
-            createOpenAppPendingIntent()
-        )
 
         if (controlsAvailable) {
             views.setViewVisibility(R.id.notification_minus, android.view.View.VISIBLE)

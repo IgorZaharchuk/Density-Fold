@@ -140,8 +140,8 @@ object DensityExecutor {
         delta: Int,
         timeoutMs: Long = 10_000L
     ): Result<DensityApplyResult> {
-        require(delta == -20 || delta == 20) {
-            "Поддерживается изменение только на 20 DPI"
+        require(delta == -50 || delta == 50) {
+            "Поддерживается изменение только на 50 DPI"
         }
 
         return applyMutex.withLock {
