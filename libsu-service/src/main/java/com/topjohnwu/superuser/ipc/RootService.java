@@ -24,6 +24,7 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.IBinder;
 import android.os.Messenger;
+import android.util.Log;
 
 import androidx.annotation.MainThread;
 import androidx.annotation.NonNull;
@@ -82,6 +83,8 @@ import java.util.concurrent.Executor;
  */
 public abstract class RootService extends ContextWrapper {
 
+    private static final String DIAG_TAG = "DensityFoldRoot";
+
     /**
      * Launch the service in "Daemon Mode".
      * <p>
@@ -107,9 +110,14 @@ public abstract class RootService extends ContextWrapper {
             @NonNull Intent intent,
             @NonNull Executor executor,
             @NonNull ServiceConnection conn) {
-        if (Utils.isRootImpossible())
+        boolean rootImpossible = Utils.isRootImpossible();
+        Log.i(DIAG_TAG, "RootService.bind: isRootImpossible=" + rootImpossible);
+        if (rootImpossible) {
+            Log.w(DIAG_TAG, "RootService.bind: выход без callback");
             return;
+        }
         Shell.Task task = bindOrTask(intent, executor, conn);
+        Log.i(DIAG_TAG, "RootService.bind: bindOrTask вернул task=" + (task != null));
         if (task != null) {
             Shell.EXECUTOR.execute(asRunnable(task));
         }
@@ -191,16 +199,26 @@ public abstract class RootService extends ContextWrapper {
 
     private static Runnable asRunnable(Shell.Task task) {
         return () -> {
+            Log.i(DIAG_TAG, "asRunnable: получение Shell");
             try {
                 Shell shell = Shell.getShell();
-                if (shell.isRoot()) {
+                boolean root = shell.isRoot();
+                Log.i(DIAG_TAG, "asRunnable: Shell получен, isRoot=" + root);
+                if (root) {
+                    Log.i(DIAG_TAG, "asRunnable: execTask BEGIN");
                     shell.execTask(task);
+                    Log.i(DIAG_TAG, "asRunnable: execTask RETURNED");
                 } else {
+                    Log.e(DIAG_TAG, "asRunnable: shell не root, shellDied()");
                     task.shellDied();
                 }
             } catch (IOException e) {
+                Log.e(DIAG_TAG, "asRunnable: IOException", e);
                 task.shellDied();
                 Utils.err(e);
+            } catch (RuntimeException e) {
+                Log.e(DIAG_TAG, "asRunnable: RuntimeException", e);
+                throw e;
             }
         };
     }

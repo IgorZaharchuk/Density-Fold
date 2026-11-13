@@ -147,6 +147,17 @@ public class RootServiceManager implements Handler.Callback {
 
     private RootServiceManager() {}
 
+    private void diag(String event) {
+        Log.i("DensityFoldRoot",
+                event + "; flags=" + flags
+                + " [REMOTE=" + ((flags & REMOTE_EN_ROUTE) != 0)
+                + ", DAEMON=" + ((flags & DAEMON_EN_ROUTE) != 0)
+                + ", RECEIVER=" + ((flags & RECEIVER_REGISTERED) != 0)
+                + "]; pendingTasks=" + pendingTasks.size()
+                + "; remote=" + (mRemote != null)
+                + "; daemon=" + (mDaemon != null));
+    }
+
     @SuppressLint("InlinedApi")
     private Shell.Task startRootProcess(ComponentName name, String action) {
         Context context = Utils.getContext();
@@ -169,6 +180,7 @@ public class RootServiceManager implements Handler.Callback {
         }
 
         return (stdin, stdout, stderr) -> {
+            diag("startRootProcess: SHELL TASK BEGIN; action=" + action);
             if (Utils.hasStartupAgents(context)) {
                 Log.e(TAG, JVMTI_ERROR);
             }
@@ -238,6 +250,7 @@ public class RootServiceManager implements Handler.Callback {
             stdin.write(bytes);
             stdin.write('\n');
             stdin.flush();
+            diag("startRootProcess: shell command записана и отправлена");
             // Since all output for the command is redirected to /dev/null and
             // the command runs in the background, we don't need to wait and
             // can just return.
@@ -283,21 +296,32 @@ public class RootServiceManager implements Handler.Callback {
     }
 
     public Shell.Task createBindTask(Intent intent, Executor executor, ServiceConnection conn) {
+        diag("createBindTask: BEGIN");
         ServiceKey key = bindInternal(intent, executor, conn);
         if (key != null) {
+            Log.i("DensityFoldRoot", "createBindTask: key получен; daemon=" + key.isDaemon());
             PendingBindTask pending = new PendingBindTask(key, intent, executor, conn);
             pendingTasks.add(pending);
             int mask = key.isDaemon() ? DAEMON_EN_ROUTE : REMOTE_EN_ROUTE;
             if ((flags & mask) == 0) {
                 flags |= mask;
                 String action = key.isDaemon() ? CMDLINE_START_DAEMON : CMDLINE_START_SERVICE;
-                return new RootProcessStartTask(startRootProcess(key.getName(), action), key.isDaemon());
+                diag("createBindTask: запускаем RootProcessStartTask; action=" + action);
+                Shell.Task result = new RootProcessStartTask(
+                        startRootProcess(key.getName(), action), key.isDaemon());
+                diag("createBindTask: END; task=true");
+                return result;
             }
+            diag("createBindTask: задача уже EN_ROUTE, новый Shell.Task не создаётся");
+        } else {
+            diag("createBindTask: bindInternal завершил подключение синхронно");
         }
+        diag("createBindTask: END; task=false");
         return null;
     }
 
     private void cancelPendingBinds(boolean daemon) {
+        diag("cancelPendingBinds: BEGIN; daemon=" + daemon);
         UiThreadHandler.runAndWait(() -> {
             int mask = daemon ? DAEMON_EN_ROUTE : REMOTE_EN_ROUTE;
             flags &= ~mask;
@@ -306,6 +330,7 @@ public class RootServiceManager implements Handler.Callback {
                     pendingTasks.remove(i);
                 }
             }
+            diag("cancelPendingBinds: END; daemon=" + daemon);
         });
     }
 
@@ -448,13 +473,19 @@ public class RootServiceManager implements Handler.Callback {
 
         @Override
         public void onReceive(Context context, Intent intent) {
+            diag("ServiceReceiver: onReceive BEGIN");
             Bundle bundle = intent.getBundleExtra(INTENT_BUNDLE_KEY);
-            if (bundle == null)
+            if (bundle == null) {
+                Log.e("DensityFoldRoot", "ServiceReceiver: bundle отсутствует");
                 return;
+            }
             IBinder binder = bundle.getBinder(BUNDLE_BINDER_KEY);
-            if (binder == null)
+            if (binder == null) {
+                Log.e("DensityFoldRoot", "ServiceReceiver: binder отсутствует");
                 return;
+            }
 
+            Log.i("DensityFoldRoot", "ServiceReceiver: binder получен; alive=" + binder.isBinderAlive());
             IRootServiceManager mgr = IRootServiceManager.Stub.asInterface(binder);
             try {
                 mgr.connect(m.getBinder());
@@ -466,12 +497,15 @@ public class RootServiceManager implements Handler.Callback {
                     mRemote = p;
                     flags &= ~REMOTE_EN_ROUTE;
                 }
+                diag("ServiceReceiver: root manager подключён; начинаем pendingTasks");
                 for (int i = pendingTasks.size() - 1; i >= 0; --i) {
                     if (pendingTasks.get(i).run()) {
                         pendingTasks.remove(i);
                     }
                 }
+                diag("ServiceReceiver: pendingTasks обработаны");
             } catch (RemoteException e) {
+                Log.e("DensityFoldRoot", "ServiceReceiver: RemoteException", e);
                 Utils.err(TAG, e);
             }
         }
@@ -519,9 +553,12 @@ public class RootServiceManager implements Handler.Callback {
                 @NonNull OutputStream stdin,
                 @NonNull InputStream stdout,
                 @NonNull InputStream stderr) throws IOException {
+            diag("RootProcessStartTask.run: BEGIN; daemon=" + daemon);
             try {
                 task.run(stdin, stdout, stderr);
+                diag("RootProcessStartTask.run: END; daemon=" + daemon);
             } catch (IOException e) {
+                Log.e("DensityFoldRoot", "RootProcessStartTask.run: IOException", e);
                 cancelPendingBinds(daemon);
                 throw e;
             }
@@ -529,6 +566,7 @@ public class RootServiceManager implements Handler.Callback {
 
         @Override
         public void shellDied() {
+            Log.e("DensityFoldRoot", "RootProcessStartTask.shellDied; daemon=" + daemon);
             cancelPendingBinds(daemon);
             task.shellDied();
         }
