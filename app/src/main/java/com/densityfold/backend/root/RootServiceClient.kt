@@ -11,6 +11,7 @@ import android.util.Log
 import com.topjohnwu.superuser.ipc.RootService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
@@ -74,6 +75,30 @@ internal object RootServiceClient {
             service().setDensity(displayId, dpi)
         }
 
+    private suspend fun awaitSuExecutable() {
+        var warningLogged = false
+
+        while (true) {
+            val path = System.getenv("PATH").orEmpty()
+            val found = path.split(':').any { entry ->
+                val directory = if (entry.isEmpty()) "." else entry
+                File(directory, "su").canExecute()
+            }
+
+            if (found) {
+                Log.i(TAG, "service: исполняемый su обнаружен в PATH")
+                return
+            }
+
+            if (!warningLogged) {
+                Log.w(TAG, "service: su пока отсутствует в PATH; RootService.bind() отложен")
+                warningLogged = true
+            }
+
+            delay(500L)
+        }
+    }
+
     private suspend fun service(): IRootDensityService =
         connectionMutex.withLock {
             Log.i(TAG, "service: запрос подключения; active=${activeConnection != null}, remote=${remote != null}")
@@ -87,10 +112,15 @@ internal object RootServiceClient {
 
             var newConnection: ServiceConnection? = null
 
+            var waitingForSu = false
             try {
-                withContext(Dispatchers.Main.immediate) {
-                    Log.i(TAG, "service: ожидание Binder, timeout=${CONNECT_TIMEOUT_MS}ms")
-                    withTimeout(CONNECT_TIMEOUT_MS) {
+                withTimeout(CONNECT_TIMEOUT_MS) {
+                    waitingForSu = true
+                    awaitSuExecutable()
+                    waitingForSu = false
+
+                    withContext(Dispatchers.Main.immediate) {
+                        Log.i(TAG, "service: su обнаружен; ожидание Binder")
                         suspendCancellableCoroutine<IRootDensityService> { continuation ->
                             val connection = object : ServiceConnection {
                                 override fun onServiceConnected(
@@ -180,10 +210,12 @@ internal object RootServiceClient {
             } catch (error: TimeoutCancellationException) {
                 Log.e(TAG, "service: TIMEOUT; connection=${newConnection?.let { System.identityHashCode(it) }}", error)
                 cleanup(newConnection)
-                throw IllegalStateException(
-                    "Таймаут запуска Root daemon (${CONNECT_TIMEOUT_MS} мс)",
-                    error
-                )
+                val message = if (waitingForSu) {
+                    "Таймаут ожидания исполняемого su в PATH (${CONNECT_TIMEOUT_MS} мс); RootService.bind() не вызывался"
+                } else {
+                    "Таймаут запуска Root daemon (${CONNECT_TIMEOUT_MS} мс)"
+                }
+                throw IllegalStateException(message, error)
             } catch (error: CancellationException) {
                 Log.w(TAG, "service: CANCELLED", error)
                 cleanup(newConnection)
