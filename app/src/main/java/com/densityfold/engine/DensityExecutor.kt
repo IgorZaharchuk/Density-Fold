@@ -58,6 +58,15 @@ object DensityExecutor {
                     preferences.getInnerDpi()
                 }
 
+                val allowedRange = DisplayUtils.allowedDpiRange(shortPx)
+                if (targetDpi !in allowedRange) {
+                    throw IllegalStateException(
+                        "Профиль содержит $targetDpi DPI, допустимо для этого экрана: " +
+                            "${allowedRange.first}–${allowedRange.last} DPI. " +
+                            "Измените профиль перед применением."
+                    )
+                }
+
                 val targetDp = DisplayUtils.dpiToDp(targetDpi, shortPx)
 
                 val settings = preferences.getSettings()
@@ -161,10 +170,15 @@ object DensityExecutor {
                     ensureDisplayUnchanged(context, active)
 
                     val currentDpi = backend.getCurrentDensity().getBackendOrThrow()
-                    val targetDpi = (currentDpi + delta).coerceIn(
-                        DensityPreferences.MIN_DPI,
-                        DensityPreferences.MAX_DPI
-                    )
+                    val allowedRange = DisplayUtils.allowedDpiRange(active.shortPx)
+                    val targetDpi = currentDpi + delta
+
+                    if (targetDpi !in allowedRange) {
+                        throw IllegalStateException(
+                            "Достигнута граница диапазона: " +
+                                "${allowedRange.first}–${allowedRange.last} DPI"
+                        )
+                    }
 
                     val alreadyApplied = targetDpi == currentDpi
 

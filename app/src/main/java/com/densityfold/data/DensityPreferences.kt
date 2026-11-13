@@ -37,8 +37,8 @@ class DensityPreferences(private val context: Context) {
         const val DEFAULT_MONITOR_ENABLED = false
         const val DEFAULT_AUTO_START_ENABLED = false
 
-        const val MIN_DPI = 72
-        const val MAX_DPI = 2000
+        const val MIN_DPI = 200
+        const val MAX_DPI = 1000
     }
 
     suspend fun getSettings(): DensitySettings {

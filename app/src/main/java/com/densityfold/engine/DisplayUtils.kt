@@ -20,6 +20,33 @@ object DisplayUtils {
     const val FALLBACK_INNER_SHORT_PX = 1968
     const val FALLBACK_OUTER_SHORT_PX = 1080
 
+    const val ABSOLUTE_MIN_DPI = 200
+    const val ABSOLUTE_MAX_DPI = 1000
+    const val MIN_LOGICAL_SHORT_DP = 200
+    const val MAX_LOGICAL_SHORT_DP = 1200
+
+    fun allowedDpiRange(shortPx: Int): IntRange {
+        require(shortPx > 0) { "Некорректный размер экрана" }
+
+        val minDpi = maxOf(
+            ABSOLUTE_MIN_DPI,
+            kotlin.math.ceil(
+                shortPx * 160.0 / MAX_LOGICAL_SHORT_DP
+            ).toInt()
+        )
+        val maxDpi = minOf(
+            ABSOLUTE_MAX_DPI,
+            kotlin.math.floor(
+                shortPx * 160.0 / MIN_LOGICAL_SHORT_DP
+            ).toInt()
+        )
+
+        require(minDpi <= maxDpi) {
+            "Для этого разрешения нет допустимого диапазона DPI"
+        }
+        return minDpi..maxDpi
+    }
+
     fun getActiveDisplay(context: Context): DisplayInfo? {
         val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager ?: return null
         val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY) ?: return null
@@ -48,7 +75,10 @@ object DisplayUtils {
 
     fun dpToDpi(dp: Int, shortPx: Int): Int? {
         if (dp <= 0 || shortPx <= 0) return null
-        return (shortPx * 160f / dp).toInt().coerceIn(72, 2000)
+        return (shortPx * 160f / dp).toInt().coerceIn(
+            ABSOLUTE_MIN_DPI,
+            ABSOLUTE_MAX_DPI
+        )
     }
 
     fun dpiToDp(dpi: Int, shortPx: Int): Int {

@@ -424,19 +424,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setOuterDpi(dpi: Int) = setDpi(DensityProfile.OUTER, dpi)
 
     private fun setDpi(profile: DensityProfile, dpi: Int) {
-        val value = dpi.coerceIn(
-            DensityPreferences.MIN_DPI,
-            DensityPreferences.MAX_DPI
-        )
+        val state = _uiState.value
+        val shortPx = when (profile) {
+            DensityProfile.INNER -> state.innerShortPx
+            DensityProfile.OUTER -> state.outerShortPx
+        }
+        val allowedRange = DisplayUtils.allowedDpiRange(shortPx)
+
+        if (dpi !in allowedRange) {
+            _uiState.update {
+                it.copy(
+                    errorMessage = "Допустимый диапазон для этого экрана: " +
+                        "${allowedRange.first}–${allowedRange.last} DPI"
+                )
+            }
+            return
+        }
 
         _uiState.update {
             when (profile) {
-                DensityProfile.INNER -> it.copy(innerDpi = value)
-                DensityProfile.OUTER -> it.copy(outerDpi = value)
+                DensityProfile.INNER -> it.copy(innerDpi = dpi, errorMessage = null)
+                DensityProfile.OUTER -> it.copy(outerDpi = dpi, errorMessage = null)
             }
         }
 
-        scheduleDpiSave(profile, value)
+        scheduleDpiSave(profile, dpi)
     }
 
     private fun scheduleDpiSave(profile: DensityProfile, dpi: Int) {

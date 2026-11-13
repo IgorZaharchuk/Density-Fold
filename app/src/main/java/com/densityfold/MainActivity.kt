@@ -109,14 +109,12 @@ fun MainScreen(
         }
     }
 
-    val innerMin = (com.densityfold.engine.DisplayUtils.dpToDpi(1200, uiState.innerShortPx) ?: 72)
-        .coerceAtLeast(72)
-    val innerMax = (com.densityfold.engine.DisplayUtils.dpToDpi(200, uiState.innerShortPx) ?: 2000)
-        .coerceAtMost(2000)
-    val outerMin = (com.densityfold.engine.DisplayUtils.dpToDpi(1200, uiState.outerShortPx) ?: 72)
-        .coerceAtLeast(72)
-    val outerMax = (com.densityfold.engine.DisplayUtils.dpToDpi(200, uiState.outerShortPx) ?: 2000)
-        .coerceAtMost(2000)
+    val innerRange = com.densityfold.engine.DisplayUtils.allowedDpiRange(uiState.innerShortPx)
+    val outerRange = com.densityfold.engine.DisplayUtils.allowedDpiRange(uiState.outerShortPx)
+    val innerMin = innerRange.first
+    val innerMax = innerRange.last
+    val outerMin = outerRange.first
+    val outerMax = outerRange.last
 
     val uriHandler = LocalUriHandler.current
 
@@ -436,7 +434,9 @@ private fun DensitySettingCard(
     onApply: () -> Unit,
     enabled: Boolean
 ) {
-    var value by remember(dpi) { mutableStateOf(dpi.toString()) }
+    var value by remember(dpi, minDpi, maxDpi) {
+        mutableStateOf(dpi.coerceIn(minDpi, maxDpi).toString())
+    }
     val safeMin = minDpi.coerceAtMost(maxDpi)
     val safeMax = maxDpi.coerceAtLeast(safeMin)
     val current = (value.toIntOrNull() ?: dpi).coerceIn(safeMin, safeMax)

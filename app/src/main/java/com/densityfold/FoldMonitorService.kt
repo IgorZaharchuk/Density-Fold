@@ -46,6 +46,8 @@ class FoldMonitorService : Service() {
 
     private val checkChannel = Channel<Unit>(Channel.CONFLATED)
     private var notificationBaseMessage = "Мониторинг складывания активен"
+    private var notificationActionError: String? = null
+    private var notificationActionErrorJob: Job? = null
     private var notificationControlsAvailable = false
     private var notificationProfileDpi: Int? = null
     private var notificationCurrentDpi: Int? = null
@@ -291,7 +293,9 @@ class FoldMonitorService : Service() {
         val isExternal = active.isExternal
 
         refreshNotificationDpi(active)
-        updateNotification("Мониторинг складывания активен")
+        updateNotification(
+            notificationActionError ?: "Мониторинг складывания активен"
+        )
 
         if (activeRequestId != null) {
             return
@@ -460,6 +464,9 @@ class FoldMonitorService : Service() {
                 }
 
                 result.getOrThrow()
+                notificationActionError = null
+                notificationActionErrorJob?.cancel()
+                notificationActionErrorJob = null
                 refreshNotificationDpi()
                 updateNotification(
                     if (notificationControlsAvailable) {
@@ -471,6 +478,38 @@ class FoldMonitorService : Service() {
                 Log.i(TAG, "Команда DPI из уведомления выполнена: $action")
             } catch (e: Exception) {
                 Log.e(TAG, "Команда DPI из уведомления не выполнена: ${e.message}", e)
+                val error = e.message.orEmpty()
+                if (error.startsWith("Достигнута граница диапазона:")) {
+                    showNotificationBoundaryError(
+                        error.replace(
+                            "Достигнута граница диапазона:",
+                            "Достигнута граница DPI:"
+                        )
+                    )
+                } else {
+                    updateNotification(
+                        if (notificationControlsAvailable) {
+                            "Мониторинг складывания активен"
+                        } else {
+                            "Управление DPI недоступно"
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    private fun showNotificationBoundaryError(message: String) {
+        notificationActionError = message
+        notificationActionErrorJob?.cancel()
+
+        updateNotification(message)
+
+        notificationActionErrorJob = scope.launch {
+            delay(5_000)
+            if (notificationActionError == message) {
+                notificationActionError = null
+                notificationActionErrorJob = null
                 updateNotification(
                     if (notificationControlsAvailable) {
                         "Мониторинг складывания активен"
