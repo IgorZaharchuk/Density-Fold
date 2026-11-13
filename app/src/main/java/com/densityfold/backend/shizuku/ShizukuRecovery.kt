@@ -21,7 +21,11 @@ object ShizukuRecovery {
 
     private const val TAG = "DensityFold-ShizukuRecovery"
     private const val FAST_INTERVAL_MS = 10_000L
-    private const val SLOW_INTERVAL_MS = 60_000L
+    private const val MEDIUM_INTERVAL_MS = 30_000L
+    private const val SLOW_INTERVAL_MS = 120_000L
+
+    private const val FAST_STAGE_MS = 2 * 60_000L
+    private const val MEDIUM_STAGE_MS = 10 * 60_000L
     private const val ACTION_TIMEOUT_MS = 20_000L
 
     @Volatile
@@ -102,9 +106,12 @@ object ShizukuRecovery {
             activeRequestStartedAt = 0L
         }
 
-        val interval = if (
-            now - binderUnavailableSince < SLOW_INTERVAL_MS
-        ) FAST_INTERVAL_MS else SLOW_INTERVAL_MS
+        val unavailableDuration = now - binderUnavailableSince
+        val interval = when {
+            unavailableDuration < FAST_STAGE_MS -> FAST_INTERVAL_MS
+            unavailableDuration < MEDIUM_STAGE_MS -> MEDIUM_INTERVAL_MS
+            else -> SLOW_INTERVAL_MS
+        }
 
         if (
             lastRecoveryAttemptAt != 0L &&
@@ -112,6 +119,11 @@ object ShizukuRecovery {
         ) return
 
         lastRecoveryAttemptAt = now
+        Log.i(
+            TAG,
+            "Recovery cadence: unavailable=${unavailableDuration / 1000}s " +
+                "interval=${interval / 1000}s"
+        )
         launchRecoveryActivity()
     }
 

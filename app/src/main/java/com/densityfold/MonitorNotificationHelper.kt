@@ -35,11 +35,17 @@ class MonitorNotificationHelper(private val context: Context) {
     fun build(
         message: String,
         controlsAvailable: Boolean,
-        centerLabel: String
+        centerLabel: String,
+        centerSubLabel: String? = null
     ): Notification {
         val views = RemoteViews(
             context.packageName,
             R.layout.notification_dpi_controls
+        )
+
+        views.setOnClickPendingIntent(
+            R.id.notification_root,
+            createOpenAppPendingIntent()
         )
 
         if (controlsAvailable) {
@@ -48,7 +54,15 @@ class MonitorNotificationHelper(private val context: Context) {
             views.setViewVisibility(R.id.notification_plus, android.view.View.VISIBLE)
             views.setViewVisibility(R.id.notification_unavailable, android.view.View.GONE)
 
-            views.setTextViewText(R.id.notification_profile, centerLabel)
+            views.setTextViewText(R.id.notification_current_dpi, centerLabel)
+            views.setViewVisibility(
+                R.id.notification_profile_sub,
+                if (centerSubLabel.isNullOrBlank()) android.view.View.GONE
+                else android.view.View.VISIBLE
+            )
+            if (!centerSubLabel.isNullOrBlank()) {
+                views.setTextViewText(R.id.notification_profile_sub, centerSubLabel)
+            }
 
             views.setOnClickPendingIntent(
                 R.id.notification_minus,
@@ -93,14 +107,15 @@ class MonitorNotificationHelper(private val context: Context) {
     fun update(
         message: String,
         controlsAvailable: Boolean,
-        centerLabel: String
+        centerLabel: String,
+        centerSubLabel: String? = null
     ) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE)
             as NotificationManager
 
         manager.notify(
             NOTIFICATION_ID,
-            build(message, controlsAvailable, centerLabel)
+            build(message, controlsAvailable, centerLabel, centerSubLabel)
         )
     }
 

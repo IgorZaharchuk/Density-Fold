@@ -48,6 +48,7 @@ class FoldMonitorService : Service() {
     private var notificationBaseMessage = "Мониторинг складывания активен"
     private var notificationControlsAvailable = false
     private var notificationProfileDpi: Int? = null
+    private var notificationCurrentDpi: Int? = null
 
     private var lastRequestedExternal: Boolean? = null
     private var activeRequestId: Long? = null
@@ -110,7 +111,7 @@ class FoldMonitorService : Service() {
                 )
 
                 scope.launch {
-                    refreshNotificationProfileDpi()
+                    refreshNotificationDpi()
                     updateNotification("Мониторинг складывания активен")
                 }
 
@@ -170,6 +171,11 @@ class FoldMonitorService : Service() {
                 }
             }.collect { available ->
                 notificationControlsAvailable = available
+                if (available) {
+                    refreshNotificationDpi()
+                } else {
+                    notificationCurrentDpi = null
+                }
                 updateNotification(
                     if (available) {
                         notificationBaseMessage
@@ -254,7 +260,7 @@ class FoldMonitorService : Service() {
                     return@launch
                 }
 
-                refreshNotificationProfileDpi()
+                refreshNotificationDpi()
                 updateNotification(
                     if (notificationControlsAvailable) {
                         notificationBaseMessage
@@ -284,7 +290,7 @@ class FoldMonitorService : Service() {
 
         val isExternal = active.isExternal
 
-        refreshNotificationProfileDpi(active)
+        refreshNotificationDpi(active)
         updateNotification("Мониторинг складывания активен")
 
         if (activeRequestId != null) {
@@ -373,19 +379,27 @@ class FoldMonitorService : Service() {
         notifications.update(
             withBackendWarning(displayMessage),
             controlsAvailable = notificationControlsAvailable,
-            centerLabel = notificationCenterLabel()
+            centerLabel = notificationCenterLabel(),
+            centerSubLabel = notificationCenterSubLabel()
         )
     }
 
     private fun notificationCenterLabel(): String =
-        notificationProfileDpi?.let { "$it DPI" } ?: "Профиль"
+        notificationCurrentDpi?.let { "$it DPI" } ?: "DPI"
 
-    private suspend fun refreshNotificationProfileDpi(
+    private fun notificationCenterSubLabel(): String? {
+        val current = notificationCurrentDpi ?: return null
+        val profile = notificationProfileDpi ?: return null
+        return if (current != profile) "Профиль: $profile" else null
+    }
+
+    private suspend fun refreshNotificationDpi(
         activeDisplay: com.densityfold.engine.DisplayInfo? =
             DisplayUtils.getActiveDisplay(applicationContext)
     ) {
         if (activeDisplay == null) {
             notificationProfileDpi = null
+            notificationCurrentDpi = null
             return
         }
 
@@ -394,6 +408,20 @@ class FoldMonitorService : Service() {
             preferences.getOuterDpi()
         } else {
             preferences.getInnerDpi()
+        }
+
+        notificationCurrentDpi = if (notificationControlsAvailable) {
+            val actual = com.densityfold.engine.DensityExecutor
+                .readCurrentDensity(applicationContext)
+                .getOrNull()
+            val latestDisplay = DisplayUtils.getActiveDisplay(applicationContext)
+            if (
+                latestDisplay != null &&
+                latestDisplay.isExternal == activeDisplay.isExternal &&
+                latestDisplay.shortPx == activeDisplay.shortPx
+            ) actual else null
+        } else {
+            null
         }
     }
 
@@ -412,12 +440,12 @@ class FoldMonitorService : Service() {
                     ACTION_NOTIFICATION_MINUS ->
                         com.densityfold.engine.DensityExecutor.adjustCurrent(
                             applicationContext,
-                            -10
+                            -20
                         )
                     ACTION_NOTIFICATION_PLUS ->
                         com.densityfold.engine.DensityExecutor.adjustCurrent(
                             applicationContext,
-                            10
+                            20
                         )
                     ACTION_NOTIFICATION_PROFILE ->
                         com.densityfold.engine.DensityExecutor.apply(
@@ -432,7 +460,7 @@ class FoldMonitorService : Service() {
                 }
 
                 result.getOrThrow()
-                refreshNotificationProfileDpi()
+                refreshNotificationDpi()
                 updateNotification(
                     if (notificationControlsAvailable) {
                         "Мониторинг складывания активен"

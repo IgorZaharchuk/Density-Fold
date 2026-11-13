@@ -105,13 +105,43 @@ object DensityExecutor {
         }
     }
 
+    suspend fun readCurrentDensity(
+        context: Context,
+        timeoutMs: Long = 10_000L
+    ): Result<Int> {
+        return applyMutex.withLock {
+            try {
+                val active = DisplayUtils.getActiveDisplay(context)
+                    ?: throw IllegalStateException("Не удалось определить активный экран")
+
+                val settings = DensityPreferences(context).getSettings()
+                val currentDpi = DensityBackendManager.withBackend(
+                    rootEnabled = settings.rootBackendEnabled,
+                    shizukuEnabled = settings.shizukuBackendEnabled,
+                    timeoutMs = timeoutMs
+                ) { backend ->
+                    backend.awaitReady(timeoutMs).getBackendOrThrow()
+                    ensureDisplayUnchanged(context, active)
+                    val dpi = backend.getCurrentDensity().getBackendOrThrow()
+                    ensureDisplayUnchanged(context, active)
+                    dpi
+                }
+                Result.success(currentDpi)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
     suspend fun adjustCurrent(
         context: Context,
         delta: Int,
         timeoutMs: Long = 10_000L
     ): Result<DensityApplyResult> {
-        require(delta == -10 || delta == 10) {
-            "Поддерживается изменение только на 10 DPI"
+        require(delta == -20 || delta == 20) {
+            "Поддерживается изменение только на 20 DPI"
         }
 
         return applyMutex.withLock {

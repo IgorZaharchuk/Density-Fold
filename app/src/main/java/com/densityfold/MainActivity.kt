@@ -132,9 +132,7 @@ fun MainScreen(
             val backendWarning = when {
                 !uiState.isRootBackendEnabled && !uiState.isShizukuBackendEnabled ->
                     "Не выбран способ выполнения. Включите Root или Shizuku в настройках."
-                !uiState.isBackendReady &&
-                    !uiState.isShizukuPermissionPending &&
-                    !uiState.isLoading ->
+                !uiState.isBackendReady ->
                     "Нет доступного движка. Проверьте Root или запустите Shizuku и выдайте разрешение."
                 else -> null
             }
