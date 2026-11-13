@@ -1,3 +1,5 @@
+<img width="4320" height="1024" alt="14358" src="https://github.com/user-attachments/assets/35324a18-4250-47a0-9d83-9c1dd98d9457" />
+<img width="2120" height="4590" alt="14357" src="https://github.com/user-attachments/assets/07eaf31e-6840-4fe4-944a-6980e5dc2df6" />
 Density Fold
 
 Density Fold — приложение для раздельной настройки плотности интерфейса (DPI) на внутреннем и внешнем экранах складного смартфона. Поддерживает ручное применение настроек и автоматическое переключение DPI при складывании и раскрытии устройства.
