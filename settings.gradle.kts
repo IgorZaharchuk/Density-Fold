@@ -15,4 +15,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "Density Fold"
-include(":app")
+include(":app", ":libsu-service")
