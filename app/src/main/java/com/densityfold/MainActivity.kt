@@ -221,7 +221,7 @@ fun MainScreen(
                                 painter = painterResource(
                                     if (display?.isExternal == true)
                                         R.drawable.ic_screen_phone
-                                    else R.drawable.ic_screen_book
+                                    else R.drawable.ic_action_open
                                 ),
                                 contentDescription = null,
                                 modifier = Modifier.size(25.dp)
@@ -456,7 +456,7 @@ private fun DensitySettingCard(
                     painter = painterResource(
                         if (title == "Внешний экран")
                             R.drawable.ic_screen_phone
-                        else R.drawable.ic_screen_book
+                        else R.drawable.ic_action_open
                     ),
                     contentDescription = null,
                     modifier = Modifier.size(23.dp)
