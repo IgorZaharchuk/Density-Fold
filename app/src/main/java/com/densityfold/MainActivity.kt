@@ -73,8 +73,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (::mainViewModel.isInitialized) mainViewModel.refreshDisplays()
-        if (::mainViewModel.isInitialized) mainViewModel.onOverlayPermissionSettingsReturned()
+        if (::mainViewModel.isInitialized) {
+            mainViewModel.refreshDisplays()
+            mainViewModel.onOverlayPermissionSettingsReturned()
+        }
     }
 
 
