@@ -54,12 +54,17 @@ class MonitorNotificationHelper(private val context: Context) {
         }
         views.setViewVisibility(
             R.id.notification_status,
-            if (statusMessage.isNullOrBlank()) android.view.View.GONE
-            else android.view.View.VISIBLE
+            if (controlsAvailable && !statusMessage.isNullOrBlank())
+                android.view.View.VISIBLE
+            else android.view.View.GONE
         )
         if (!statusMessage.isNullOrBlank()) {
             views.setTextViewText(R.id.notification_status, statusMessage)
         }
+
+        val unavailableReason = statusMessage
+            ?.substringAfter(" · ", "")
+            ?.takeIf { it.isNotBlank() }
 
         if (controlsAvailable) {
             views.setViewVisibility(R.id.notification_minus, android.view.View.VISIBLE)
@@ -103,6 +108,17 @@ class MonitorNotificationHelper(private val context: Context) {
             views.setViewVisibility(R.id.notification_profile, android.view.View.GONE)
             views.setViewVisibility(R.id.notification_plus, android.view.View.GONE)
             views.setViewVisibility(R.id.notification_unavailable, android.view.View.VISIBLE)
+            views.setViewVisibility(
+                R.id.notification_unavailable_reason,
+                if (unavailableReason == null) android.view.View.GONE
+                else android.view.View.VISIBLE
+            )
+            if (unavailableReason != null) {
+                views.setTextViewText(
+                    R.id.notification_unavailable_reason,
+                    unavailableReason
+                )
+            }
         }
 
         return NotificationCompat.Builder(context, CHANNEL_ID)

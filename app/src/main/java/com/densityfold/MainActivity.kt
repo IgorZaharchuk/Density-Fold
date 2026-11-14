@@ -349,11 +349,11 @@ fun MainScreen(
                                 description = when {
                                     uiState.activeBackendName == "Root" -> "Активен"
                                     uiState.isRootAvailable == false ->
-                                        "Недоступен — Root-доступ не предоставлен"
+                                        "Нет Root-доступа"
                                     uiState.isRootAvailable == true -> "Доступен"
                                     uiState.isRootBackendEnabled ->
-                                        "Проверка root-доступа…"
-                                    else -> "Приоритетный способ, если доступен"
+                                        "Проверка Root…"
+                                    else -> "Приоритетный способ"
                                 },
                                 checked = uiState.isRootBackendEnabled,
                                 onCheckedChange = viewModel::setRootBackendEnabled
@@ -364,20 +364,20 @@ fun MainScreen(
                                 description = when {
                                     uiState.activeBackendName == "Shizuku" -> "Активен"
                                     uiState.isShizukuPermissionPending ->
-                                        "Ожидание запуска Shizuku и запроса разрешения"
+                                        "Ожидание Shizuku"
                                     uiState.activeBackendName == "Root" ->
-                                        "Резервный способ — сейчас активен Root"
+                                        "Резерв — активен Root"
                                     uiState.isShizukuBackendAvailable == false ->
-                                        "Недоступен — Shizuku не запущен или разрешение не выдано"
+                                        "Нет Shizuku или разрешения"
                                     uiState.isShizukuBackendAvailable == true -> "Доступен"
-                                    else -> "Резервный способ, если Root недоступен"
+                                    else -> "Резерв при недоступном Root"
                                 },
                                 checked = uiState.isShizukuBackendEnabled,
                                 onCheckedChange = viewModel::setShizukuBackendEnabled
                             )
                             Divider()
                             SettingSwitch(
-                                title = "Автоприменение при складывании",
+                                title = "Автоприменение",
                                 description = "Менять DPI при смене экрана",
                                 checked = uiState.isFoldMonitorEnabled,
                                 onCheckedChange = viewModel::setFoldMonitorEnabled
