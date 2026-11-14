@@ -47,6 +47,7 @@ class DensityActionService : Service() {
         }
 
         val fromMonitor = intent.getBooleanExtra(EXTRA_MONITOR_REQUEST, false)
+        val isRecovery = intent.getBooleanExtra(EXTRA_RECOVERY_REQUEST, false)
         val monitorRequestId = if (fromMonitor) {
             intent.getLongExtra(EXTRA_MONITOR_REQUEST_ID, 0L)
         } else {
@@ -60,9 +61,9 @@ class DensityActionService : Service() {
             var cancelled = false
 
             try {
-                if (fromMonitor) {
-                    // Activity уже запущена для восстановления Shizuku Binder.
-                    // Не применяем профиль DPI в рамках recovery.
+                if (isRecovery) {
+                    // Activity запущена только для восстановления Shizuku Binder.
+                    // DPI не меняем.
                     succeeded = true
                     Log.i(TAG, "Shizuku recovery trigger delivered; DPI unchanged")
                 } else {
@@ -80,13 +81,15 @@ class DensityActionService : Service() {
                             "target=${value.targetDpi} actual=${value.actualDpi}"
                     )
 
-                    showNotification(
-                        applicationContext,
-                        screenName,
-                        value.targetDpi,
-                        true,
-                        null
-                    )
+                    if (!fromMonitor) {
+                        showNotification(
+                            applicationContext,
+                            screenName,
+                            value.targetDpi,
+                            true,
+                            null
+                        )
+                    }
                 }
             } catch (e: CancellationException) {
                 cancelled = true
@@ -218,6 +221,7 @@ class DensityActionService : Service() {
         const val ACTION_COMPLETED = "com.densityfold.ACTION_COMPLETED"
 
         const val EXTRA_MONITOR_REQUEST = "com.densityfold.EXTRA_MONITOR_REQUEST"
+        const val EXTRA_RECOVERY_REQUEST = "com.densityfold.EXTRA_RECOVERY_REQUEST"
         const val EXTRA_MONITOR_REQUEST_ID = "com.densityfold.EXTRA_MONITOR_REQUEST_ID"
         const val EXTRA_SUCCESS = "com.densityfold.EXTRA_SUCCESS"
         const val EXTRA_IS_EXTERNAL = "com.densityfold.EXTRA_IS_EXTERNAL"

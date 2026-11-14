@@ -157,6 +157,7 @@ object ShizukuRecovery {
                         Intent.FLAG_ACTIVITY_NO_ANIMATION
                 )
                 putExtra(DensityActionService.EXTRA_MONITOR_REQUEST, true)
+                putExtra(DensityActionService.EXTRA_RECOVERY_REQUEST, true)
                 putExtra(DensityActionService.EXTRA_MONITOR_REQUEST_ID, requestId)
             }
 
