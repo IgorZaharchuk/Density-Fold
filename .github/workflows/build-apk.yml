@@ -27,6 +27,9 @@ jobs:
         yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
         $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
       
+    - name: Run Android Lint
+      run: ./gradlew :app:lintDebug --stacktrace
+
     - name: Build with Gradle
       run: |
         VERSION_NAME=$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)
