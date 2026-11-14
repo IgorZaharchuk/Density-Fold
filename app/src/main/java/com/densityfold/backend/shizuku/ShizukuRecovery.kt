@@ -4,10 +4,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.densityfold.ClosedActionActivity
 import com.densityfold.DensityActionService
 import com.densityfold.OpenActionActivity
@@ -68,16 +68,12 @@ object ShizukuRecovery {
         appContext = app
 
         val filter = IntentFilter(DensityActionService.ACTION_COMPLETED)
-        if (Build.VERSION.SDK_INT >= 33) {
-            app.registerReceiver(
-                completionReceiver,
-                filter,
-                Context.RECEIVER_NOT_EXPORTED
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            app.registerReceiver(completionReceiver, filter)
-        }
+        ContextCompat.registerReceiver(
+            app,
+            completionReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         Log.i(TAG, "Shizuku recovery инициализирован")
     }

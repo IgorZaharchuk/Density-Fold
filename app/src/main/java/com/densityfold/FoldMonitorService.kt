@@ -13,6 +13,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import android.view.Display
+import androidx.core.content.ContextCompat
 import com.densityfold.engine.DisplayUtils
 import com.densityfold.backend.DensityBackendManager
 import com.densityfold.backend.shizuku.ShizukuMonitor
@@ -140,12 +141,12 @@ class FoldMonitorService : Service() {
         displayManager?.registerDisplayListener(displayListener, null)
 
         val filter = IntentFilter(DensityActionService.ACTION_COMPLETED)
-        if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(actionCompletedReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("DEPRECATION")
-            registerReceiver(actionCompletedReceiver, filter)
-        }
+        ContextCompat.registerReceiver(
+            this,
+            actionCompletedReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         startForegroundSafely()
 

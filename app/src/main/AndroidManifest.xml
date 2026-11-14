@@ -78,10 +78,12 @@
                 android:value="Мониторинг состояния складывания устройства и автоматическое применение настроек DPI при смене экрана" />
         </service>
             
+        <!-- Shizuku запускает этот AIDL Binder Stub как UserService, не как Android Service. -->
         <service
             android:name=".backend.shizuku.ShizukuUserService"
             android:enabled="true"
-            android:exported="false" />
+            android:exported="false"
+            tools:ignore="Instantiatable" />
             
         <meta-data
             android:name="moe.shizuku.client.V3_SUPPORT"
