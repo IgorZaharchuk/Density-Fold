@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 
@@ -18,8 +17,6 @@ class MonitorNotificationHelper(private val context: Context) {
     }
 
     fun ensureChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE)
             as NotificationManager
 
@@ -48,6 +45,26 @@ class MonitorNotificationHelper(private val context: Context) {
             createOpenAppPendingIntent()
         )
 
+        val normalMessage = "Мониторинг складывания активен"
+        val statusMessage = when {
+            message == normalMessage -> null
+            message.startsWith("$normalMessage · ") ->
+                message.removePrefix("$normalMessage · ")
+            else -> message
+        }
+        views.setViewVisibility(
+            R.id.notification_status,
+            if (controlsAvailable && !statusMessage.isNullOrBlank())
+                android.view.View.VISIBLE
+            else android.view.View.GONE
+        )
+        if (!statusMessage.isNullOrBlank()) {
+            views.setTextViewText(R.id.notification_status, statusMessage)
+        }
+
+        val unavailableReason = statusMessage
+            ?.substringAfter(" · ", "")
+            ?.takeIf { it.isNotBlank() }
 
         if (controlsAvailable) {
             views.setViewVisibility(R.id.notification_minus, android.view.View.VISIBLE)
@@ -91,6 +108,17 @@ class MonitorNotificationHelper(private val context: Context) {
             views.setViewVisibility(R.id.notification_profile, android.view.View.GONE)
             views.setViewVisibility(R.id.notification_plus, android.view.View.GONE)
             views.setViewVisibility(R.id.notification_unavailable, android.view.View.VISIBLE)
+            views.setViewVisibility(
+                R.id.notification_unavailable_reason,
+                if (unavailableReason == null) android.view.View.GONE
+                else android.view.View.VISIBLE
+            )
+            if (unavailableReason != null) {
+                views.setTextViewText(
+                    R.id.notification_unavailable_reason,
+                    unavailableReason
+                )
+            }
         }
 
         return NotificationCompat.Builder(context, CHANNEL_ID)

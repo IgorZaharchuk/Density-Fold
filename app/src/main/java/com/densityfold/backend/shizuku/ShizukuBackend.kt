@@ -5,9 +5,6 @@ import com.densityfold.backend.DensityBackend
 object ShizukuBackend : DensityBackend {
     override val name: String = "SHIZUKU"
 
-    override suspend fun isAvailable(): Boolean =
-        ShizukuManager.isShizukuAvailable()
-
     override suspend fun awaitReady(timeoutMs: Long): Result<Unit> =
         ShizukuManager.awaitShizukuReady(timeoutMs)
 

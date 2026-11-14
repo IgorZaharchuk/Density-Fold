@@ -44,21 +44,14 @@ object ShizukuMonitor {
         _runtimeState.value = null
 
         monitorJob = scope.launch {
-            var previousState: ShizukuRuntimeState? = null
             var lastReconnectAt = 0L
 
-            Log.i(TAG, "Монитор Shizuku запущен")
 
             while (isActive) {
                 val state = ShizukuCommandRunner.currentState()
 
                 _runtimeState.value = state
                 ShizukuRecovery.onRuntimeState(state)
-
-                if (state != previousState) {
-                    Log.i(TAG, "Состояние Shizuku: ${state.label}")
-                    previousState = state
-                }
 
                 if (
                     state.mainBinder &&
@@ -93,6 +86,5 @@ object ShizukuMonitor {
             ShizukuRecovery.reset()
         }
 
-        Log.i(TAG, "Монитор Shizuku остановлен")
     }
 }

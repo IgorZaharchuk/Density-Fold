@@ -1,39 +1,44 @@
 package com.densityfold.backend.root
 
 import com.densityfold.backend.DensityBackend
-import com.densityfold.engine.DensityOutputParser
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.TimeoutException
 
 object RootBackend : DensityBackend {
     override val name: String = "ROOT"
 
-    override suspend fun isAvailable(): Boolean =
-        RootCommandRunner.isAvailable()
-
     override suspend fun awaitReady(timeoutMs: Long): Result<Unit> {
-        return if (isAvailable()) {
-            Result.success(Unit)
-        } else {
-            Result.failure(
-                IllegalStateException("Root недоступен или не предоставлен приложению")
+        return try {
+            val uid = withTimeoutOrNull(timeoutMs) {
+                RootCommandRunner.getProcessUid()
+            } ?: return Result.failure(
+                TimeoutException(
+                    "Проверка Root превысила лимит времени (${timeoutMs} мс)"
+                )
             )
+
+            if (uid != 0) {
+                Result.failure(
+                    IllegalStateException(
+                        "Root недоступен: процесс получил UID $uid вместо UID 0"
+                    )
+                )
+            } else {
+                Result.success(Unit)
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Result.failure(error)
         }
     }
 
-    override suspend fun getCurrentDensity(): Result<Int> {
-        return RootCommandRunner.getCurrentDensity().mapCatching { output ->
-            val density = DensityOutputParser.parse(output)
-            if (density > 0) {
-                density
-            } else {
-                throw IllegalStateException(
-                    "Не удалось определить плотность через Root. Вывод: $output"
-                )
-            }
-        }
-    }
+    override suspend fun getCurrentDensity(): Result<Int> =
+        RootCommandRunner.getCurrentDensity()
 
     override suspend fun setDensity(dpi: Int): Result<String> {
         return RootCommandRunner.setDensity(dpi)
-            .map { "DPI изменён на $dpi" }
+            .map { actual -> "DPI изменён на $actual" }
     }
 }

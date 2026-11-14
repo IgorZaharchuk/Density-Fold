@@ -7,4 +7,8 @@
     <string name="shortcut_closed_short">Внешний</string>
     <string name="shortcut_closed_long">Внешний экран</string>
     <string name="shortcut_closed_disabled">Недоступно</string>
+    <string name="notification_minus_50" translatable="false">−50</string>
+    <string name="notification_dpi" translatable="false">DPI</string>
+    <string name="notification_plus_50" translatable="false">+50</string>
+    <string name="notification_unavailable">Управление DPI недоступно</string>
 </resources>

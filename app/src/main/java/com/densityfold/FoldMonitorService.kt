@@ -13,6 +13,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import android.view.Display
+import androidx.core.content.ContextCompat
 import com.densityfold.engine.DisplayUtils
 import com.densityfold.backend.DensityBackendManager
 import com.densityfold.backend.shizuku.ShizukuMonitor
@@ -82,7 +83,6 @@ class FoldMonitorService : Service() {
                 0L
             )
             if (requestId == 0L || activeRequestId != requestId) {
-                Log.d(TAG, "Игнорируется устаревший ответ монитора: id=$requestId")
                 return
             }
 
@@ -137,17 +137,16 @@ class FoldMonitorService : Service() {
     override fun onCreate() {
         super.onCreate()
 
-        Log.i(TAG, "MONITOR onCreate")
         displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         displayManager?.registerDisplayListener(displayListener, null)
 
         val filter = IntentFilter(DensityActionService.ACTION_COMPLETED)
-        if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(actionCompletedReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("DEPRECATION")
-            registerReceiver(actionCompletedReceiver, filter)
-        }
+        ContextCompat.registerReceiver(
+            this,
+            actionCompletedReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         startForegroundSafely()
 
@@ -178,7 +177,7 @@ class FoldMonitorService : Service() {
                 } else {
                     notificationCurrentDpi = null
                 }
-                updateNotification(
+                renderNotification(
                     if (available) {
                         notificationBaseMessage
                     } else {
@@ -263,7 +262,7 @@ class FoldMonitorService : Service() {
                 }
 
                 refreshNotificationDpi()
-                updateNotification(
+                renderNotification(
                     if (notificationControlsAvailable) {
                         notificationBaseMessage
                     } else {
@@ -375,6 +374,10 @@ class FoldMonitorService : Service() {
 
     private fun updateNotification(message: String) {
         notificationBaseMessage = message
+        renderNotification(message)
+    }
+
+    private fun renderNotification(message: String) {
         val displayMessage = if (notificationControlsAvailable) {
             message
         } else {
@@ -568,7 +571,6 @@ class FoldMonitorService : Service() {
     }
 
     override fun onDestroy() {
-        Log.d(TAG, "Монитор останавливается")
         displayManager?.unregisterDisplayListener(displayListener)
         retryJob?.cancel()
         actionTimeoutJob?.cancel()

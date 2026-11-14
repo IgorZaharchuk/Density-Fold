@@ -69,10 +69,8 @@ object DensityExecutor {
 
                 val targetDp = DisplayUtils.dpiToDp(targetDpi, shortPx)
 
-                val settings = preferences.getSettings()
                 val result = DensityBackendManager.withBackend(
-                    rootEnabled = settings.rootBackendEnabled,
-                    shizukuEnabled = settings.shizukuBackendEnabled,
+                    settingsProvider = { DensityPreferences(context).getSettings() },
                     timeoutMs = timeoutMs
                 ) { backend ->
                     backend.awaitReady(timeoutMs).getBackendOrThrow()
@@ -123,10 +121,8 @@ object DensityExecutor {
                 val active = DisplayUtils.getActiveDisplay(context)
                     ?: throw IllegalStateException("Не удалось определить активный экран")
 
-                val settings = DensityPreferences(context).getSettings()
                 val currentDpi = DensityBackendManager.withBackend(
-                    rootEnabled = settings.rootBackendEnabled,
-                    shizukuEnabled = settings.shizukuBackendEnabled,
+                    settingsProvider = { DensityPreferences(context).getSettings() },
                     timeoutMs = timeoutMs
                 ) { backend ->
                     backend.awaitReady(timeoutMs).getBackendOrThrow()
@@ -158,12 +154,8 @@ object DensityExecutor {
                 val active = DisplayUtils.getActiveDisplay(context)
                     ?: throw IllegalStateException("Не удалось определить активный экран")
 
-                val preferences = DensityPreferences(context)
-                val settings = preferences.getSettings()
-
                 val result = DensityBackendManager.withBackend(
-                    rootEnabled = settings.rootBackendEnabled,
-                    shizukuEnabled = settings.shizukuBackendEnabled,
+                    settingsProvider = { DensityPreferences(context).getSettings() },
                     timeoutMs = timeoutMs
                 ) { backend ->
                     backend.awaitReady(timeoutMs).getBackendOrThrow()

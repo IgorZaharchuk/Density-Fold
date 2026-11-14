@@ -14,7 +14,6 @@ import com.densityfold.engine.DisplayInfo
 import com.densityfold.engine.DisplayUtils
 import com.densityfold.engine.DensityExecutor
 import com.densityfold.engine.DensityProfile
-import com.densityfold.backend.shizuku.ShizukuManager
 import com.densityfold.backend.shizuku.ShizukuMonitor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,7 +37,6 @@ data class UiState(
     val isAutoStartEnabled: Boolean = false,
     val isRootBackendEnabled: Boolean = false,
     val isShizukuBackendEnabled: Boolean = false,
-    val isShizukuAvailable: Boolean = false,
     val isRootAvailable: Boolean? = null,
     val isShizukuBackendAvailable: Boolean? = null,
     val isShizukuPermissionPending: Boolean = false,
@@ -68,12 +66,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var pendingShizukuPermissionRequest = false
 
     @Volatile
+    private var shizukuPermissionDenied = false
+
+    @Volatile
     private var pendingOverlayPermissionRequest = false
 
     private val shizukuPermissionResultListener =
         Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
             if (requestCode == SHIZUKU_PERMISSION_REQUEST_CODE) {
                 pendingShizukuPermissionRequest = false
+                shizukuPermissionDenied =
+                    grantResult != PackageManager.PERMISSION_GRANTED
 
                 _uiState.update {
                     it.copy(
@@ -105,7 +108,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Shizuku.OnBinderDeadListener {
             _uiState.update {
                 it.copy(
-                    isShizukuAvailable = false,
                     isBackendReady = if (it.activeBackendName == "Shizuku") {
                         false
                     } else {
@@ -169,7 +171,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 _uiState.update {
                     it.copy(
-                        isShizukuAvailable = ready,
                         isBackendReady = if (it.activeBackendName == "Shizuku") {
                             ready
                         } else {
@@ -214,25 +215,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         updateFoldMonitorService(monitorEnabled)
 
-        if (settings.shizukuBackendEnabled) {
-            _uiState.update { it.copy(isShizukuPermissionPending = true) }
-            pendingShizukuPermissionRequest = true
-            try {
-                ShizukuManager.start()
-                requestShizukuPermissionIfReady()
-            } catch (e: Exception) {
-                pendingShizukuPermissionRequest = false
-                _uiState.update {
-                    it.copy(
-                        isShizukuPermissionPending = false,
-                        errorMessage = "Не удалось запустить Shizuku: ${e.message}"
-                    )
-                }
-                refreshBackendSelection()
-            }
-        } else {
-            refreshBackendSelection()
-        }
+        refreshBackendSelection()
     }
 
     private fun updateFoldMonitorService(enabled: Boolean) {
@@ -340,31 +323,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update {
                 it.copy(
                     isShizukuBackendEnabled = enabled,
-                    isShizukuPermissionPending = enabled,
+                    isShizukuPermissionPending = false,
                     errorMessage = null
                 )
             }
 
             if (enabled) {
-                pendingShizukuPermissionRequest = true
-                try {
-                    ShizukuManager.start()
-                    requestShizukuPermissionIfReady()
-                } catch (e: Exception) {
-                    pendingShizukuPermissionRequest = false
-                    _uiState.update {
-                        it.copy(
-                            isShizukuPermissionPending = false,
-                            errorMessage = "Не удалось запустить Shizuku: ${e.message}"
-                        )
-                    }
-                    refreshBackendSelection()
-                }
+                shizukuPermissionDenied = false
             } else {
                 pendingShizukuPermissionRequest = false
-                _uiState.update { it.copy(isShizukuPermissionPending = false) }
-                refreshBackendSelection()
+                shizukuPermissionDenied = false
             }
+            refreshBackendSelection()
         }
     }
 
@@ -372,11 +342,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (_uiState.value.isShizukuPermissionPending) return
 
         try {
-            val settings = preferences.getSettings()
-
             DensityBackendManager.selectBackend(
-                rootEnabled = settings.rootBackendEnabled,
-                shizukuEnabled = settings.shizukuBackendEnabled
+                settingsProvider = { preferences.getSettings() }
             ).onSuccess {
                 _uiState.update { it.copy(errorMessage = null) }
             }.onFailure { error ->
@@ -397,6 +364,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
         }
+
+        requestShizukuPermissionIfNeeded()
+    }
+
+    private suspend fun requestShizukuPermissionIfNeeded() {
+        if (_uiState.value.isShizukuPermissionPending) return
+
+        val settings = preferences.getSettings()
+        if (!settings.shizukuBackendEnabled || shizukuPermissionDenied) return
+
+        val availability = DensityBackendManager.availability.value
+        if (settings.rootBackendEnabled && availability.rootAvailable != false) return
+
+        val permissionGranted = try {
+            Shizuku.pingBinder() &&
+                Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+        } catch (_: Exception) {
+            false
+        }
+        if (permissionGranted) return
+
+        pendingShizukuPermissionRequest = true
+        _uiState.update { it.copy(isShizukuPermissionPending = true) }
+        requestShizukuPermissionIfReady()
     }
 
     private suspend fun refreshDisplaysInternal() {
@@ -547,24 +538,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         super.onCleared()
     }
 
-    fun requestShizukuPermission() {
-        _uiState.update { it.copy(isShizukuPermissionPending = true) }
-        pendingShizukuPermissionRequest = true
-        try {
-            ShizukuManager.start()
-            requestShizukuPermissionIfReady()
-        } catch (e: Exception) {
-            pendingShizukuPermissionRequest = false
-            Log.w("DensityFold-UI", "Не удалось запустить Shizuku", e)
-        }
-    }
-
     private fun requestShizukuPermissionIfReady() {
         if (!pendingShizukuPermissionRequest) return
         if (!Shizuku.pingBinder()) return
 
         try {
             if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                shizukuPermissionDenied = false
                 pendingShizukuPermissionRequest = false
                 _uiState.update { it.copy(isShizukuPermissionPending = false) }
                 viewModelScope.launch {
@@ -576,6 +556,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         } catch (e: Exception) {
             pendingShizukuPermissionRequest = false
+            shizukuPermissionDenied = true
             Log.w("DensityFold-UI", "Не удалось запросить разрешение Shizuku", e)
             _uiState.update {
                 it.copy(

@@ -5,7 +5,6 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -74,14 +73,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (::mainViewModel.isInitialized) mainViewModel.refreshDisplays()
-        if (::mainViewModel.isInitialized) mainViewModel.onOverlayPermissionSettingsReturned()
+        if (::mainViewModel.isInitialized) {
+            mainViewModel.refreshDisplays()
+            mainViewModel.onOverlayPermissionSettingsReturned()
+        }
     }
 
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        if (::mainViewModel.isInitialized) mainViewModel.refreshDisplays()
-    }
 
 }
 
@@ -144,9 +141,10 @@ fun MainScreen(
                 ) {
                     Text(
                         message,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                         color = MaterialTheme.colorScheme.onErrorContainer,
-                        fontSize = 13.sp
+                        fontSize = 13.sp,
+                        lineHeight = 17.sp
                     )
                 }
             }
@@ -160,9 +158,10 @@ fun MainScreen(
                 ) {
                     Text(
                         it,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                         color = MaterialTheme.colorScheme.onErrorContainer,
-                        fontSize = 13.sp
+                        fontSize = 13.sp,
+                        lineHeight = 17.sp
                     )
                 }
             }
@@ -176,9 +175,10 @@ fun MainScreen(
                 ) {
                     Text(
                         it,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        fontSize = 13.sp
+                        fontSize = 13.sp,
+                        lineHeight = 17.sp
                     )
                 }
             }
@@ -221,7 +221,7 @@ fun MainScreen(
                                 painter = painterResource(
                                     if (display?.isExternal == true)
                                         R.drawable.ic_screen_phone
-                                    else R.drawable.ic_screen_book
+                                    else R.drawable.ic_action_open
                                 ),
                                 contentDescription = null,
                                 modifier = Modifier.size(25.dp)
@@ -349,9 +349,11 @@ fun MainScreen(
                                 description = when {
                                     uiState.activeBackendName == "Root" -> "Активен"
                                     uiState.isRootAvailable == false ->
-                                        "Недоступен — Root-доступ не предоставлен"
+                                        "Нет Root-доступа"
                                     uiState.isRootAvailable == true -> "Доступен"
-                                    else -> "Приоритетный способ, если доступен"
+                                    uiState.isRootBackendEnabled ->
+                                        "Проверка Root…"
+                                    else -> "Приоритетный способ"
                                 },
                                 checked = uiState.isRootBackendEnabled,
                                 onCheckedChange = viewModel::setRootBackendEnabled
@@ -362,20 +364,20 @@ fun MainScreen(
                                 description = when {
                                     uiState.activeBackendName == "Shizuku" -> "Активен"
                                     uiState.isShizukuPermissionPending ->
-                                        "Ожидание запуска Shizuku и запроса разрешения"
+                                        "Ожидание Shizuku"
                                     uiState.activeBackendName == "Root" ->
-                                        "Резервный способ — сейчас активен Root"
+                                        "Резерв — активен Root"
                                     uiState.isShizukuBackendAvailable == false ->
-                                        "Недоступен — Shizuku не запущен или разрешение не выдано"
+                                        "Нет Shizuku или разрешения"
                                     uiState.isShizukuBackendAvailable == true -> "Доступен"
-                                    else -> "Резервный способ, если Root недоступен"
+                                    else -> "Резерв при недоступном Root"
                                 },
                                 checked = uiState.isShizukuBackendEnabled,
                                 onCheckedChange = viewModel::setShizukuBackendEnabled
                             )
                             Divider()
                             SettingSwitch(
-                                title = "Автоприменение при складывании",
+                                title = "Автоприменение",
                                 description = "Менять DPI при смене экрана",
                                 checked = uiState.isFoldMonitorEnabled,
                                 onCheckedChange = viewModel::setFoldMonitorEnabled
@@ -454,7 +456,7 @@ private fun DensitySettingCard(
                     painter = painterResource(
                         if (title == "Внешний экран")
                             R.drawable.ic_screen_phone
-                        else R.drawable.ic_screen_book
+                        else R.drawable.ic_action_open
                     ),
                     contentDescription = null,
                     modifier = Modifier.size(23.dp)

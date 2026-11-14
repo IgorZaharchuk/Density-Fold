@@ -4,6 +4,7 @@ import com.densityfold.backend.root.RootBackend
 import com.densityfold.backend.shizuku.ShizukuBackend
 import com.densityfold.backend.shizuku.ShizukuManager
 import com.densityfold.backend.shizuku.ShizukuMonitor
+import com.densityfold.data.DensitySettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,11 +38,15 @@ object DensityBackendManager {
     }
 
     suspend fun selectBackend(
-        rootEnabled: Boolean,
-        shizukuEnabled: Boolean,
+        settingsProvider: suspend () -> DensitySettings,
         timeoutMs: Long = 10_000L
     ): Result<DensityBackend> = selectionMutex.withLock {
-        selectBackendLocked(rootEnabled, shizukuEnabled, timeoutMs)
+        val settings = settingsProvider()
+        selectBackendLocked(
+            settings.rootBackendEnabled,
+            settings.shizukuBackendEnabled,
+            timeoutMs
+        )
     }
 
     /**
@@ -49,11 +54,13 @@ object DensityBackendManager {
      * Переключение настроек ждёт завершения текущей операции.
      */
     suspend fun <T> withBackend(
-        rootEnabled: Boolean,
-        shizukuEnabled: Boolean,
+        settingsProvider: suspend () -> DensitySettings,
         timeoutMs: Long = 10_000L,
         operation: suspend (DensityBackend) -> T
     ): T = selectionMutex.withLock {
+        val settings = settingsProvider()
+        val rootEnabled = settings.rootBackendEnabled
+        val shizukuEnabled = settings.shizukuBackendEnabled
         val current = activeBackend
         val backend = if (
             current != null && isEnabled(current, rootEnabled, shizukuEnabled)
@@ -143,7 +150,6 @@ object DensityBackendManager {
         }
 
         publishActiveBackend(null)
-        if (!shizukuEnabled) stopShizukuSafely()
         val reasons = buildList {
             if (rootEnabled) add("Root: ${rootError?.message ?: "недоступен"}")
             if (shizukuEnabled) add("Shizuku: ${shizukuError?.message ?: "недоступен"}")
@@ -168,5 +174,4 @@ object DensityBackendManager {
         }
     }
 
-    fun currentBackend(): DensityBackend? = activeBackend
 }
