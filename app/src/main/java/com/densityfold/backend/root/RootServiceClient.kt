@@ -9,6 +9,7 @@ import java.io.File
 import android.util.Log
 import com.topjohnwu.superuser.ipc.RootService
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.TimeoutCancellationException
@@ -201,7 +202,7 @@ internal object RootServiceClient {
     private suspend fun cleanup(connection: ServiceConnection?) {
         if (connection == null) return
 
-        withContext(Dispatchers.Main.immediate) {
+        withContext(NonCancellable + Dispatchers.Main.immediate) {
             if (activeConnection === connection) {
                 activeConnection = null
                 remote = null

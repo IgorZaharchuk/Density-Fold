@@ -764,16 +764,26 @@ object ShizukuCommandRunner {
         conn: ServiceConnection,
         remove: Boolean = false
     ) {
-        try {
-            if (!Shizuku.pingBinder()) return
+        synchronized(stateLock) {
+            // Shizuku unbind адресуется по UserServiceArgs, а не по conn.
+            // Не позволяем устаревшему callback снять уже опубликованную
+            // новую сессию с теми же аргументами.
+            if (connection != null && connection !== conn) {
+                Log.w(TAG, "Ignoring unbind for stale UserService connection")
+                return
+            }
 
-            Shizuku.unbindUserService(
-                userServiceArgs,
-                conn,
-                remove
-            )
-        } catch (_: Exception) {
-            // Shizuku мог уже потерять собственный Binder.
+            try {
+                if (!Shizuku.pingBinder()) return
+
+                Shizuku.unbindUserService(
+                    userServiceArgs,
+                    conn,
+                    remove
+                )
+            } catch (_: Exception) {
+                // Shizuku мог уже потерять собственный Binder.
+            }
         }
     }
 
