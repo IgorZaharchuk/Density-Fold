@@ -176,7 +176,7 @@ class FoldMonitorService : Service() {
                 } else {
                     notificationCurrentDpi = null
                 }
-                updateNotification(
+                renderNotification(
                     if (available) {
                         notificationBaseMessage
                     } else {
@@ -261,7 +261,7 @@ class FoldMonitorService : Service() {
                 }
 
                 refreshNotificationDpi()
-                updateNotification(
+                renderNotification(
                     if (notificationControlsAvailable) {
                         notificationBaseMessage
                     } else {
@@ -373,6 +373,10 @@ class FoldMonitorService : Service() {
 
     private fun updateNotification(message: String) {
         notificationBaseMessage = message
+        renderNotification(message)
+    }
+
+    private fun renderNotification(message: String) {
         val displayMessage = if (notificationControlsAvailable) {
             message
         } else {
