@@ -60,19 +60,26 @@ class DensityActionService : Service() {
             var cancelled = false
 
             try {
+                if (fromMonitor) {
+                    // Activity уже запущена для восстановления Shizuku Binder.
+                    // Не применяем профиль DPI в рамках recovery.
+                    succeeded = true
+                    Log.i(TAG, "Shizuku recovery trigger delivered; DPI unchanged")
+                } else {
+                    val value = DensityExecutor.apply(
+                        applicationContext,
+                        profile
+                    ).getOrThrow()
+                    succeeded = true
+                    applied = value
 
-                val value = DensityExecutor.apply(applicationContext, profile).getOrThrow()
-                succeeded = true
-                applied = value
+                    val screenName = if (value.isExternal) "Внешний" else "Внутренний"
+                    Log.i(
+                        TAG,
+                        "Action confirmed: screen=$screenName " +
+                            "target=${value.targetDpi} actual=${value.actualDpi}"
+                    )
 
-                val screenName = if (value.isExternal) "Внешний" else "Внутренний"
-                Log.i(
-                    TAG,
-                    "Action confirmed: screen=$screenName " +
-                        "target=${value.targetDpi} actual=${value.actualDpi}"
-                )
-
-                if (!fromMonitor) {
                     showNotification(
                         applicationContext,
                         screenName,
