@@ -33,7 +33,7 @@
             android:layout_margin="2dp"
             android:gravity="center"
             android:background="#30343B"
-            android:text="−50"
+            android:text="@string/notification_minus_50"
             android:textColor="#FFFFFF"
             android:textSize="14sp"
             android:textStyle="bold" />
@@ -54,7 +54,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:text="DPI"
+                android:text="@string/notification_dpi"
                 android:textColor="#FFFFFF"
                 android:textSize="14sp"
                 android:textStyle="bold"
@@ -79,7 +79,7 @@
             android:layout_margin="2dp"
             android:gravity="center"
             android:background="#30343B"
-            android:text="+50"
+            android:text="@string/notification_plus_50"
             android:textColor="#FFFFFF"
             android:textSize="14sp"
             android:textStyle="bold" />
@@ -89,7 +89,7 @@
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:gravity="center"
-            android:text="Управление DPI недоступно"
+            android:text="@string/notification_unavailable"
             android:textColor="#FFFFFF"
             android:textSize="14sp"
             android:visibility="gone" />

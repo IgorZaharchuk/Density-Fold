@@ -5,7 +5,6 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -175,15 +174,13 @@ class DensityActionService : Service() {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "density_actions_channel"
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(
-                NotificationChannel(
-                    channelId,
-                    "Действия Density Fold",
-                    NotificationManager.IMPORTANCE_LOW
-                )
+        manager.createNotificationChannel(
+            NotificationChannel(
+                channelId,
+                "Действия Density Fold",
+                NotificationManager.IMPORTANCE_LOW
             )
-        }
+        )
 
         val title = if (isSuccess) "Density Fold: Успешно" else "Density Fold: Ошибка"
         val text = if (isSuccess) {
