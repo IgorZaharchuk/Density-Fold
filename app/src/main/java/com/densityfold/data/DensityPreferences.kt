@@ -24,6 +24,8 @@ class DensityPreferences(private val context: Context) {
     companion object {
         val INNER_DPI = intPreferencesKey("inner_dpi")
         val OUTER_DPI = intPreferencesKey("outer_dpi")
+        val PREVIOUS_INNER_DPI = intPreferencesKey("previous_inner_dpi")
+        val PREVIOUS_OUTER_DPI = intPreferencesKey("previous_outer_dpi")
         val FOLD_MONITOR_ENABLED = booleanPreferencesKey("fold_monitor_enabled")
         val AUTO_START_ENABLED = booleanPreferencesKey("auto_start_enabled")
         val ROOT_BACKEND_ENABLED = booleanPreferencesKey("root_backend_enabled")
@@ -71,6 +73,17 @@ class DensityPreferences(private val context: Context) {
     suspend fun setInnerDpi(dpi: Int) = setDpi(INNER_DPI, dpi)
 
     suspend fun setOuterDpi(dpi: Int) = setDpi(OUTER_DPI, dpi)
+
+    suspend fun getPreviousInnerDpi(): Int? =
+        context.dataStore.data.first()[PREVIOUS_INNER_DPI]
+
+    suspend fun getPreviousOuterDpi(): Int? =
+        context.dataStore.data.first()[PREVIOUS_OUTER_DPI]
+
+    suspend fun setPreviousDpi(isExternal: Boolean, dpi: Int) {
+        val key = if (isExternal) PREVIOUS_OUTER_DPI else PREVIOUS_INNER_DPI
+        context.dataStore.edit { it[key] = dpi.coerceIn(MIN_DPI, MAX_DPI) }
+    }
 
     suspend fun setFoldMonitorEnabled(enabled: Boolean) {
         context.dataStore.edit { it[FOLD_MONITOR_ENABLED] = enabled }

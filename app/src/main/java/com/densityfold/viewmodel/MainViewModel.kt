@@ -29,6 +29,8 @@ data class UiState(
     val activeDisplay: DisplayInfo? = null,
     val innerDpi: Int = 350,
     val outerDpi: Int = 440,
+    val previousInnerDpi: Int? = null,
+    val previousOuterDpi: Int? = null,
     val innerShortPx: Int = DisplayUtils.FALLBACK_INNER_SHORT_PX,
     val outerShortPx: Int = DisplayUtils.FALLBACK_OUTER_SHORT_PX,
     val innerSizeEstimated: Boolean = true,
@@ -200,6 +202,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             it.copy(
                 innerDpi = settings.innerDpi,
                 outerDpi = settings.outerDpi,
+                previousInnerDpi = preferences.getPreviousInnerDpi(),
+                previousOuterDpi = preferences.getPreviousOuterDpi(),
                 isFoldMonitorEnabled = monitorEnabled,
                 isAutoStartEnabled = settings.autoStartEnabled,
                 isRootBackendEnabled = settings.rootBackendEnabled,
@@ -474,6 +478,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { applyDensity(DensityProfile.OUTER) }
     }
 
+    fun restorePreviousInnerDensity() = restorePreviousDensity(DensityProfile.INNER)
+
+    fun restorePreviousOuterDensity() = restorePreviousDensity(DensityProfile.OUTER)
+
+    private fun restorePreviousDensity(profile: DensityProfile) {
+        if (_uiState.value.isLoading) return
+        val previous = when (profile) {
+            DensityProfile.INNER -> _uiState.value.previousInnerDpi
+            DensityProfile.OUTER -> _uiState.value.previousOuterDpi
+        } ?: return
+
+        setDpi(profile, previous)
+        viewModelScope.launch { applyDensity(profile) }
+    }
+
     private suspend fun applyDensity(profile: DensityProfile) {
         val context = getApplication<Application>().applicationContext
         activeDensityOperations.incrementAndGet()
@@ -495,6 +514,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
 
             val applied = result.getOrThrow()
+            if (!applied.alreadyApplied && applied.previousDpi != null) {
+                preferences.setPreviousDpi(applied.isExternal, applied.previousDpi)
+                _uiState.update {
+                    if (applied.isExternal) {
+                        it.copy(previousOuterDpi = applied.previousDpi)
+                    } else {
+                        it.copy(previousInnerDpi = applied.previousDpi)
+                    }
+                }
+            }
+
             val screenName = if (profile == DensityProfile.INNER) {
                 "Внутренний"
             } else {

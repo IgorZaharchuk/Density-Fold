@@ -20,7 +20,8 @@ data class DensityApplyResult(
     val targetDp: Int,
     val targetDpi: Int,
     val actualDpi: Int,
-    val alreadyApplied: Boolean
+    val alreadyApplied: Boolean,
+    val previousDpi: Int? = null
 )
 
 object DensityExecutor {
@@ -100,7 +101,8 @@ object DensityExecutor {
                         targetDp = targetDp,
                         targetDpi = targetDpi,
                         actualDpi = actualDpi,
-                        alreadyApplied = alreadyApplied
+                        alreadyApplied = alreadyApplied,
+                        previousDpi = currentDpi
                     )
                 }
                 Result.success(result)

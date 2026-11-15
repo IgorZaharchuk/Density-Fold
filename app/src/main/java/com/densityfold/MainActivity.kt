@@ -285,6 +285,8 @@ fun MainScreen(
                 referenceShortPx = uiState.innerShortPx,
                 onDpiChange = viewModel::setInnerDpi,
                 onApply = viewModel::applyInnerDensity,
+                previousDpi = uiState.previousInnerDpi,
+                onRestorePrevious = viewModel::restorePreviousInnerDensity,
                 enabled = uiState.isBackendReady && !uiState.isLoading
             )
 
@@ -300,6 +302,8 @@ fun MainScreen(
                 referenceShortPx = uiState.outerShortPx,
                 onDpiChange = viewModel::setOuterDpi,
                 onApply = viewModel::applyOuterDensity,
+                previousDpi = uiState.previousOuterDpi,
+                onRestorePrevious = viewModel::restorePreviousOuterDensity,
                 enabled = uiState.isBackendReady && !uiState.isLoading
             )
 
@@ -434,6 +438,8 @@ private fun DensitySettingCard(
     referenceShortPx: Int,
     onDpiChange: (Int) -> Unit,
     onApply: () -> Unit,
+    previousDpi: Int?,
+    onRestorePrevious: () -> Unit,
     enabled: Boolean
 ) {
     var value by remember(dpi, minDpi, maxDpi) {
@@ -504,23 +510,43 @@ private fun DensitySettingCard(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                Button(
-                    onClick = onApply,
-                    enabled = enabled,
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(
-                        1.dp,
-                        Color(0xFF4AD9FF).copy(alpha = if (enabled) 0.85f else 0.25f)
-                    ),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF0B2B68),
-                        contentColor = Color(0xFFDBFAFF),
-                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Text("Применить", maxLines = 1)
+                    if (previousDpi != null) {
+                        Text(
+                            text = "↶ $previousDpi DPI",
+                            modifier = Modifier.clickable(
+                                enabled = enabled,
+                                onClick = onRestorePrevious
+                            ),
+                            color = if (enabled) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                    }
+
+                    Button(
+                        onClick = onApply,
+                        enabled = enabled,
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(
+                            1.dp,
+                            Color(0xFF4AD9FF).copy(alpha = if (enabled) 0.85f else 0.25f)
+                        ),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF0B2B68),
+                            contentColor = Color(0xFFDBFAFF),
+                            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+                    ) {
+                        Text("Применить", maxLines = 1)
+                    }
                 }
             }
 
