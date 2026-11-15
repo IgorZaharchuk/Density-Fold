@@ -370,6 +370,7 @@ class FoldMonitorService : Service() {
         if (shizukuExpected && !shizukuReady) {
             if (foldTransition) {
                 pendingShizukuAction = true
+                updateNotification("Ожидание восстановления Shizuku")
                 Log.w(TAG, "Fold transition при недоступном Shizuku")
                 val state = ShizukuMonitor.runtimeState.value
                 if (state?.mainBinder != true) {
@@ -426,9 +427,7 @@ class FoldMonitorService : Service() {
         }
     }
 
-
-
-        private fun startActionTimeout(
+    private fun startActionTimeout(
         requestId: Long,
         logMessage: String,
         notificationMessage: String
