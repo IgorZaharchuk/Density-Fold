@@ -127,6 +127,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
+            preferences.observePreviousDpi().collect { (previousInnerDpi, previousOuterDpi) ->
+                _uiState.update {
+                    it.copy(
+                        previousInnerDpi = previousInnerDpi,
+                        previousOuterDpi = previousOuterDpi
+                    )
+                }
+            }
+        }
+
+        viewModelScope.launch {
             DensityBackendManager.selectedBackend.collect { backend ->
                 val shizukuReady = ShizukuMonitor.runtimeState.value?.let {
                     it.mainBinder && it.permission && it.userService
@@ -202,8 +213,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             it.copy(
                 innerDpi = settings.innerDpi,
                 outerDpi = settings.outerDpi,
-                previousInnerDpi = preferences.getPreviousInnerDpi(),
-                previousOuterDpi = preferences.getPreviousOuterDpi(),
                 isFoldMonitorEnabled = monitorEnabled,
                 isAutoStartEnabled = settings.autoStartEnabled,
                 isRootBackendEnabled = settings.rootBackendEnabled,
@@ -397,14 +406,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun refreshDisplaysInternal() {
         val context = getApplication<Application>().applicationContext
         val active = DisplayUtils.getActiveDisplay(context)
-        val previousInnerDpi = preferences.getPreviousInnerDpi()
-        val previousOuterDpi = preferences.getPreviousOuterDpi()
-
         _uiState.update {
             it.copy(
                 activeDisplay = active,
-                previousInnerDpi = previousInnerDpi,
-                previousOuterDpi = previousOuterDpi,
                 innerShortPx = DisplayUtils.getInnerShortPx(active),
                 outerShortPx = DisplayUtils.getOuterShortPx(active),
                 innerSizeEstimated = active == null || active.isExternal,

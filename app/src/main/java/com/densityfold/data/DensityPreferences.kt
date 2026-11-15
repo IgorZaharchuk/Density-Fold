@@ -7,7 +7,9 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "density_prefs")
 
@@ -73,6 +75,11 @@ class DensityPreferences(private val context: Context) {
     suspend fun setInnerDpi(dpi: Int) = setDpi(INNER_DPI, dpi)
 
     suspend fun setOuterDpi(dpi: Int) = setDpi(OUTER_DPI, dpi)
+
+    fun observePreviousDpi(): Flow<Pair<Int?, Int?>> =
+        context.dataStore.data.map { values ->
+            values[PREVIOUS_INNER_DPI] to values[PREVIOUS_OUTER_DPI]
+        }
 
     suspend fun getPreviousInnerDpi(): Int? =
         context.dataStore.data.first()[PREVIOUS_INNER_DPI]
