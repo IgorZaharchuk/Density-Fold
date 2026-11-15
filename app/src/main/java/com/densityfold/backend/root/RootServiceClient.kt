@@ -33,6 +33,7 @@ internal object RootServiceClient {
     @Volatile
     private var remote: IRootDensityService? = null
 
+    @Volatile
     private var activeConnection: ServiceConnection? = null
     private val connectionMutex = Mutex()
 
@@ -52,7 +53,7 @@ internal object RootServiceClient {
     private suspend fun <T> withRemote(
         operation: (IRootDensityService) -> T
     ): T {
-        val current = service()
+        val current = withContext(Dispatchers.IO) { service() }
         return try {
             withContext(Dispatchers.IO) {
                 operation(current)
