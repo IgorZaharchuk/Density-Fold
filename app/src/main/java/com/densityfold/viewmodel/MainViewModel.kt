@@ -387,9 +387,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val settings = preferences.getSettings()
         if (!settings.shizukuBackendEnabled || shizukuPermissionDenied) return
 
-        val availability = DensityBackendManager.availability.value
-        if (settings.rootBackendEnabled && availability.rootAvailable != false) return
-
         val permissionGranted = try {
             Shizuku.pingBinder() &&
                 Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
