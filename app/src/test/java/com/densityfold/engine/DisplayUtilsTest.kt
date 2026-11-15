@@ -1,8 +1,6 @@
 package com.densityfold.engine
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DisplayUtilsTest {
@@ -20,19 +18,6 @@ class DisplayUtilsTest {
     @Test(expected = IllegalArgumentException::class)
     fun zeroScreenSizeIsRejected() {
         DisplayUtils.allowedDpiRange(0)
-    }
-
-    @Test
-    fun dpToDpiConvertsAndClamps() {
-        assertEquals(432, DisplayUtils.dpToDpi(400, 1080))
-        assertEquals(200, DisplayUtils.dpToDpi(1200, 1080))
-        assertEquals(1000, DisplayUtils.dpToDpi(100, 1080))
-    }
-
-    @Test
-    fun dpToDpiRejectsInvalidInput() {
-        assertNull(DisplayUtils.dpToDpi(0, 1080))
-        assertNull(DisplayUtils.dpToDpi(400, 0))
     }
 
     @Test

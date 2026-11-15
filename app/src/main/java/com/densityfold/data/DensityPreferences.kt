@@ -81,12 +81,6 @@ class DensityPreferences(private val context: Context) {
             values[PREVIOUS_INNER_DPI] to values[PREVIOUS_OUTER_DPI]
         }
 
-    suspend fun getPreviousInnerDpi(): Int? =
-        context.dataStore.data.first()[PREVIOUS_INNER_DPI]
-
-    suspend fun getPreviousOuterDpi(): Int? =
-        context.dataStore.data.first()[PREVIOUS_OUTER_DPI]
-
     suspend fun setPreviousDpi(isExternal: Boolean, dpi: Int) {
         val key = if (isExternal) PREVIOUS_OUTER_DPI else PREVIOUS_INNER_DPI
         context.dataStore.edit { it[key] = dpi.coerceIn(MIN_DPI, MAX_DPI) }

@@ -166,7 +166,6 @@ class DensityActionService : Service() {
             putExtra(EXTRA_MONITOR_REQUEST_ID, monitorRequestId)
             putExtra(EXTRA_SUCCESS, success)
             putExtra(EXTRA_IS_EXTERNAL, applied?.isExternal ?: expectedExternal)
-            putExtra(EXTRA_SHORT_PX, applied?.shortPx ?: 0)
             putExtra(EXTRA_ACTUAL_DPI, applied?.actualDpi ?: 0)
             putExtra(EXTRA_ERROR, error)
         }
@@ -224,7 +223,6 @@ class DensityActionService : Service() {
         const val EXTRA_MONITOR_REQUEST_ID = "com.densityfold.EXTRA_MONITOR_REQUEST_ID"
         const val EXTRA_SUCCESS = "com.densityfold.EXTRA_SUCCESS"
         const val EXTRA_IS_EXTERNAL = "com.densityfold.EXTRA_IS_EXTERNAL"
-        const val EXTRA_SHORT_PX = "com.densityfold.EXTRA_SHORT_PX"
         const val EXTRA_ACTUAL_DPI = "com.densityfold.EXTRA_ACTUAL_DPI"
         const val EXTRA_ERROR = "com.densityfold.EXTRA_ERROR"
 

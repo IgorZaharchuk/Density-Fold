@@ -107,10 +107,6 @@ class FoldMonitorService : Service() {
                     DensityActionService.EXTRA_IS_EXTERNAL,
                     false
                 )
-                val shortPx = intent.getIntExtra(
-                    DensityActionService.EXTRA_SHORT_PX,
-                    0
-                )
                 val actualDpi = intent.getIntExtra(
                     DensityActionService.EXTRA_ACTUAL_DPI,
                     0

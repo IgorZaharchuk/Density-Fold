@@ -16,12 +16,9 @@ enum class DensityProfile {
 
 data class DensityApplyResult(
     val isExternal: Boolean,
-    val shortPx: Int,
-    val targetDp: Int,
     val targetDpi: Int,
     val actualDpi: Int,
-    val alreadyApplied: Boolean,
-    val previousDpi: Int? = null
+    val alreadyApplied: Boolean
 )
 
 object DensityExecutor {
@@ -68,8 +65,6 @@ object DensityExecutor {
                     )
                 }
 
-                val targetDp = DisplayUtils.dpiToDp(targetDpi, shortPx)
-
                 val result = DensityBackendManager.withBackend(
                     settingsProvider = { DensityPreferences(context).getSettings() },
                     timeoutMs = timeoutMs
@@ -100,12 +95,9 @@ object DensityExecutor {
                     }
                     DensityApplyResult(
                         isExternal = isExternal,
-                        shortPx = shortPx,
-                        targetDp = targetDp,
                         targetDpi = targetDpi,
                         actualDpi = actualDpi,
                         alreadyApplied = alreadyApplied,
-                        previousDpi = currentDpi
                     )
                 }
                 Result.success(result)
@@ -195,8 +187,6 @@ object DensityExecutor {
 
                     DensityApplyResult(
                         isExternal = active.isExternal,
-                        shortPx = active.shortPx,
-                        targetDp = DisplayUtils.dpiToDp(targetDpi, active.shortPx),
                         targetDpi = targetDpi,
                         actualDpi = actualDpi,
                         alreadyApplied = alreadyApplied

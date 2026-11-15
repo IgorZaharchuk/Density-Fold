@@ -73,14 +73,6 @@ object DisplayUtils {
     fun getOuterShortPx(active: DisplayInfo?): Int =
         if (active != null && active.isExternal) active.shortPx else FALLBACK_OUTER_SHORT_PX
 
-    fun dpToDpi(dp: Int, shortPx: Int): Int? {
-        if (dp <= 0 || shortPx <= 0) return null
-        return (shortPx * 160f / dp).toInt().coerceIn(
-            ABSOLUTE_MIN_DPI,
-            ABSOLUTE_MAX_DPI
-        )
-    }
-
     fun dpiToDp(dpi: Int, shortPx: Int): Int {
         if (dpi <= 0 || shortPx <= 0) return 0
         return (shortPx * 160f / dpi).toInt()
