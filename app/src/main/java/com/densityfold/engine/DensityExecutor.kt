@@ -74,7 +74,7 @@ object DensityExecutor {
                     settingsProvider = { DensityPreferences(context).getSettings() },
                     timeoutMs = timeoutMs
                 ) { backend ->
-                    backend.awaitReady(timeoutMs).getBackendOrThrow()
+                    backend.awaitReady(timeoutMs).getBackendOrThrow(invalidateBackend = true)
                     ensureDisplayUnchanged(context, active)
 
                     val currentDpi = backend.getCurrentDensity().getBackendOrThrow()
@@ -130,7 +130,7 @@ object DensityExecutor {
                     settingsProvider = { DensityPreferences(context).getSettings() },
                     timeoutMs = timeoutMs
                 ) { backend ->
-                    backend.awaitReady(timeoutMs).getBackendOrThrow()
+                    backend.awaitReady(timeoutMs).getBackendOrThrow(invalidateBackend = true)
                     ensureDisplayUnchanged(context, active)
                     val dpi = backend.getCurrentDensity().getBackendOrThrow()
                     ensureDisplayUnchanged(context, active)
@@ -163,7 +163,7 @@ object DensityExecutor {
                     settingsProvider = { DensityPreferences(context).getSettings() },
                     timeoutMs = timeoutMs
                 ) { backend ->
-                    backend.awaitReady(timeoutMs).getBackendOrThrow()
+                    backend.awaitReady(timeoutMs).getBackendOrThrow(invalidateBackend = true)
                     ensureDisplayUnchanged(context, active)
 
                     val currentDpi = backend.getCurrentDensity().getBackendOrThrow()

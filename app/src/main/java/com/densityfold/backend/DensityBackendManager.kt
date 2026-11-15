@@ -75,7 +75,9 @@ object DensityBackendManager {
         } catch (e: CancellationException) {
             throw e
         } catch (e: BackendOperationException) {
-            if (activeBackend === backend) publishActiveBackend(null)
+            if (e.invalidatesBackend && activeBackend === backend) {
+                publishActiveBackend(null)
+            }
             throw e
         }
     }
