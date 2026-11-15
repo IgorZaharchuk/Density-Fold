@@ -6,7 +6,6 @@ import android.os.Build
 import java.io.File
 import com.densityfold.backend.DensityBackendManager
 import com.densityfold.backend.root.RootCommandRunner
-import com.densityfold.backend.shizuku.ShizukuRecovery
 import com.densityfold.data.DensityPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +31,6 @@ class App : Application() {
         if (!isMainProcess()) return
 
         RootCommandRunner.initialize(applicationContext)
-        ShizukuRecovery.initialize(applicationContext)
 
         startupScope.launch {
             try {

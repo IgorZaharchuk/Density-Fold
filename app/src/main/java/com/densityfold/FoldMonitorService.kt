@@ -17,6 +17,8 @@ import androidx.core.content.ContextCompat
 import com.densityfold.engine.DisplayUtils
 import com.densityfold.backend.DensityBackendManager
 import com.densityfold.backend.shizuku.ShizukuMonitor
+import com.densityfold.backend.shizuku.ShizukuBackend
+import com.densityfold.backend.shizuku.ShizukuRecovery
 import kotlinx.coroutines.flow.combine
 import com.densityfold.data.DensityPreferences
 import kotlinx.coroutines.CoroutineScope
@@ -54,6 +56,8 @@ class FoldMonitorService : Service() {
     private var notificationCurrentDpi: Int? = null
 
     private var lastRequestedExternal: Boolean? = null
+    private var lastObservedExternal: Boolean? = null
+    private var pendingShizukuAction = false
     private var activeRequestId: Long? = null
     private var retryPending = false
     private var retryJob: Job? = null
@@ -120,16 +124,18 @@ class FoldMonitorService : Service() {
                 Log.i(TAG, "Действие подтверждено монитором")
 
                 val active = DisplayUtils.getActiveDisplay(applicationContext)
-                if (active == null || active.isExternal != isExternal) {
-                    Log.i(TAG, "Экран изменился во время выполнения, повторная проверка")
+                if (
+                    pendingShizukuAction ||
+                    active == null ||
+                    active.isExternal != isExternal
+                ) {
+                    Log.i(TAG, "Требуется повторная проверка активного экрана")
                     scheduleDensityCheck()
                 }
             } else {
-                retryPending = true
                 val error = intent.getStringExtra(DensityActionService.EXTRA_ERROR)
                 Log.w(TAG, "Действие не выполнено: ${error ?: "неизвестная ошибка"}")
-                updateNotification("Не удалось выполнить действие · повторная попытка")
-                scheduleRetry()
+                handleActionFailure("Действие не выполнено")
             }
         }
     }
@@ -188,6 +194,31 @@ class FoldMonitorService : Service() {
         }
 
         scope.launch {
+            combine(
+                DensityBackendManager.selectedBackend,
+                DensityBackendManager.availability,
+                ShizukuMonitor.runtimeState
+            ) { backend, availability, state ->
+                val expected = backend === ShizukuBackend ||
+                    (
+                        backend == null &&
+                            availability.shizukuEnabled &&
+                            (!availability.rootEnabled || availability.rootAvailable == false)
+                    )
+
+                expected &&
+                    state?.mainBinder == true &&
+                    state.permission &&
+                    state.userService
+            }.collect { ready ->
+                if (ready && (pendingShizukuAction || lastRequestedExternal == null)) {
+                    Log.i(TAG, "Shizuku READY: проверяем отложенное действие")
+                    scheduleDensityCheck()
+                }
+            }
+        }
+
+        scope.launch {
             for (event in checkChannel) {
                 try {
                     performDensityCheck()
@@ -198,6 +229,39 @@ class FoldMonitorService : Service() {
         }
     }
 
+
+    private fun isShizukuExpected(): Boolean {
+        val selected = DensityBackendManager.selectedBackend.value
+        val availability = DensityBackendManager.availability.value
+
+        return selected === ShizukuBackend ||
+            (
+                selected == null &&
+                    availability.shizukuEnabled &&
+                    (!availability.rootEnabled || availability.rootAvailable == false)
+            )
+    }
+
+    private fun isShizukuReady(): Boolean {
+        val state = ShizukuMonitor.runtimeState.value ?: return false
+        return state.mainBinder && state.permission && state.userService
+    }
+
+    private fun handleActionFailure(reason: String) {
+        if (isShizukuExpected() && !isShizukuReady()) {
+            pendingShizukuAction = true
+            retryPending = false
+            retryJob?.cancel()
+            retryJob = null
+            updateNotification("Ожидание восстановления Shizuku")
+            Log.w(TAG, "$reason: Shizuku не готов; таймерные повторы отключены")
+            return
+        }
+
+        retryPending = true
+        updateNotification("Не удалось выполнить действие · повторная попытка")
+        scheduleRetry()
+    }
 
     private fun beginRequest(isExternal: Boolean): Long {
         val requestId = SystemClock.elapsedRealtimeNanos()
@@ -290,21 +354,43 @@ class FoldMonitorService : Service() {
         }
 
         val isExternal = active.isExternal
+        val previousObserved = lastObservedExternal
+        val foldTransition = previousObserved != null &&
+            previousObserved != isExternal
+        lastObservedExternal = isExternal
 
         refreshNotificationDpi(active)
         updateNotification(
             notificationActionError ?: "Мониторинг складывания активен"
         )
 
-        if (activeRequestId != null) {
+        val shizukuExpected = isShizukuExpected()
+        val shizukuReady = isShizukuReady()
+
+        if (shizukuExpected && !shizukuReady) {
+            if (foldTransition) {
+                pendingShizukuAction = true
+                Log.w(TAG, "Fold transition при недоступном Shizuku")
+                val state = ShizukuMonitor.runtimeState.value
+                if (state?.mainBinder != true) {
+                    ShizukuRecovery.launch(this, isExternal)
+                } else {
+                    Log.i(TAG, "Главный Binder жив: ожидаем reconnect UserService")
+                }
+            }
             return
         }
 
-        if (lastRequestedExternal == isExternal && !retryPending) {
-            return
-        }
+        if (activeRequestId != null) return
+
+        if (
+            !pendingShizukuAction &&
+            lastRequestedExternal == isExternal &&
+            !retryPending
+        ) return
 
         val requestId = beginRequest(isExternal)
+        pendingShizukuAction = false
 
         val actionName = if (isExternal) "Внешний" else "Внутренний"
         Log.i(TAG, "Запуск действия: $actionName")
@@ -334,15 +420,15 @@ class FoldMonitorService : Service() {
                 actionTimeoutJob?.cancel()
                 actionTimeoutJob = null
                 activeRequestId = null
-                retryPending = true
             }
             Log.e(TAG, "Не удалось запустить сервис: ${e.message}", e)
-            updateNotification("Не удалось запустить действие · повторная попытка")
-            scheduleRetry()
+            handleActionFailure("Ошибка запуска действия")
         }
     }
 
-    private fun startActionTimeout(
+
+
+        private fun startActionTimeout(
         requestId: Long,
         logMessage: String,
         notificationMessage: String
@@ -352,10 +438,14 @@ class FoldMonitorService : Service() {
             delay(20_000L)
             if (activeRequestId == requestId) {
                 activeRequestId = null
-                retryPending = true
                 Log.w(TAG, logMessage)
-                updateNotification(notificationMessage)
-                scheduleRetry()
+                if (isShizukuExpected() && !isShizukuReady()) {
+                    handleActionFailure(logMessage)
+                } else {
+                    retryPending = true
+                    updateNotification(notificationMessage)
+                    scheduleRetry()
+                }
             }
         }
     }

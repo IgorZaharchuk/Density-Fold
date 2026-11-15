@@ -64,7 +64,6 @@ class DensityActionService : Service() {
                 if (isRecovery) {
                     // Activity запущена только для восстановления Shizuku Binder.
                     // DPI не меняем.
-                    succeeded = true
                     Log.i(TAG, "Shizuku recovery trigger delivered; DPI unchanged")
                 } else {
                     val value = DensityExecutor.apply(
@@ -97,7 +96,7 @@ class DensityActionService : Service() {
             } catch (e: Exception) {
                 failureMessage = reportFailure(e, profile, fromMonitor)
             } finally {
-                if (!cancelled) {
+                if (!cancelled && !isRecovery) {
                     sendCompletionBroadcast(
                         fromMonitor = fromMonitor,
                         success = succeeded,

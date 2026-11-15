@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Наблюдает за состоянием Shizuku только пока выбран этот backend.
- * Передаёт состояние Binder в ShizukuRecovery.
+ * Наблюдает за Binder и восстанавливает только UserService через runner.
  * Восстановление UserService делегируется runner.
  */
 object ShizukuMonitor {
@@ -51,7 +51,6 @@ object ShizukuMonitor {
                 val state = ShizukuCommandRunner.currentState()
 
                 _runtimeState.value = state
-                ShizukuRecovery.onRuntimeState(state)
 
                 if (
                     state.mainBinder &&
@@ -83,7 +82,6 @@ object ShizukuMonitor {
             throw e
         } finally {
             _runtimeState.value = null
-            ShizukuRecovery.reset()
         }
 
     }
