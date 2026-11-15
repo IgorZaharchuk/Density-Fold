@@ -48,9 +48,10 @@ internal object RootServiceClient {
         withRemote { it.getCurrentDensity(displayId) }
 
     suspend fun setDensity(displayId: Int, dpi: Int): Int =
-        withRemote { it.setDensity(displayId, dpi) }
+        withRemote(stopDaemonOnFailure = true) { it.setDensity(displayId, dpi) }
 
     private suspend fun <T> withRemote(
+        stopDaemonOnFailure: Boolean = false,
         operation: (IRootDensityService) -> T
     ): T {
         val current = withContext(Dispatchers.IO) { service() }
@@ -58,10 +59,53 @@ internal object RootServiceClient {
             withContext(Dispatchers.IO) {
                 operation(current)
             }
-        } catch (error: RemoteException) {
-            Log.e(TAG, "Root Binder: транспортная ошибка; сбрасываем соединение", error)
-            invalidate(current)
+        } catch (error: CancellationException) {
             throw error
+        } catch (error: Exception) {
+            if (stopDaemonOnFailure) {
+                Log.e(TAG, "Root setDensity: операция завершилась ошибкой; останавливаем daemon", error)
+                try {
+                    stopDaemon()
+                } catch (stopError: Exception) {
+                    Log.e(TAG, "Root daemon: ошибка при вызове RootService.stop()", stopError)
+                } finally {
+                    invalidate(current)
+                }
+            } else if (error is RemoteException) {
+                Log.e(TAG, "Root Binder: транспортная ошибка; сбрасываем соединение", error)
+                invalidate(current)
+            }
+            throw error
+        }
+    }
+
+    internal suspend fun stopDaemonIfConnected() {
+        val state = connectionMutex.withLock {
+            val connected = remote != null || activeConnection != null
+            val connection = activeConnection
+            remote = null
+            activeConnection = null
+            connected to connection
+        }
+
+        if (!state.first) return
+
+        try {
+            stopDaemon()
+        } finally {
+            cleanup(state.second)
+        }
+    }
+
+    private suspend fun stopDaemon() {
+        val context = appContext
+            ?: throw IllegalStateException("RootServiceClient не инициализирован")
+
+        val intent = Intent(context, RootDensityService::class.java)
+            .addCategory(RootService.CATEGORY_DAEMON_MODE)
+
+        withContext(NonCancellable + Dispatchers.Main.immediate) {
+            RootService.stop(intent)
         }
     }
 

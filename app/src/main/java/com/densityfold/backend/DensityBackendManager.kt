@@ -1,6 +1,7 @@
 package com.densityfold.backend
 
 import com.densityfold.backend.root.RootBackend
+import com.densityfold.backend.root.RootServiceClient
 import com.densityfold.backend.shizuku.ShizukuBackend
 import com.densityfold.backend.shizuku.ShizukuManager
 import com.densityfold.backend.shizuku.ShizukuMonitor
@@ -102,6 +103,10 @@ object DensityBackendManager {
             shizukuEnabled = shizukuEnabled
         )
 
+        if (!rootEnabled) {
+            stopRootSafely()
+        }
+
         if (!rootEnabled && !shizukuEnabled) {
             publishActiveBackend(null)
             stopShizukuSafely()
@@ -163,6 +168,20 @@ object DensityBackendManager {
                 shizukuError ?: rootError
             )
         )
+    }
+
+    private suspend fun stopRootSafely() {
+        try {
+            RootServiceClient.stopDaemonIfConnected()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w(
+                "DensityBackendManager",
+                "Не удалось остановить Root daemon при отключении backend",
+                e
+            )
+        }
     }
 
     private suspend fun stopShizukuSafely() {
