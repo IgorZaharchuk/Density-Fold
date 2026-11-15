@@ -397,10 +397,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun refreshDisplaysInternal() {
         val context = getApplication<Application>().applicationContext
         val active = DisplayUtils.getActiveDisplay(context)
+        val previousInnerDpi = preferences.getPreviousInnerDpi()
+        val previousOuterDpi = preferences.getPreviousOuterDpi()
 
         _uiState.update {
             it.copy(
                 activeDisplay = active,
+                previousInnerDpi = previousInnerDpi,
+                previousOuterDpi = previousOuterDpi,
                 innerShortPx = DisplayUtils.getInnerShortPx(active),
                 outerShortPx = DisplayUtils.getOuterShortPx(active),
                 innerSizeEstimated = active == null || active.isExternal,
@@ -514,17 +518,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
 
             val applied = result.getOrThrow()
-            if (!applied.alreadyApplied && applied.previousDpi != null) {
-                preferences.setPreviousDpi(applied.isExternal, applied.previousDpi)
-                _uiState.update {
-                    if (applied.isExternal) {
-                        it.copy(previousOuterDpi = applied.previousDpi)
-                    } else {
-                        it.copy(previousInnerDpi = applied.previousDpi)
-                    }
-                }
-            }
-
             val screenName = if (profile == DensityProfile.INNER) {
                 "Внутренний"
             } else {

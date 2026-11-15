@@ -468,6 +468,20 @@ private fun DensitySettingCard(
                     modifier = Modifier.size(23.dp)
                 )
                 Text(title, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.weight(1f))
+                if (previousDpi != null) {
+                    Text(
+                        text = "↶ $previousDpi DPI",
+                        modifier = Modifier
+                            .clickable(enabled = enabled, onClick = onRestorePrevious)
+                            .padding(vertical = 4.dp),
+                        color = if (enabled) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                }
             }
 
             Row(
@@ -510,26 +524,7 @@ private fun DensitySettingCard(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    if (previousDpi != null) {
-                        Text(
-                            text = "↶ $previousDpi DPI",
-                            modifier = Modifier.clickable(
-                                enabled = enabled,
-                                onClick = onRestorePrevious
-                            ),
-                            color = if (enabled) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1
-                        )
-                    }
-
-                    Button(
+                Button(
                         onClick = onApply,
                         enabled = enabled,
                         shape = RoundedCornerShape(10.dp),
@@ -547,7 +542,6 @@ private fun DensitySettingCard(
                     ) {
                         Text("Применить", maxLines = 1)
                     }
-                }
             }
 
             if (sizeIsEstimated) {

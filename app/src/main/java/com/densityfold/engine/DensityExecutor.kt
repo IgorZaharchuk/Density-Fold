@@ -95,6 +95,9 @@ object DensityExecutor {
                     }
 
                     ensureDisplayUnchanged(context, active)
+                    if (!alreadyApplied) {
+                        preferences.setPreviousDpi(isExternal, currentDpi)
+                    }
                     DensityApplyResult(
                         isExternal = isExternal,
                         shortPx = shortPx,
