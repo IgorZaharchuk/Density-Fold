@@ -476,11 +476,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun applyInnerDensity() {
-        viewModelScope.launch { applyDensity(DensityProfile.INNER) }
+        viewModelScope.launch {
+            applyDensity(DensityProfile.INNER, armPreviousDpi = true)
+        }
     }
 
     fun applyOuterDensity() {
-        viewModelScope.launch { applyDensity(DensityProfile.OUTER) }
+        viewModelScope.launch {
+            applyDensity(DensityProfile.OUTER, armPreviousDpi = true)
+        }
     }
 
     fun restorePreviousInnerDensity() = restorePreviousDensity(DensityProfile.INNER)
@@ -498,7 +502,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { applyDensity(profile) }
     }
 
-    private suspend fun applyDensity(profile: DensityProfile) {
+    private suspend fun applyDensity(
+        profile: DensityProfile,
+        armPreviousDpi: Boolean = false
+    ) {
         val context = getApplication<Application>().applicationContext
         activeDensityOperations.incrementAndGet()
 
@@ -511,6 +518,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         try {
+            if (armPreviousDpi) {
+                preferences.armPreviousDpi(profile == DensityProfile.OUTER)
+            }
             flushDpiPreference(profile)
 
             val result = DensityExecutor.apply(

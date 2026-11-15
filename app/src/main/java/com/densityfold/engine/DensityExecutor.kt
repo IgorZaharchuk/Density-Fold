@@ -91,7 +91,7 @@ object DensityExecutor {
 
                     ensureDisplayUnchanged(context, active)
                     if (!alreadyApplied) {
-                        preferences.setPreviousDpi(isExternal, currentDpi)
+                        preferences.rememberPreviousDpiIfArmed(isExternal, currentDpi)
                     }
                     DensityApplyResult(
                         isExternal = isExternal,
@@ -184,6 +184,10 @@ object DensityExecutor {
                     }
 
                     ensureDisplayUnchanged(context, active)
+                    if (!alreadyApplied) {
+                        DensityPreferences(context)
+                            .rememberPreviousDpiIfArmed(active.isExternal, currentDpi)
+                    }
 
                     DensityApplyResult(
                         isExternal = active.isExternal,

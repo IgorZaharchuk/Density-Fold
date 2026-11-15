@@ -28,6 +28,8 @@ class DensityPreferences(private val context: Context) {
         val OUTER_DPI = intPreferencesKey("outer_dpi")
         val PREVIOUS_INNER_DPI = intPreferencesKey("previous_inner_dpi")
         val PREVIOUS_OUTER_DPI = intPreferencesKey("previous_outer_dpi")
+        val REMEMBER_PREVIOUS_INNER_DPI = booleanPreferencesKey("remember_previous_inner_dpi")
+        val REMEMBER_PREVIOUS_OUTER_DPI = booleanPreferencesKey("remember_previous_outer_dpi")
         val FOLD_MONITOR_ENABLED = booleanPreferencesKey("fold_monitor_enabled")
         val AUTO_START_ENABLED = booleanPreferencesKey("auto_start_enabled")
         val ROOT_BACKEND_ENABLED = booleanPreferencesKey("root_backend_enabled")
@@ -81,9 +83,32 @@ class DensityPreferences(private val context: Context) {
             values[PREVIOUS_INNER_DPI] to values[PREVIOUS_OUTER_DPI]
         }
 
-    suspend fun setPreviousDpi(isExternal: Boolean, dpi: Int) {
-        val key = if (isExternal) PREVIOUS_OUTER_DPI else PREVIOUS_INNER_DPI
-        context.dataStore.edit { it[key] = dpi.coerceIn(MIN_DPI, MAX_DPI) }
+    suspend fun armPreviousDpi(isExternal: Boolean) {
+        val key = if (isExternal) {
+            REMEMBER_PREVIOUS_OUTER_DPI
+        } else {
+            REMEMBER_PREVIOUS_INNER_DPI
+        }
+        context.dataStore.edit { it[key] = true }
+    }
+
+    suspend fun rememberPreviousDpiIfArmed(isExternal: Boolean, dpi: Int): Boolean {
+        val triggerKey = if (isExternal) {
+            REMEMBER_PREVIOUS_OUTER_DPI
+        } else {
+            REMEMBER_PREVIOUS_INNER_DPI
+        }
+        val previousKey = if (isExternal) PREVIOUS_OUTER_DPI else PREVIOUS_INNER_DPI
+        var saved = false
+
+        context.dataStore.edit { values ->
+            if (values[triggerKey] == true) {
+                values[previousKey] = dpi.coerceIn(MIN_DPI, MAX_DPI)
+                values.remove(triggerKey)
+                saved = true
+            }
+        }
+        return saved
     }
 
     suspend fun setFoldMonitorEnabled(enabled: Boolean) {
