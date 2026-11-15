@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
+import android.os.RemoteException
 import java.io.File
 import android.util.Log
 import com.topjohnwu.superuser.ipc.RootService
@@ -39,19 +40,43 @@ internal object RootServiceClient {
         appContext = context.applicationContext
     }
 
-    suspend fun getProcessUid(): Int = withContext(Dispatchers.IO) {
-        service().getProcessUid()
-    }
+    suspend fun getProcessUid(): Int =
+        withRemote { it.getProcessUid() }
 
     suspend fun getCurrentDensity(displayId: Int): Int =
-        withContext(Dispatchers.IO) {
-            service().getCurrentDensity(displayId)
-        }
+        withRemote { it.getCurrentDensity(displayId) }
 
     suspend fun setDensity(displayId: Int, dpi: Int): Int =
-        withContext(Dispatchers.IO) {
-            service().setDensity(displayId, dpi)
+        withRemote { it.setDensity(displayId, dpi) }
+
+    private suspend fun <T> withRemote(
+        operation: (IRootDensityService) -> T
+    ): T {
+        val current = service()
+        return try {
+            withContext(Dispatchers.IO) {
+                operation(current)
+            }
+        } catch (error: RemoteException) {
+            Log.e(TAG, "Root Binder: транспортная ошибка; сбрасываем соединение", error)
+            invalidate(current)
+            throw error
         }
+    }
+
+    private suspend fun invalidate(expected: IRootDensityService) {
+        var connectionToUnbind: ServiceConnection? = null
+
+        connectionMutex.withLock {
+            if (remote === expected) {
+                remote = null
+                connectionToUnbind = activeConnection
+                activeConnection = null
+            }
+        }
+
+        cleanup(connectionToUnbind)
+    }
 
     private suspend fun awaitSuExecutable() {
         var warningLogged = false
@@ -76,10 +101,28 @@ internal object RootServiceClient {
         }
     }
 
-    private suspend fun service(): IRootDensityService =
-        connectionMutex.withLock {
-            remote?.let {
-                return@withLock it
+    private suspend fun service(): IRootDensityService {
+        while (true) {
+            var staleConnection: ServiceConnection? = null
+
+            val result = connectionMutex.withLock {
+                remote?.let { cached ->
+                val binder = cached.asBinder()
+                val alive = try {
+                    binder.isBinderAlive && binder.pingBinder()
+                } catch (_: Exception) {
+                    false
+                }
+
+                if (alive) {
+                    return@withLock cached
+                }
+
+                Log.w(TAG, "Root Binder мёртв; сбрасываем старое соединение")
+                remote = null
+                staleConnection = activeConnection
+                activeConnection = null
+                return@withLock null
             }
 
             val context = appContext
@@ -197,7 +240,13 @@ internal object RootServiceClient {
             remote ?: throw IllegalStateException(
                 "Root daemon подключился без доступного Binder"
             )
+            }
+
+            if (result != null) return result
+
+            cleanup(staleConnection)
         }
+    }
 
     private suspend fun cleanup(connection: ServiceConnection?) {
         if (connection == null) return
