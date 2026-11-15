@@ -2,6 +2,9 @@ package com.densityfold.backend
 
 import kotlinx.coroutines.CancellationException
 
+internal fun shouldInvalidateBackend(error: Throwable): Boolean =
+    error is BackendOperationException && error.invalidatesBackend
+
 class BackendOperationException(
     cause: Throwable,
     val invalidatesBackend: Boolean = false
