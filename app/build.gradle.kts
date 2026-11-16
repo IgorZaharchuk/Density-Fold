@@ -46,7 +46,8 @@ android {
 }
 
 dependencies {
-    implementation(project(":libsu-service"))
+    debugImplementation(project(":libsu-service"))
+    releaseImplementation(project(":libsu-service"))
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.activity:activity-compose:1.8.1")
     implementation(platform("androidx.compose:compose-bom:2023.10.01"))
