@@ -15,6 +15,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import com.densityfold.engine.DirectDensityDiag
+import java.lang.reflect.InvocationTargetException
 import com.densityfold.engine.DisplayUtils
 
 class DirectDiagActivity : Activity() {
@@ -22,6 +23,8 @@ class DirectDiagActivity : Activity() {
     private lateinit var reportView: TextView
     private lateinit var densityInput: EditText
     private lateinit var statusView: TextView
+    private lateinit var applyButton: Button
+    private lateinit var restoreButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,7 +49,7 @@ class DirectDiagActivity : Activity() {
         }
         content.addView(densityInput)
 
-        content.addView(makeButton("Применить") {
+        applyButton = makeButton("Применить") {
             val dpi = densityInput.text.toString().toIntOrNull()
             val active = DisplayUtils.getActiveDisplay(this)
 
@@ -55,13 +58,19 @@ class DirectDiagActivity : Activity() {
             } else if (active == null || dpi !in DisplayUtils.allowedDpiRange(active.shortPx)) {
                 statusView.text = "Недопустимое значение DPI для этого экрана."
             } else {
-                runDensityAction { DirectDensityDiag.applyDensity(dpi) }
+                runDensityAction {
+                    DirectDensityDiag.applyDensity(applicationContext, dpi)
+                }
             }
-        })
+        }
+        content.addView(applyButton)
 
-        content.addView(makeButton("Восстановить исходную плотность") {
-            runDensityAction { DirectDensityDiag.restoreDensity() }
-        })
+        restoreButton = makeButton("Восстановить исходную плотность") {
+            runDensityAction {
+                DirectDensityDiag.restoreDensity(applicationContext)
+            }
+        }
+        content.addView(restoreButton)
 
         statusView = TextView(this).apply {
             text = "Готово."
@@ -105,13 +114,21 @@ class DirectDiagActivity : Activity() {
 
     private fun runDensityAction(action: () -> String) {
         statusView.text = "Выполняется..."
+        applyButton.isEnabled = false
+        restoreButton.isEnabled = false
+
         Thread {
             val result = runCatching(action).getOrElse {
-                "Ошибка: ${it.javaClass.simpleName}: ${it.message}"
+                val cause = (it as? InvocationTargetException)?.targetException
+                    ?: it.cause
+                    ?: it
+                "Ошибка: ${cause.javaClass.name}: ${cause.message}"
             }
             runOnUiThread {
                 statusView.text = result
                 reportView.text = deviceReport()
+                applyButton.isEnabled = true
+                restoreButton.isEnabled = true
             }
         }.start()
     }

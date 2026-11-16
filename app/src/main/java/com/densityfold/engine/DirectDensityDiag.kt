@@ -2,6 +2,11 @@ package com.densityfold.engine
 
 import android.content.Context
 import android.content.pm.PackageManager
+import android.hardware.display.DisplayManager
+import android.os.SystemClock
+import android.provider.Settings
+import android.util.DisplayMetrics
+import java.lang.reflect.InvocationTargetException
 import android.os.Process
 import android.util.Log
 
@@ -9,47 +14,106 @@ object DirectDensityDiag {
 
     private const val TAG = "DirectDensityDiag"
 
-    fun getBaseDensity(): Int {
-        val service = getWindowManagerService()
-        val method = service.javaClass.getMethod(
-            "getBaseDisplayDensity",
-            Int::class.javaPrimitiveType!!
-        )
-        return method.invoke(service, 0) as Int
-    }
+    private const val DISPLAY_ID = 0
+    private val USER_ID = Process.myUid() / 100000
+    private val I = Int::class.javaPrimitiveType!!
 
-    fun applyDensity(density: Int): String {
-        require(density in 1..1000) { "Недопустимое значение DPI: $density" }
+    @Volatile private var savedInitial: Int? = null
+    @Volatile private var savedBase: Int? = null
 
-        val service = getWindowManagerService()
-        val method = service.javaClass.getMethod(
-            "setForcedDisplayDensityForUser",
-            Int::class.javaPrimitiveType!!,
-            Int::class.javaPrimitiveType!!,
-            Int::class.javaPrimitiveType!!
-        )
-        method.invoke(service, 0, android.os.UserHandle.myUserId(), density)
-        return "Вызов установки DPI выполнен: $density"
-    }
-
-    fun restoreDensity(): String {
-        val service = getWindowManagerService()
-        val method = service.javaClass.getMethod(
-            "clearForcedDisplayDensityForUser",
-            Int::class.javaPrimitiveType!!,
-            Int::class.javaPrimitiveType!!
-        )
-        method.invoke(service, 0, android.os.UserHandle.myUserId())
-        return "Переопределение DPI сброшено."
-    }
-
-    private fun getWindowManagerService(): Any {
-        val globalClass = Class.forName("android.view.WindowManagerGlobal")
-        val getter = globalClass.getDeclaredMethod("getWindowManagerService")
-        getter.isAccessible = true
+    private fun service(): Any {
+        val getter = Class.forName("android.view.WindowManagerGlobal")
+            .getDeclaredMethod("getWindowManagerService")
+            .apply { isAccessible = true }
         return getter.invoke(null) ?: error("WindowManager service недоступен")
     }
 
+    fun readDensities(): Pair<Int, Int> {
+        val s = service()
+        val initial = s.javaClass.getMethod("getInitialDisplayDensity", I)
+            .invoke(s, DISPLAY_ID) as Int
+        val base = s.javaClass.getMethod("getBaseDisplayDensity", I)
+            .invoke(s, DISPLAY_ID) as Int
+        return initial to base
+    }
+
+    private fun captureBaseline() {
+        if (savedBase == null) {
+            val (initial, base) = readDensities()
+            savedInitial = initial
+            savedBase = base
+            Log.i(TAG, "baseline initial=$initial base=$base")
+        }
+    }
+
+    private fun namespaces(context: Context): String {
+        val resolver = context.contentResolver
+        return "secure=${Settings.Secure.getString(resolver, "display_density_forced")}, " +
+            "system=${Settings.System.getString(resolver, "display_density_forced")}"
+    }
+
+    private fun verify(context: Context, expected: Int): String {
+        val manager = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+        val display = manager.getDisplay(DISPLAY_ID)
+            ?: error("Display $DISPLAY_ID недоступен")
+        val started = SystemClock.elapsedRealtime()
+
+        repeat(50) {
+            val metrics = DisplayMetrics()
+            display.getRealMetrics(metrics)
+            if (metrics.densityDpi == expected) {
+                return "ПРИМЕНЕНО за ${SystemClock.elapsedRealtime() - started} мс (metrics=${metrics.densityDpi})"
+            }
+            Thread.sleep(100)
+        }
+
+        val metrics = DisplayMetrics()
+        display.getRealMetrics(metrics)
+        return "НЕ подтверждено за 5 с: metrics=${metrics.densityDpi}, ожидалось $expected"
+    }
+
+    fun applyDensity(context: Context, density: Int): String {
+        require(density in 200..1000) { "Недопустимое значение DPI: $density" }
+
+        return try {
+            captureBaseline()
+            val before = namespaces(context)
+            val s = service()
+            val method = s.javaClass.getMethod(
+                "setForcedDisplayDensityForUser", I, I, I
+            )
+            method.invoke(s, DISPLAY_ID, density, USER_ID)
+            val verification = verify(context, density)
+            "set($density) OK; $verification\nдо: $before\nпосле: ${namespaces(context)}"
+        } catch (e: InvocationTargetException) {
+            val cause = e.targetException ?: e
+            "IPC отклонён: ${cause.javaClass.name}: ${cause.message}"
+        }
+    }
+
+    fun restoreDensity(context: Context): String {
+        return try {
+            captureBaseline()
+            val initial = savedInitial!!
+            val base = savedBase!!
+            val s = service()
+
+            if (base != initial) {
+                s.javaClass.getMethod(
+                    "setForcedDisplayDensityForUser", I, I, I
+                ).invoke(s, DISPLAY_ID, base, USER_ID)
+                "Восстановлен прежний override base=$base; ${verify(context, base)}"
+            } else {
+                s.javaClass.getMethod(
+                    "clearForcedDisplayDensityForUser", I, I
+                ).invoke(s, DISPLAY_ID, USER_ID)
+                "Override снят (base==initial=$initial); ${verify(context, initial)}"
+            }
+        } catch (e: InvocationTargetException) {
+            val cause = e.targetException ?: e
+            "IPC отклонён: ${cause.javaClass.name}: ${cause.message}"
+        }
+    }
 
     fun run(context: Context): String {
         Log.i(TAG, "DIRECT_DIAG_PROBE_START pid=${Process.myPid()}")
