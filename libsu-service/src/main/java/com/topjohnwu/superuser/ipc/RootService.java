@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+// Modified by Density Fold contributors from upstream libsu 6.0.0.
+// This file contains Density Fold project modifications; the original
+// upstream copyright and Apache-2.0 license notice are retained.
+
 package com.topjohnwu.superuser.ipc;
 
 import android.app.Service;

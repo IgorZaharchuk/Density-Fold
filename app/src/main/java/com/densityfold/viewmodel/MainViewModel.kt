@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.densityfold.FoldMonitorService
 import com.densityfold.backend.DensityBackendManager
 import com.densityfold.data.DensityPreferences
+import com.densityfold.data.DensitySettings
 import com.densityfold.engine.DisplayInfo
 import com.densityfold.engine.DisplayUtils
 import com.densityfold.engine.DensityExecutor
@@ -354,9 +355,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun refreshBackendSelection() {
         if (_uiState.value.isShizukuPermissionPending) return
 
+        var settings: DensitySettings? = null
+
         try {
+            val currentSettings = preferences.getSettings()
+            settings = currentSettings
+
             DensityBackendManager.selectBackend(
-                settingsProvider = { preferences.getSettings() }
+                settingsProvider = { currentSettings }
             ).onSuccess {
                 _uiState.update { it.copy(errorMessage = null) }
             }.onFailure { error ->
@@ -378,13 +384,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        requestShizukuPermissionIfNeeded()
+        settings?.let { requestShizukuPermissionIfNeeded(it) }
     }
 
-    private suspend fun requestShizukuPermissionIfNeeded() {
+    private suspend fun requestShizukuPermissionIfNeeded(settings: DensitySettings) {
         if (_uiState.value.isShizukuPermissionPending) return
-
-        val settings = preferences.getSettings()
         if (!settings.shizukuBackendEnabled || shizukuPermissionDenied) return
 
         val permissionGranted = try {
