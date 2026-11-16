@@ -28,10 +28,10 @@ jobs:
         $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
       
     - name: Run unit tests
-      run: ./gradlew :app:testStandardDebugUnitTest --stacktrace
+      run: ./gradlew :app:testDebugUnitTest --stacktrace
 
     - name: Run Android Lint
-      run: ./gradlew :app:lintStandardDebug --stacktrace
+      run: ./gradlew :app:lintDebug --stacktrace
 
     - name: Upload Android Lint report
       if: always()
@@ -39,9 +39,9 @@ jobs:
       with:
         name: Android-Lint-Report
         path: |
-          app/build/reports/lint-results-standardDebug.html
-          app/build/reports/lint-results-standardDebug.txt
-          app/build/reports/lint-results-standardDebug.sarif
+          app/build/reports/lint-results-debug.html
+          app/build/reports/lint-results-debug.txt
+          app/build/reports/lint-results-debug.sarif
         if-no-files-found: warn
         retention-days: 7
 
@@ -54,19 +54,11 @@ jobs:
         fi
         echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
 
-        if [ "$GITHUB_REF_NAME" = "experiment/direct-density" ]; then
-          ./gradlew :app:assembleLegacyDiagDirectDiag --stacktrace
-          APK_PATH="app/build/outputs/apk/legacyDiag/directDiag/app-legacyDiag-directDiag.apk"
-          cp "$APK_PATH" "app/build/outputs/apk/legacyDiag/directDiag/Density-Fold-DirectDiag-API27-$VERSION_NAME.apk"
-          echo "APK_PATH=app/build/outputs/apk/legacyDiag/directDiag/Density-Fold-DirectDiag-API27-$VERSION_NAME.apk" >> "$GITHUB_ENV"
-          echo "ARTIFACT_NAME=Density-Fold-DirectDiag-API27-$VERSION_NAME" >> "$GITHUB_ENV"
-        else
-          ./gradlew :app:assembleDebug --stacktrace
-          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
-          cp "$APK_PATH" "app/build/outputs/apk/debug/Density-Fold-$VERSION_NAME.apk"
-          echo "APK_PATH=app/build/outputs/apk/debug/Density-Fold-$VERSION_NAME.apk" >> "$GITHUB_ENV"
-          echo "ARTIFACT_NAME=Density-Fold-$VERSION_NAME" >> "$GITHUB_ENV"
-        fi
+        ./gradlew :app:assembleDebug --stacktrace
+        APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+        cp "$APK_PATH" "app/build/outputs/apk/debug/Density-Fold-Direct-API27-$VERSION_NAME.apk"
+        echo "APK_PATH=app/build/outputs/apk/debug/Density-Fold-Direct-API27-$VERSION_NAME.apk" >> "$GITHUB_ENV"
+        echo "ARTIFACT_NAME=Density-Fold-Direct-API27-$VERSION_NAME" >> "$GITHUB_ENV"
     - name: Upload APK
       uses: actions/upload-artifact@v7
       with:
