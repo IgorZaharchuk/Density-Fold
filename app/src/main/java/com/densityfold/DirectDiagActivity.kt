@@ -43,7 +43,7 @@ class DirectDiagActivity : Activity() {
 
         densityInput = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER
-            singleLine = true
+            isSingleLine = true
             hint = "Плотность, DPI"
             setText(DisplayUtils.getActiveDisplay(this@DirectDiagActivity)?.density?.toString() ?: "")
         }
