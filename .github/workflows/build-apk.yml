@@ -28,10 +28,10 @@ jobs:
         $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
       
     - name: Run unit tests
-      run: ./gradlew :app:testDebugUnitTest --stacktrace
+      run: ./gradlew :app:testStandardDebugUnitTest --stacktrace
 
     - name: Run Android Lint
-      run: ./gradlew :app:lintDebug --stacktrace
+      run: ./gradlew :app:lintStandardDebug --stacktrace
 
     - name: Upload Android Lint report
       if: always()
@@ -39,9 +39,9 @@ jobs:
       with:
         name: Android-Lint-Report
         path: |
-          app/build/reports/lint-results-debug.html
-          app/build/reports/lint-results-debug.txt
-          app/build/reports/lint-results-debug.sarif
+          app/build/reports/lint-results-standardDebug.html
+          app/build/reports/lint-results-standardDebug.txt
+          app/build/reports/lint-results-standardDebug.sarif
         if-no-files-found: warn
         retention-days: 7
 
@@ -55,9 +55,9 @@ jobs:
         echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
 
         if [ "$GITHUB_REF_NAME" = "experiment/direct-density" ]; then
-          ./gradlew :app:assembleDirectDiag --stacktrace
-          APK_PATH="app/build/outputs/apk/directDiag/app-directDiag.apk"
-          cp "$APK_PATH" "app/build/outputs/apk/directDiag/Density-Fold-DirectDiag-$VERSION_NAME.apk"
+          ./gradlew :app:assembleLegacyDiagDirectDiag --stacktrace
+          APK_PATH="app/build/outputs/apk/legacyDiag/directDiag/app-legacyDiag-directDiag.apk"
+          cp "$APK_PATH" "app/build/outputs/apk/directDiag/Density-Fold-DirectDiag-API27-$VERSION_NAME.apk"
           echo "APK_PATH=app/build/outputs/apk/directDiag/Density-Fold-DirectDiag-$VERSION_NAME.apk" >> "$GITHUB_ENV"
           echo "ARTIFACT_NAME=Density-Fold-DirectDiag-$VERSION_NAME" >> "$GITHUB_ENV"
         else

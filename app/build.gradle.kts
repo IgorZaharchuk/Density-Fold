@@ -11,9 +11,22 @@ android {
         applicationId = "com.densityfold"
         minSdk = 26
         targetSdk = 34
+        missingDimensionStrategy("target", "standard")
         versionCode = 23
         versionName = "0.9.22"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    flavorDimensions += "target"
+    productFlavors {
+        create("standard") {
+            dimension = "target"
+            targetSdk = 34
+        }
+        create("legacyDiag") {
+            dimension = "target"
+            targetSdk = 27
+        }
     }
 
     buildTypes {
