@@ -57,9 +57,9 @@ jobs:
         if [ "$GITHUB_REF_NAME" = "experiment/direct-density" ]; then
           ./gradlew :app:assembleLegacyDiagDirectDiag --stacktrace
           APK_PATH="app/build/outputs/apk/legacyDiag/directDiag/app-legacyDiag-directDiag.apk"
-          cp "$APK_PATH" "app/build/outputs/apk/directDiag/Density-Fold-DirectDiag-API27-$VERSION_NAME.apk"
-          echo "APK_PATH=app/build/outputs/apk/directDiag/Density-Fold-DirectDiag-$VERSION_NAME.apk" >> "$GITHUB_ENV"
-          echo "ARTIFACT_NAME=Density-Fold-DirectDiag-$VERSION_NAME" >> "$GITHUB_ENV"
+          cp "$APK_PATH" "app/build/outputs/apk/legacyDiag/directDiag/Density-Fold-DirectDiag-API27-$VERSION_NAME.apk"
+          echo "APK_PATH=app/build/outputs/apk/legacyDiag/directDiag/Density-Fold-DirectDiag-API27-$VERSION_NAME.apk" >> "$GITHUB_ENV"
+          echo "ARTIFACT_NAME=Density-Fold-DirectDiag-API27-$VERSION_NAME" >> "$GITHUB_ENV"
         else
           ./gradlew :app:assembleDebug --stacktrace
           APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
