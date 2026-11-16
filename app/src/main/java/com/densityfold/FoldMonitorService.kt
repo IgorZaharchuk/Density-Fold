@@ -38,6 +38,8 @@ class FoldMonitorService : Service() {
             "com.densityfold.NOTIFICATION_PLUS"
         const val ACTION_NOTIFICATION_PROFILE =
             "com.densityfold.NOTIFICATION_PROFILE"
+
+        private const val MAX_ACTION_ATTEMPTS = 3
     }
 
     private val TAG = "DensityFold-Monitor"
@@ -60,8 +62,8 @@ class FoldMonitorService : Service() {
     private var pendingShizukuAction = false
     private var activeRequestId: Long? = null
     private var retryPending = false
+    private var consecutiveActionFailures = 0
     private var retryJob: Job? = null
-    private var actionTimeoutJob: Job? = null
 
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
@@ -90,8 +92,6 @@ class FoldMonitorService : Service() {
                 return
             }
 
-            actionTimeoutJob?.cancel()
-            actionTimeoutJob = null
             activeRequestId = null
 
             val success = intent.getBooleanExtra(
@@ -101,6 +101,7 @@ class FoldMonitorService : Service() {
 
             if (success) {
                 retryPending = false
+                consecutiveActionFailures = 0
                 retryJob?.cancel()
 
                 val isExternal = intent.getBooleanExtra(
@@ -254,8 +255,21 @@ class FoldMonitorService : Service() {
             return
         }
 
+        consecutiveActionFailures++
+        if (consecutiveActionFailures >= MAX_ACTION_ATTEMPTS) {
+            retryPending = false
+            retryJob?.cancel()
+            retryJob = null
+            updateNotification("Не удалось применить DPI · автоматические повторы остановлены")
+            Log.e(TAG, "Достигнут предел попыток ($MAX_ACTION_ATTEMPTS); повторы остановлены")
+            return
+        }
+
         retryPending = true
-        updateNotification("Не удалось выполнить действие · повторная попытка")
+        updateNotification(
+            "Не удалось выполнить действие · попытка " +
+                "${consecutiveActionFailures + 1} из $MAX_ACTION_ATTEMPTS"
+        )
         scheduleRetry()
     }
 
@@ -353,6 +367,12 @@ class FoldMonitorService : Service() {
         val previousObserved = lastObservedExternal
         val foldTransition = previousObserved != null &&
             previousObserved != isExternal
+        if (foldTransition) {
+            consecutiveActionFailures = 0
+            retryPending = false
+            retryJob?.cancel()
+            retryJob = null
+        }
         lastObservedExternal = isExternal
 
         refreshNotificationDpi(active)
@@ -407,41 +427,14 @@ class FoldMonitorService : Service() {
                 )
             }
 
-            startActionTimeout(
-                requestId = requestId,
-                logMessage = "Тайм-аут ожидания результата действия",
-                notificationMessage = "Нет ответа от сервиса · повторная попытка"
-            )
+            // Запрос остаётся активным до ACTION_COMPLETED.
+            // Таймер не должен запускать повтор, пока исходная операция ещё выполняется.
         } catch (e: Exception) {
             if (activeRequestId == requestId) {
-                actionTimeoutJob?.cancel()
-                actionTimeoutJob = null
                 activeRequestId = null
             }
             Log.e(TAG, "Не удалось запустить сервис: ${e.message}", e)
             handleActionFailure("Ошибка запуска действия")
-        }
-    }
-
-    private fun startActionTimeout(
-        requestId: Long,
-        logMessage: String,
-        notificationMessage: String
-    ) {
-        actionTimeoutJob?.cancel()
-        actionTimeoutJob = scope.launch {
-            delay(20_000L)
-            if (activeRequestId == requestId) {
-                activeRequestId = null
-                Log.w(TAG, logMessage)
-                if (isShizukuExpected() && !isShizukuReady()) {
-                    handleActionFailure(logMessage)
-                } else {
-                    retryPending = true
-                    updateNotification(notificationMessage)
-                    scheduleRetry()
-                }
-            }
         }
     }
 
@@ -658,8 +651,6 @@ class FoldMonitorService : Service() {
     override fun onDestroy() {
         displayManager?.unregisterDisplayListener(displayListener)
         retryJob?.cancel()
-        actionTimeoutJob?.cancel()
-
         try {
             unregisterReceiver(actionCompletedReceiver)
         } catch (e: Exception) {

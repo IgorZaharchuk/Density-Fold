@@ -108,13 +108,7 @@ internal object WindowManagerDensity {
             USER_CURRENT
         )
 
-        // Readback выполняем через тот же актуальный proxy.
-        val actual = readDensity(currentManager, displayId)
-        if (actual != dpi) {
-            throw IllegalStateException(
-                "Проверка не пройдена: задано $dpi, получено $actual"
-            )
-        }
-        return actual
+        // Фактическое значение проверяется общим readback в DensityExecutor.
+        return dpi
     }
 }
