@@ -6,9 +6,11 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
 import android.os.Bundle
+import android.text.InputType
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -18,6 +20,8 @@ import com.densityfold.engine.DisplayUtils
 class DirectDiagActivity : Activity() {
 
     private lateinit var reportView: TextView
+    private lateinit var densityInput: EditText
+    private lateinit var statusView: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,6 +37,37 @@ class DirectDiagActivity : Activity() {
             setPadding(0, 0, 0, 16)
         }
         content.addView(title)
+
+        densityInput = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+            singleLine = true
+            hint = "Плотность, DPI"
+            setText(DisplayUtils.getActiveDisplay(this@DirectDiagActivity)?.density?.toString() ?: "")
+        }
+        content.addView(densityInput)
+
+        content.addView(makeButton("Применить") {
+            val dpi = densityInput.text.toString().toIntOrNull()
+            val active = DisplayUtils.getActiveDisplay(this)
+
+            if (dpi == null) {
+                statusView.text = "Введите целое значение DPI."
+            } else if (active == null || dpi !in DisplayUtils.allowedDpiRange(active.shortPx)) {
+                statusView.text = "Недопустимое значение DPI для этого экрана."
+            } else {
+                runDensityAction { DirectDensityDiag.applyDensity(dpi) }
+            }
+        })
+
+        content.addView(makeButton("Восстановить исходную плотность") {
+            runDensityAction { DirectDensityDiag.restoreDensity() }
+        })
+
+        statusView = TextView(this).apply {
+            text = "Готово."
+            setPadding(0, 8, 0, 12)
+        }
+        content.addView(statusView)
 
         content.addView(makeButton("Проверить API") {
             runProbe()
@@ -66,6 +101,19 @@ class DirectDiagActivity : Activity() {
         )
 
         setContentView(content)
+    }
+
+    private fun runDensityAction(action: () -> String) {
+        statusView.text = "Выполняется..."
+        Thread {
+            val result = runCatching(action).getOrElse {
+                "Ошибка: ${it.javaClass.simpleName}: ${it.message}"
+            }
+            runOnUiThread {
+                statusView.text = result
+                reportView.text = deviceReport()
+            }
+        }.start()
     }
 
     private fun makeButton(label: String, action: () -> Unit): Button {

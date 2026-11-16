@@ -9,6 +9,48 @@ object DirectDensityDiag {
 
     private const val TAG = "DirectDensityDiag"
 
+    fun getBaseDensity(): Int {
+        val service = getWindowManagerService()
+        val method = service.javaClass.getMethod(
+            "getBaseDisplayDensity",
+            Int::class.javaPrimitiveType!!
+        )
+        return method.invoke(service, 0) as Int
+    }
+
+    fun applyDensity(density: Int): String {
+        require(density in 1..1000) { "Недопустимое значение DPI: $density" }
+
+        val service = getWindowManagerService()
+        val method = service.javaClass.getMethod(
+            "setForcedDisplayDensityForUser",
+            Int::class.javaPrimitiveType!!,
+            Int::class.javaPrimitiveType!!,
+            Int::class.javaPrimitiveType!!
+        )
+        method.invoke(service, 0, android.os.UserHandle.myUserId(), density)
+        return "Вызов установки DPI выполнен: $density"
+    }
+
+    fun restoreDensity(): String {
+        val service = getWindowManagerService()
+        val method = service.javaClass.getMethod(
+            "clearForcedDisplayDensityForUser",
+            Int::class.javaPrimitiveType!!,
+            Int::class.javaPrimitiveType!!
+        )
+        method.invoke(service, 0, android.os.UserHandle.myUserId())
+        return "Переопределение DPI сброшено."
+    }
+
+    private fun getWindowManagerService(): Any {
+        val globalClass = Class.forName("android.view.WindowManagerGlobal")
+        val getter = globalClass.getDeclaredMethod("getWindowManagerService")
+        getter.isAccessible = true
+        return getter.invoke(null) ?: error("WindowManager service недоступен")
+    }
+
+
     fun run(context: Context): String {
         Log.i(TAG, "DIRECT_DIAG_PROBE_START pid=${Process.myPid()}")
 
