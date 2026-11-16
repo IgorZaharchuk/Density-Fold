@@ -419,11 +419,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { refreshDisplaysInternal() }
     }
 
-    fun setInnerDpi(dpi: Int) = setDpi(DensityProfile.INNER, dpi)
+    fun setInnerDpi(dpi: Int) {
+        setDpi(DensityProfile.INNER, dpi)
+    }
 
-    fun setOuterDpi(dpi: Int) = setDpi(DensityProfile.OUTER, dpi)
+    fun setOuterDpi(dpi: Int) {
+        setDpi(DensityProfile.OUTER, dpi)
+    }
 
-    private fun setDpi(profile: DensityProfile, dpi: Int) {
+    private fun setDpi(profile: DensityProfile, dpi: Int): Boolean {
         val state = _uiState.value
         val shortPx = when (profile) {
             DensityProfile.INNER -> state.innerShortPx
@@ -438,7 +442,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         "${allowedRange.first}–${allowedRange.last} DPI"
                 )
             }
-            return
+            return false
         }
 
         _uiState.update {
@@ -449,6 +453,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         scheduleDpiSave(profile, dpi)
+        return true
     }
 
     private fun scheduleDpiSave(profile: DensityProfile, dpi: Int) {
@@ -498,7 +503,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             DensityProfile.OUTER -> _uiState.value.previousOuterDpi
         } ?: return
 
-        setDpi(profile, previous)
+        if (!setDpi(profile, previous)) return
         viewModelScope.launch { applyDensity(profile) }
     }
 
