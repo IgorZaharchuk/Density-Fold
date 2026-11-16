@@ -29,13 +29,6 @@ abstract class BaseActionActivity : Activity() {
         startService(Intent(this, DensityActionService::class.java).apply {
             this.action = this@BaseActionActivity.action
             putExtra(DensityActionService.EXTRA_MONITOR_REQUEST, fromMonitor)
-            putExtra(
-                DensityActionService.EXTRA_RECOVERY_REQUEST,
-                intent.getBooleanExtra(
-                    DensityActionService.EXTRA_RECOVERY_REQUEST,
-                    false
-                )
-            )
             if (fromMonitor) {
                 putExtra(
                     DensityActionService.EXTRA_MONITOR_REQUEST_ID,

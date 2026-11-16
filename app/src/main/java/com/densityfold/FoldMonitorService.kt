@@ -15,11 +15,6 @@ import android.util.Log
 import android.view.Display
 import androidx.core.content.ContextCompat
 import com.densityfold.engine.DisplayUtils
-import com.densityfold.backend.DensityBackendManager
-import com.densityfold.backend.shizuku.ShizukuMonitor
-import com.densityfold.backend.shizuku.ShizukuBackend
-import com.densityfold.backend.shizuku.ShizukuRecovery
-import kotlinx.coroutines.flow.combine
 import com.densityfold.data.DensityPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,12 +49,28 @@ class FoldMonitorService : Service() {
     private var notificationActionError: String? = null
     private var notificationActionErrorJob: Job? = null
     private var notificationControlsAvailable = false
+
+
+    private fun hasWriteSecureSettingsPermission(): Boolean {
+        return checkSelfPermission(
+            "android.permission.WRITE_SECURE_SETTINGS"
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun refreshPermissionState(): Boolean {
+        val granted = hasWriteSecureSettingsPermission()
+        notificationControlsAvailable = granted
+        if (!granted) {
+            notificationCurrentDpi = null
+        }
+        return granted
+    }
     private var notificationProfileDpi: Int? = null
     private var notificationCurrentDpi: Int? = null
 
     private var lastRequestedExternal: Boolean? = null
     private var lastObservedExternal: Boolean? = null
-    private var pendingShizukuAction = false
+    private var pendingDensityAction = false
     private var activeRequestId: Long? = null
     private var retryPending = false
     private var consecutiveActionFailures = 0
@@ -122,7 +133,7 @@ class FoldMonitorService : Service() {
 
                 val active = DisplayUtils.getActiveDisplay(applicationContext)
                 if (
-                    pendingShizukuAction ||
+                    pendingDensityAction ||
                     active == null ||
                     active.isExternal != isExternal
                 ) {
@@ -151,69 +162,8 @@ class FoldMonitorService : Service() {
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
 
+        refreshPermissionState()
         startForegroundSafely()
-
-        scope.launch {
-            combine(
-                DensityBackendManager.selectedBackend,
-                DensityBackendManager.availability,
-                ShizukuMonitor.runtimeState
-            ) { backend, availability, shizukuState ->
-                when (backend) {
-                    com.densityfold.backend.root.RootBackend ->
-                        availability.rootEnabled &&
-                            availability.rootAvailable == true
-
-                    com.densityfold.backend.shizuku.ShizukuBackend ->
-                        availability.shizukuEnabled &&
-                            availability.shizukuAvailable == true &&
-                            shizukuState?.mainBinder == true &&
-                            shizukuState.permission &&
-                            shizukuState.userService
-
-                    else -> false
-                }
-            }.collect { available ->
-                notificationControlsAvailable = available
-                if (available) {
-                    refreshNotificationDpi()
-                } else {
-                    notificationCurrentDpi = null
-                }
-                renderNotification(
-                    if (available) {
-                        notificationBaseMessage
-                    } else {
-                        "Управление DPI недоступно"
-                    }
-                )
-            }
-        }
-
-        scope.launch {
-            combine(
-                DensityBackendManager.selectedBackend,
-                DensityBackendManager.availability,
-                ShizukuMonitor.runtimeState
-            ) { backend, availability, state ->
-                val expected = backend === ShizukuBackend ||
-                    (
-                        backend == null &&
-                            availability.shizukuEnabled &&
-                            (!availability.rootEnabled || availability.rootAvailable == false)
-                    )
-
-                expected &&
-                    state?.mainBinder == true &&
-                    state.permission &&
-                    state.userService
-            }.collect { ready ->
-                if (ready && (pendingShizukuAction || lastRequestedExternal == null)) {
-                    Log.i(TAG, "Shizuku READY: проверяем отложенное действие")
-                    scheduleDensityCheck()
-                }
-            }
-        }
 
         scope.launch {
             for (event in checkChannel) {
@@ -227,41 +177,14 @@ class FoldMonitorService : Service() {
     }
 
 
-    private fun isShizukuExpected(): Boolean {
-        val selected = DensityBackendManager.selectedBackend.value
-        val availability = DensityBackendManager.availability.value
-
-        return selected === ShizukuBackend ||
-            (
-                selected == null &&
-                    availability.shizukuEnabled &&
-                    (!availability.rootEnabled || availability.rootAvailable == false)
-            )
-    }
-
-    private fun isShizukuReady(): Boolean {
-        val state = ShizukuMonitor.runtimeState.value ?: return false
-        return state.mainBinder && state.permission && state.userService
-    }
-
     private fun handleActionFailure(reason: String) {
-        if (isShizukuExpected() && !isShizukuReady()) {
-            pendingShizukuAction = true
-            retryPending = false
-            retryJob?.cancel()
-            retryJob = null
-            updateNotification("Ожидание восстановления Shizuku")
-            Log.w(TAG, "$reason: Shizuku не готов; таймерные повторы отключены")
-            return
-        }
-
         consecutiveActionFailures++
         if (consecutiveActionFailures >= MAX_ACTION_ATTEMPTS) {
             retryPending = false
             retryJob?.cancel()
             retryJob = null
             updateNotification("Не удалось применить DPI · автоматические повторы остановлены")
-            Log.e(TAG, "Достигнут предел попыток ($MAX_ACTION_ATTEMPTS); повторы остановлены")
+            Log.e(TAG, "$reason: достигнут предел попыток ($MAX_ACTION_ATTEMPTS)")
             return
         }
 
@@ -380,34 +303,22 @@ class FoldMonitorService : Service() {
             notificationActionError ?: "Мониторинг складывания активен"
         )
 
-        val shizukuExpected = isShizukuExpected()
-        val shizukuReady = isShizukuReady()
-
-        if (shizukuExpected && !shizukuReady) {
-            if (foldTransition) {
-                pendingShizukuAction = true
-                updateNotification("Ожидание восстановления Shizuku")
-                Log.w(TAG, "Fold transition при недоступном Shizuku")
-                val state = ShizukuMonitor.runtimeState.value
-                if (state?.mainBinder != true) {
-                    ShizukuRecovery.launch(this, isExternal)
-                } else {
-                    Log.i(TAG, "Главный Binder жив: ожидаем reconnect UserService")
-                }
-            }
+        if (!refreshPermissionState()) {
+            updateNotification("Нет разрешения WRITE_SECURE_SETTINGS")
+            Log.w(TAG, "Автоприменение приостановлено: нет системного разрешения")
             return
         }
 
         if (activeRequestId != null) return
 
         if (
-            !pendingShizukuAction &&
+            !pendingDensityAction &&
             lastRequestedExternal == isExternal &&
             !retryPending
         ) return
 
         val requestId = beginRequest(isExternal)
-        pendingShizukuAction = false
+        pendingDensityAction = false
 
         val actionName = if (isExternal) "Внешний" else "Внутренний"
         Log.i(TAG, "Запуск действия: $actionName")
@@ -513,6 +424,7 @@ class FoldMonitorService : Service() {
     private fun executeNotificationAction(action: String) {
         scope.launch {
             try {
+                refreshPermissionState()
                 if (!notificationControlsAvailable) {
                     updateNotification("Управление DPI недоступно")
                     return@launch
@@ -603,49 +515,11 @@ class FoldMonitorService : Service() {
     }
 
     private fun withBackendWarning(message: String): String {
-        val selected = DensityBackendManager.selectedBackend.value?.name
-        val availability = DensityBackendManager.availability.value
-        val runtime = ShizukuMonitor.runtimeState.value
-
-        val shizukuRuntimeUnavailable = runtime?.let {
-            !(it.mainBinder && it.permission && it.userService)
-        } == true
-
-        val warning = when (selected) {
-            "ROOT" -> null
-
-            "SHIZUKU" -> {
-                if (
-                    availability.shizukuAvailable == false ||
-                    shizukuRuntimeUnavailable
-                ) "Shizuku недоступен" else null
-            }
-
-            else -> {
-                val rootUnavailable =
-                    availability.rootEnabled &&
-                    availability.rootAvailable == false
-
-                val shizukuUnavailable =
-                    availability.shizukuEnabled &&
-                    (
-                        availability.shizukuAvailable == false ||
-                        shizukuRuntimeUnavailable
-                    )
-
-                when {
-                    rootUnavailable && shizukuUnavailable ->
-                        "Root и Shizuku недоступны"
-                    shizukuUnavailable ->
-                        "Shizuku недоступен"
-                    rootUnavailable ->
-                        "Root недоступен"
-                    else -> null
-                }
-            }
+        return if (hasWriteSecureSettingsPermission()) {
+            message
+        } else {
+            "$message · Требуется WRITE_SECURE_SETTINGS"
         }
-
-        return if (warning == null) message else "$message · $warning"
     }
 
     override fun onDestroy() {

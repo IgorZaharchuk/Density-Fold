@@ -75,6 +75,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         if (::mainViewModel.isInitialized) {
             mainViewModel.refreshDisplays()
+            mainViewModel.refreshWriteSecureSettingsPermission()
             mainViewModel.onOverlayPermissionSettingsReturned()
         }
     }
@@ -124,12 +125,10 @@ fun MainScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            val backendWarning = when {
-                !uiState.isRootBackendEnabled && !uiState.isShizukuBackendEnabled ->
-                    "Не выбран способ выполнения. Включите Root или Shizuku в настройках."
-                !uiState.isBackendReady ->
-                    "Нет доступного движка. Проверьте Root или запустите Shizuku и выдайте разрешение."
-                else -> null
+            val backendWarning = if (!uiState.isWriteSecureSettingsGranted) {
+                "Не выдано разрешение WRITE_SECURE_SETTINGS. Откройте настройки и выдайте его через Shizuku."
+            } else {
+                null
             }
 
             backendWarning?.let { message ->
@@ -198,15 +197,13 @@ fun MainScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.weight(1f))
-                        uiState.activeBackendName?.let { backendName ->
-                            Text(
-                                backendName,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.primary,
-                                maxLines = 1
-                            )
-                        }
+                        Text(
+                            if (uiState.isWriteSecureSettingsGranted) "DPI API" else "Нет разрешения",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1
+                        )
                     }
                     val display = uiState.activeDisplay
                     Column(
@@ -287,7 +284,7 @@ fun MainScreen(
                 onApply = viewModel::applyInnerDensity,
                 previousDpi = uiState.previousInnerDpi,
                 onRestorePrevious = viewModel::restorePreviousInnerDensity,
-                enabled = uiState.isBackendReady && !uiState.isLoading
+                enabled = uiState.isWriteSecureSettingsGranted && !uiState.isLoading
             )
 
             DensitySettingCard(
@@ -304,7 +301,7 @@ fun MainScreen(
                 onApply = viewModel::applyOuterDensity,
                 previousDpi = uiState.previousOuterDpi,
                 onRestorePrevious = viewModel::restorePreviousOuterDensity,
-                enabled = uiState.isBackendReady && !uiState.isLoading
+                enabled = uiState.isWriteSecureSettingsGranted && !uiState.isLoading
             )
 
             Card(modifier = Modifier.fillMaxWidth()) {
@@ -348,37 +345,31 @@ fun MainScreen(
                             ),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            SettingSwitch(
-                                title = "Root",
-                                description = when {
-                                    uiState.activeBackendName == "Root" -> "Активен"
-                                    uiState.isRootAvailable == false ->
-                                        "Нет Root-доступа"
-                                    uiState.isRootAvailable == true -> "Доступен"
-                                    uiState.isRootBackendEnabled ->
-                                        "Проверка Root…"
-                                    else -> "Приоритетный способ"
+                            Text(
+                                if (uiState.isWriteSecureSettingsGranted) {
+                                    "Разрешение WRITE_SECURE_SETTINGS выдано"
+                                } else {
+                                    "Для прямого изменения DPI требуется разрешение WRITE_SECURE_SETTINGS"
                                 },
-                                checked = uiState.isRootBackendEnabled,
-                                onCheckedChange = viewModel::setRootBackendEnabled
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Divider()
-                            SettingSwitch(
-                                title = "Shizuku",
-                                description = when {
-                                    uiState.activeBackendName == "Shizuku" -> "Активен"
-                                    uiState.isShizukuPermissionPending ->
-                                        "Ожидание Shizuku"
-                                    uiState.activeBackendName == "Root" ->
-                                        "Резерв — активен Root"
-                                    uiState.isShizukuBackendAvailable == false ->
-                                        "Нет Shizuku или разрешения"
-                                    uiState.isShizukuBackendAvailable == true -> "Доступен"
-                                    else -> "Резерв при недоступном Root"
-                                },
-                                checked = uiState.isShizukuBackendEnabled,
-                                onCheckedChange = viewModel::setShizukuBackendEnabled
-                            )
+                            Button(
+                                onClick = viewModel::requestWriteSecureSettings,
+                                enabled = !uiState.isPermissionGrantInProgress &&
+                                    !uiState.isWriteSecureSettingsGranted,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    if (uiState.isPermissionGrantInProgress) {
+                                        "Ожидание Shizuku…"
+                                    } else if (uiState.isWriteSecureSettingsGranted) {
+                                        "Разрешение выдано"
+                                    } else {
+                                        "Выдать разрешение через Shizuku"
+                                    }
+                                )
+                            }
                             Divider()
                             SettingSwitch(
                                 title = "Автоприменение",

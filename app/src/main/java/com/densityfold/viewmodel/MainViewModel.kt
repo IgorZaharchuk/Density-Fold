@@ -8,14 +8,12 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.densityfold.FoldMonitorService
-import com.densityfold.backend.DensityBackendManager
+import com.densityfold.backend.shizuku.ShizukuPermissionGrant
 import com.densityfold.data.DensityPreferences
-import com.densityfold.data.DensitySettings
 import com.densityfold.engine.DisplayInfo
 import com.densityfold.engine.DisplayUtils
 import com.densityfold.engine.DensityExecutor
 import com.densityfold.engine.DensityProfile
-import com.densityfold.backend.shizuku.ShizukuMonitor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,13 +36,8 @@ data class UiState(
     val outerSizeEstimated: Boolean = true,
     val isFoldMonitorEnabled: Boolean = false,
     val isAutoStartEnabled: Boolean = false,
-    val isRootBackendEnabled: Boolean = false,
-    val isShizukuBackendEnabled: Boolean = false,
-    val isRootAvailable: Boolean? = null,
-    val isShizukuBackendAvailable: Boolean? = null,
-    val isShizukuPermissionPending: Boolean = false,
-    val activeBackendName: String? = null,
-    val isBackendReady: Boolean = false,
+    val isWriteSecureSettingsGranted: Boolean = false,
+    val isPermissionGrantInProgress: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val successMessage: String? = null,
@@ -69,30 +62,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var pendingShizukuPermissionRequest = false
 
     @Volatile
-    private var shizukuPermissionDenied = false
-
-    @Volatile
     private var pendingOverlayPermissionRequest = false
 
     private val shizukuPermissionResultListener =
         Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
             if (requestCode == SHIZUKU_PERMISSION_REQUEST_CODE) {
                 pendingShizukuPermissionRequest = false
-                shizukuPermissionDenied =
-                    grantResult != PackageManager.PERMISSION_GRANTED
 
-                _uiState.update {
-                    it.copy(
-                        isShizukuPermissionPending = false,
-                        errorMessage = if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                            null
-                        } else {
-                            "Разрешение Shizuku не выдано"
-                        }
-                    )
-                }
-                viewModelScope.launch {
-                    refreshBackendSelection()
+                if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                    grantWriteSecureSettings()
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isPermissionGrantInProgress = false,
+                            errorMessage = "Разрешение Shizuku не выдано"
+                        )
+                    }
                 }
             }
         }
@@ -107,28 +92,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-    private val shizukuBinderDeadListener =
-        Shizuku.OnBinderDeadListener {
-            _uiState.update {
-                it.copy(
-                    isBackendReady = if (it.activeBackendName == "Shizuku") {
-                        false
-                    } else {
-                        it.isBackendReady
-                    },
-                    isLoading = activeDensityOperations.get() > 0,
-                    errorMessage = if (it.activeBackendName == "Shizuku") {
-                        "Shizuku отключён. Автоприменение приостановлено."
-                    } else {
-                        it.errorMessage
-                    }
-                )
-            }
-        }
-
     init {
         viewModelScope.launch {
-            preferences.observePreviousDpi().collect { (previousInnerDpi, previousOuterDpi) ->
+            preferences.observePreviousDpi().collect {
+                (previousInnerDpi, previousOuterDpi) ->
                 _uiState.update {
                     it.copy(
                         previousInnerDpi = previousInnerDpi,
@@ -138,62 +105,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        viewModelScope.launch {
-            DensityBackendManager.selectedBackend.collect { backend ->
-                val shizukuReady = ShizukuMonitor.runtimeState.value?.let {
-                    it.mainBinder && it.permission && it.userService
-                } ?: false
-
-                _uiState.update {
-                    it.copy(
-                        activeBackendName = when (backend?.name) {
-                            "ROOT" -> "Root"
-                            "SHIZUKU" -> "Shizuku"
-                            else -> null
-                        },
-                        isBackendReady = when (backend?.name) {
-                            "ROOT" -> true
-                            "SHIZUKU" -> shizukuReady
-                            else -> false
-                        }
-                    )
-                }
-            }
-        }
-
-
-        viewModelScope.launch {
-            DensityBackendManager.availability.collect { availability ->
-                _uiState.update {
-                    it.copy(
-                        isRootAvailable = availability.rootAvailable,
-                        isShizukuBackendAvailable = availability.shizukuAvailable
-                    )
-                }
-            }
-        }
-
         Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener)
-        Shizuku.addBinderDeadListener(shizukuBinderDeadListener)
         Shizuku.addRequestPermissionResultListener(shizukuPermissionResultListener)
 
-        viewModelScope.launch {
-            ShizukuMonitor.runtimeState.collect { state ->
-                val ready = state?.let {
-                    it.mainBinder && it.permission && it.userService
-                } ?: false
-
-                _uiState.update {
-                    it.copy(
-                        isBackendReady = if (it.activeBackendName == "Shizuku") {
-                            ready
-                        } else {
-                            it.isBackendReady
-                        }
-                    )
-                }
-            }
-        }
         viewModelScope.launch {
             loadSettingsInternal()
             refreshDisplaysInternal()
@@ -216,8 +130,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 outerDpi = settings.outerDpi,
                 isFoldMonitorEnabled = monitorEnabled,
                 isAutoStartEnabled = settings.autoStartEnabled,
-                isRootBackendEnabled = settings.rootBackendEnabled,
-                isShizukuBackendEnabled = settings.shizukuBackendEnabled,
                 isOverlayPermissionGranted = overlayGranted,
                 errorMessage = if (settings.foldMonitorEnabled && !overlayGranted) {
                     "Автоматизация отключена: отсутствует разрешение «Поверх других окон»."
@@ -229,7 +141,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         updateFoldMonitorService(monitorEnabled)
 
-        refreshBackendSelection()
+        refreshWriteSecureSettingsPermission()
     }
 
     private fun updateFoldMonitorService(enabled: Boolean) {
@@ -320,88 +232,88 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setRootBackendEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            preferences.setRootBackendEnabled(enabled)
-            _uiState.update {
-                it.copy(isRootBackendEnabled = enabled, errorMessage = null)
-            }
-            refreshBackendSelection()
+    fun refreshWriteSecureSettingsPermission() {
+        val granted = getApplication<Application>().checkSelfPermission(
+            "android.permission.WRITE_SECURE_SETTINGS"
+        ) == PackageManager.PERMISSION_GRANTED
+
+        _uiState.update {
+            it.copy(isWriteSecureSettingsGranted = granted)
         }
     }
 
-    fun setShizukuBackendEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            preferences.setShizukuBackendEnabled(enabled)
+    fun requestWriteSecureSettings() {
+        if (_uiState.value.isPermissionGrantInProgress) return
 
-            _uiState.update {
-                it.copy(
-                    isShizukuBackendEnabled = enabled,
-                    isShizukuPermissionPending = false,
-                    errorMessage = null
-                )
-            }
+        refreshWriteSecureSettingsPermission()
+        if (_uiState.value.isWriteSecureSettingsGranted) return
 
-            if (enabled) {
-                shizukuPermissionDenied = false
-            } else {
-                pendingShizukuPermissionRequest = false
-                shizukuPermissionDenied = false
-            }
-            refreshBackendSelection()
+        _uiState.update {
+            it.copy(
+                isPermissionGrantInProgress = true,
+                errorMessage = null
+            )
         }
-    }
-
-    private suspend fun refreshBackendSelection() {
-        if (_uiState.value.isShizukuPermissionPending) return
-
-        var settings: DensitySettings? = null
 
         try {
-            val currentSettings = preferences.getSettings()
-            settings = currentSettings
-
-            DensityBackendManager.selectBackend(
-                settingsProvider = { currentSettings }
-            ).onSuccess {
-                _uiState.update { it.copy(errorMessage = null) }
-            }.onFailure { error ->
+            if (!Shizuku.pingBinder()) {
+                pendingShizukuPermissionRequest = false
                 _uiState.update {
                     it.copy(
-                        errorMessage = "Не удалось выбрать способ выполнения: " +
-                            (error.message ?: "backend недоступен")
+                        isPermissionGrantInProgress = false,
+                        errorMessage = "Сначала запустите Shizuku"
                     )
                 }
+                return
             }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
+
+            if (Shizuku.checkSelfPermission() ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                grantWriteSecureSettings()
+            } else {
+                pendingShizukuPermissionRequest = true
+                requestShizukuPermissionIfReady()
+            }
         } catch (e: Exception) {
+            pendingShizukuPermissionRequest = false
             _uiState.update {
                 it.copy(
-                    errorMessage = "Ошибка переключения backend: " +
-                        (e.message ?: "неизвестная ошибка")
+                    isPermissionGrantInProgress = false,
+                    errorMessage = "Ошибка Shizuku: ${e.message}"
                 )
             }
         }
-
-        settings?.let { requestShizukuPermissionIfNeeded(it) }
     }
 
-    private suspend fun requestShizukuPermissionIfNeeded(settings: DensitySettings) {
-        if (_uiState.value.isShizukuPermissionPending) return
-        if (!settings.shizukuBackendEnabled || shizukuPermissionDenied) return
-
-        val permissionGranted = try {
-            Shizuku.pingBinder() &&
-                Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
-        } catch (_: Exception) {
-            false
+    private fun grantWriteSecureSettings() {
+        viewModelScope.launch {
+            val context = getApplication<Application>()
+            ShizukuPermissionGrant.grant(context)
+                .onSuccess {
+                    refreshWriteSecureSettingsPermission()
+                    _uiState.update {
+                        it.copy(
+                            isPermissionGrantInProgress = false,
+                            errorMessage = if (it.isWriteSecureSettingsGranted) {
+                                null
+                            } else {
+                                "WRITE_SECURE_SETTINGS не выдано"
+                            }
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    refreshWriteSecureSettingsPermission()
+                    _uiState.update {
+                        it.copy(
+                            isPermissionGrantInProgress = false,
+                            errorMessage = error.message
+                                ?: "Не удалось выдать разрешение"
+                        )
+                    }
+                }
         }
-        if (permissionGranted) return
-
-        pendingShizukuPermissionRequest = true
-        _uiState.update { it.copy(isShizukuPermissionPending = true) }
-        requestShizukuPermissionIfReady()
     }
 
     private suspend fun refreshDisplaysInternal() {
@@ -414,7 +326,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 outerShortPx = DisplayUtils.getOuterShortPx(active),
                 innerSizeEstimated = active == null || active.isExternal,
                 outerSizeEstimated = active == null || !active.isExternal,
-                isOverlayPermissionGranted = Settings.canDrawOverlays(context)
+                isOverlayPermissionGranted = Settings.canDrawOverlays(context),
+                isWriteSecureSettingsGranted =
+                    context.checkSelfPermission(
+                        "android.permission.WRITE_SECURE_SETTINGS"
+                    ) == PackageManager.PERMISSION_GRANTED
             )
         }
     }
@@ -516,6 +432,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         armPreviousDpi: Boolean = false
     ) {
         val context = getApplication<Application>().applicationContext
+
+        if (context.checkSelfPermission(
+                "android.permission.WRITE_SECURE_SETTINGS"
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            _uiState.update {
+                it.copy(
+                    isWriteSecureSettingsGranted = false,
+                    errorMessage = "Нет разрешения WRITE_SECURE_SETTINGS"
+                )
+            }
+            return
+        }
+
         activeDensityOperations.incrementAndGet()
 
         _uiState.update {
@@ -576,39 +506,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         Shizuku.removeBinderReceivedListener(shizukuBinderReceivedListener)
-        Shizuku.removeBinderDeadListener(shizukuBinderDeadListener)
         Shizuku.removeRequestPermissionResultListener(shizukuPermissionResultListener)
         super.onCleared()
     }
 
     private fun requestShizukuPermissionIfReady() {
         if (!pendingShizukuPermissionRequest) return
-        if (!Shizuku.pingBinder()) return
 
         try {
-            if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
-                shizukuPermissionDenied = false
+            if (!Shizuku.pingBinder()) return
+
+            if (Shizuku.checkSelfPermission() ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
                 pendingShizukuPermissionRequest = false
-                _uiState.update { it.copy(isShizukuPermissionPending = false) }
-                viewModelScope.launch {
-                    refreshBackendSelection()
-                }
+                grantWriteSecureSettings()
             } else {
                 pendingShizukuPermissionRequest = false
                 Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST_CODE)
             }
         } catch (e: Exception) {
             pendingShizukuPermissionRequest = false
-            shizukuPermissionDenied = true
-            Log.w("DensityFold-UI", "Не удалось запросить разрешение Shizuku", e)
             _uiState.update {
                 it.copy(
-                    isShizukuPermissionPending = false,
+                    isPermissionGrantInProgress = false,
                     errorMessage = "Ошибка запроса разрешения Shizuku: ${e.message}"
                 )
-            }
-            viewModelScope.launch {
-                refreshBackendSelection()
             }
         }
     }

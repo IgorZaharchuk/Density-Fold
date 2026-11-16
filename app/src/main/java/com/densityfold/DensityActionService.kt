@@ -47,7 +47,6 @@ class DensityActionService : Service() {
         }
 
         val fromMonitor = intent.getBooleanExtra(EXTRA_MONITOR_REQUEST, false)
-        val isRecovery = intent.getBooleanExtra(EXTRA_RECOVERY_REQUEST, false)
         val monitorRequestId = if (fromMonitor) {
             intent.getLongExtra(EXTRA_MONITOR_REQUEST_ID, 0L)
         } else {
@@ -61,34 +60,28 @@ class DensityActionService : Service() {
             var cancelled = false
 
             try {
-                if (isRecovery) {
-                    // Activity запущена только для восстановления Shizuku Binder.
-                    // DPI не меняем.
-                    Log.i(TAG, "Shizuku recovery trigger delivered; DPI unchanged")
-                } else {
-                    val value = DensityExecutor.apply(
+                val value = DensityExecutor.apply(
+                    applicationContext,
+                    profile
+                ).getOrThrow()
+                succeeded = true
+                applied = value
+
+                val screenName = if (value.isExternal) "Внешний" else "Внутренний"
+                Log.i(
+                    TAG,
+                    "Action confirmed: screen=$screenName " +
+                        "target=${value.targetDpi} actual=${value.actualDpi}"
+                )
+
+                if (!fromMonitor) {
+                    showNotification(
                         applicationContext,
-                        profile
-                    ).getOrThrow()
-                    succeeded = true
-                    applied = value
-
-                    val screenName = if (value.isExternal) "Внешний" else "Внутренний"
-                    Log.i(
-                        TAG,
-                        "Action confirmed: screen=$screenName " +
-                            "target=${value.targetDpi} actual=${value.actualDpi}"
+                        screenName,
+                        value.targetDpi,
+                        true,
+                        null
                     )
-
-                    if (!fromMonitor) {
-                        showNotification(
-                            applicationContext,
-                            screenName,
-                            value.targetDpi,
-                            true,
-                            null
-                        )
-                    }
                 }
             } catch (e: CancellationException) {
                 cancelled = true
@@ -96,7 +89,7 @@ class DensityActionService : Service() {
             } catch (e: Exception) {
                 failureMessage = reportFailure(e, profile, fromMonitor)
             } finally {
-                if (!cancelled && !isRecovery) {
+                if (!cancelled) {
                     sendCompletionBroadcast(
                         fromMonitor = fromMonitor,
                         success = succeeded,
@@ -219,7 +212,6 @@ class DensityActionService : Service() {
         const val ACTION_COMPLETED = "com.densityfold.ACTION_COMPLETED"
 
         const val EXTRA_MONITOR_REQUEST = "com.densityfold.EXTRA_MONITOR_REQUEST"
-        const val EXTRA_RECOVERY_REQUEST = "com.densityfold.EXTRA_RECOVERY_REQUEST"
         const val EXTRA_MONITOR_REQUEST_ID = "com.densityfold.EXTRA_MONITOR_REQUEST_ID"
         const val EXTRA_SUCCESS = "com.densityfold.EXTRA_SUCCESS"
         const val EXTRA_IS_EXTERNAL = "com.densityfold.EXTRA_IS_EXTERNAL"

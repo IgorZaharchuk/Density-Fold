@@ -17,9 +17,7 @@ data class DensitySettings(
     val innerDpi: Int,
     val outerDpi: Int,
     val foldMonitorEnabled: Boolean,
-    val autoStartEnabled: Boolean,
-    val rootBackendEnabled: Boolean,
-    val shizukuBackendEnabled: Boolean
+    val autoStartEnabled: Boolean
 )
 
 class DensityPreferences(private val context: Context) {
@@ -32,11 +30,6 @@ class DensityPreferences(private val context: Context) {
         val REMEMBER_PREVIOUS_OUTER_DPI = booleanPreferencesKey("remember_previous_outer_dpi")
         val FOLD_MONITOR_ENABLED = booleanPreferencesKey("fold_monitor_enabled")
         val AUTO_START_ENABLED = booleanPreferencesKey("auto_start_enabled")
-        val ROOT_BACKEND_ENABLED = booleanPreferencesKey("root_backend_enabled")
-        val SHIZUKU_BACKEND_ENABLED = booleanPreferencesKey("shizuku_backend_enabled")
-
-        const val DEFAULT_ROOT_BACKEND_ENABLED = false
-        const val DEFAULT_SHIZUKU_BACKEND_ENABLED = false
 
         const val DEFAULT_INNER_DPI = 350
         const val DEFAULT_OUTER_DPI = 440
@@ -53,9 +46,7 @@ class DensityPreferences(private val context: Context) {
             innerDpi = values[INNER_DPI] ?: DEFAULT_INNER_DPI,
             outerDpi = values[OUTER_DPI] ?: DEFAULT_OUTER_DPI,
             foldMonitorEnabled = values[FOLD_MONITOR_ENABLED] ?: DEFAULT_MONITOR_ENABLED,
-            autoStartEnabled = values[AUTO_START_ENABLED] ?: DEFAULT_AUTO_START_ENABLED,
-            rootBackendEnabled = values[ROOT_BACKEND_ENABLED] ?: DEFAULT_ROOT_BACKEND_ENABLED,
-            shizukuBackendEnabled = values[SHIZUKU_BACKEND_ENABLED] ?: DEFAULT_SHIZUKU_BACKEND_ENABLED
+            autoStartEnabled = values[AUTO_START_ENABLED] ?: DEFAULT_AUTO_START_ENABLED
         )
     }
 
@@ -119,11 +110,4 @@ class DensityPreferences(private val context: Context) {
         context.dataStore.edit { it[AUTO_START_ENABLED] = enabled }
     }
 
-    suspend fun setRootBackendEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[ROOT_BACKEND_ENABLED] = enabled }
-    }
-
-    suspend fun setShizukuBackendEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[SHIZUKU_BACKEND_ENABLED] = enabled }
-    }
 }
