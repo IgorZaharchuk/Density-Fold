@@ -8,35 +8,16 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.densityfold"
+        applicationId = "com.densityfold.direct"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 27
         missingDimensionStrategy("target", "standard")
-        versionCode = 23
-        versionName = "0.9.22"
+        versionCode = 30
+        versionName = "0.9.30"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    flavorDimensions += "target"
-    productFlavors {
-        create("standard") {
-            dimension = "target"
-            targetSdk = 34
-        }
-        create("legacyDiag") {
-            dimension = "target"
-            targetSdk = 27
-        }
-    }
-
     buildTypes {
-        create("directDiag") {
-            initWith(getByName("debug"))
-            matchingFallbacks += listOf("debug")
-            applicationIdSuffix = ".directdiag"
-            versionNameSuffix = "-directdiag"
-            isDebuggable = true
-        }
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))

@@ -1,13 +1,20 @@
 package com.densityfold.engine
 
-import com.densityfold.backend.DensityBackendManager
-import com.densityfold.backend.getBackendOrThrow
-
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Process
+import android.util.DisplayMetrics
+import android.hardware.display.DisplayManager
+import android.view.Display
 import com.densityfold.data.DensityPreferences
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 
 enum class DensityProfile {
     INNER,
@@ -24,6 +31,80 @@ data class DensityApplyResult(
 object DensityExecutor {
 
     private val applyMutex = Mutex()
+    private const val DISPLAY_ID = 0
+    private val USER_ID = Process.myUid() / 100000
+    private val INT = Int::class.javaPrimitiveType!!
+
+    private fun windowManagerService(): Any {
+        val getter = Class.forName("android.view.WindowManagerGlobal")
+            .getDeclaredMethod("getWindowManagerService")
+            .apply { isAccessible = true }
+
+        return getter.invoke(null)
+            ?: error("WindowManager service недоступен")
+    }
+
+    private fun checkPermission(context: Context) {
+        if (context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            error("Нет разрешения WRITE_SECURE_SETTINGS. Выдайте его через Shizuku.")
+        }
+    }
+
+    private suspend fun setDensity(context: Context, dpi: Int) {
+        checkPermission(context)
+
+        withContext(Dispatchers.IO) {
+            try {
+                val service = windowManagerService()
+                val method = service.javaClass.getMethod(
+                    "setForcedDisplayDensityForUser",
+                    INT, INT, INT
+                )
+                method.invoke(service, DISPLAY_ID, dpi, USER_ID)
+            } catch (e: java.lang.reflect.InvocationTargetException) {
+                throw IllegalStateException(
+                    "Не удалось изменить DPI: " +
+                        (e.targetException?.message ?: e.message),
+                    e.targetException ?: e
+                )
+            } catch (e: Exception) {
+                throw IllegalStateException(
+                    "Ошибка прямого DPI API: ${e.message}", e
+                )
+            }
+        }
+    }
+
+    private fun currentDensity(context: Context): Int {
+        val manager = context.getSystemService(Context.DISPLAY_SERVICE)
+            as DisplayManager
+        val display = manager.getDisplay(Display.DEFAULT_DISPLAY)
+            ?: error("Основной дисплей недоступен")
+
+        val metrics = DisplayMetrics()
+        display.getRealMetrics(metrics)
+        return metrics.densityDpi
+    }
+
+    private suspend fun applyAndVerify(
+        context: Context,
+        dpi: Int,
+        timeoutMs: Long
+    ): Int {
+        setDensity(context, dpi)
+
+        return withTimeout(timeoutMs) {
+            while (true) {
+                val actual = currentDensity(context)
+                if (actual == dpi) return@withTimeout actual
+                delay(100)
+            }
+            @Suppress("UNREACHABLE_CODE")
+            dpi
+        }
+    }
 
     suspend fun apply(
         context: Context,
@@ -33,74 +114,54 @@ object DensityExecutor {
         return applyMutex.withLock {
             try {
                 val active = DisplayUtils.getActiveDisplay(context)
-                    ?: throw IllegalStateException("Не удалось определить активный экран")
+                    ?: error("Не удалось определить активный экран")
 
                 val isExternal = profile == DensityProfile.OUTER
-
                 if (active.isExternal != isExternal) {
-                    throw IllegalStateException(
-                        if (isExternal) {
+                    error(
+                        if (isExternal)
                             "Для применения настроек внешнего экрана закройте телефон"
-                        } else {
+                        else
                             "Для применения настроек внутреннего экрана раскройте телефон"
-                        }
                     )
                 }
-
-                val shortPx = active.shortPx
 
                 val preferences = DensityPreferences(context)
-                val targetDpi = if (isExternal) {
+                val targetDpi = if (isExternal)
                     preferences.getOuterDpi()
-                } else {
+                else
                     preferences.getInnerDpi()
-                }
 
-                val allowedRange = DisplayUtils.allowedDpiRange(shortPx)
-                if (targetDpi !in allowedRange) {
-                    throw IllegalStateException(
-                        "Профиль содержит $targetDpi DPI, допустимо для этого экрана: " +
-                            "${allowedRange.first}–${allowedRange.last} DPI. " +
-                            "Измените профиль перед применением."
+                val allowed = DisplayUtils.allowedDpiRange(active.shortPx)
+                if (targetDpi !in allowed) {
+                    error(
+                        "Профиль содержит $targetDpi DPI, допустимо: " +
+                            "${allowed.first}–${allowed.last} DPI"
                     )
                 }
 
-                val result = DensityBackendManager.withBackend(
-                    settingsProvider = { DensityPreferences(context).getSettings() },
-                    timeoutMs = timeoutMs
-                ) { backend ->
-                    backend.awaitReady(timeoutMs).getBackendOrThrow(invalidateBackend = true)
+                ensureDisplayUnchanged(context, active)
+                val current = currentDensity(context)
+                val alreadyApplied = current == targetDpi
+
+                val actual = if (alreadyApplied) {
+                    current
+                } else {
                     ensureDisplayUnchanged(context, active)
+                    applyAndVerify(context, targetDpi, timeoutMs)
+                }
 
-                    val currentDpi = backend.getCurrentDensity().getBackendOrThrow()
-                    val alreadyApplied = currentDpi == targetDpi
+                ensureDisplayUnchanged(context, active)
 
-                    val actualDpi = if (alreadyApplied) {
-                        currentDpi
-                    } else {
-                        ensureDisplayUnchanged(context, active)
-                        backend.setDensity(targetDpi).getBackendOrThrow()
-                        backend.getCurrentDensity().getBackendOrThrow()
-                    }
+                if (!alreadyApplied) {
+                    preferences.rememberPreviousDpiIfArmed(isExternal, current)
+                }
 
-                    if (actualDpi != targetDpi) {
-                        throw IllegalStateException(
-                            "Проверка DPI не пройдена: целевой=$targetDpi, фактический=$actualDpi"
-                        )
-                    }
-
-                    ensureDisplayUnchanged(context, active)
-                    if (!alreadyApplied) {
-                        preferences.rememberPreviousDpiIfArmed(isExternal, currentDpi)
-                    }
+                Result.success(
                     DensityApplyResult(
-                        isExternal = isExternal,
-                        targetDpi = targetDpi,
-                        actualDpi = actualDpi,
-                        alreadyApplied = alreadyApplied,
+                        isExternal, targetDpi, actual, alreadyApplied
                     )
-                }
-                Result.success(result)
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -116,19 +177,11 @@ object DensityExecutor {
         return applyMutex.withLock {
             try {
                 val active = DisplayUtils.getActiveDisplay(context)
-                    ?: throw IllegalStateException("Не удалось определить активный экран")
-
-                val currentDpi = DensityBackendManager.withBackend(
-                    settingsProvider = { DensityPreferences(context).getSettings() },
-                    timeoutMs = timeoutMs
-                ) { backend ->
-                    backend.awaitReady(timeoutMs).getBackendOrThrow(invalidateBackend = true)
-                    ensureDisplayUnchanged(context, active)
-                    val dpi = backend.getCurrentDensity().getBackendOrThrow()
-                    ensureDisplayUnchanged(context, active)
-                    dpi
-                }
-                Result.success(currentDpi)
+                    ?: error("Не удалось определить активный экран")
+                ensureDisplayUnchanged(context, active)
+                val dpi = currentDensity(context)
+                ensureDisplayUnchanged(context, active)
+                Result.success(dpi)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -149,54 +202,31 @@ object DensityExecutor {
         return applyMutex.withLock {
             try {
                 val active = DisplayUtils.getActiveDisplay(context)
-                    ?: throw IllegalStateException("Не удалось определить активный экран")
+                    ?: error("Не удалось определить активный экран")
+                ensureDisplayUnchanged(context, active)
 
-                val result = DensityBackendManager.withBackend(
-                    settingsProvider = { DensityPreferences(context).getSettings() },
-                    timeoutMs = timeoutMs
-                ) { backend ->
-                    backend.awaitReady(timeoutMs).getBackendOrThrow(invalidateBackend = true)
-                    ensureDisplayUnchanged(context, active)
+                val current = currentDensity(context)
+                val target = current + delta
+                val allowed = DisplayUtils.allowedDpiRange(active.shortPx)
 
-                    val currentDpi = backend.getCurrentDensity().getBackendOrThrow()
-                    val allowedRange = DisplayUtils.allowedDpiRange(active.shortPx)
-                    val targetDpi = currentDpi + delta
-
-                    if (targetDpi !in allowedRange) {
-                        throw IllegalStateException(
-                            "Достигнута граница диапазона: " +
-                                "${allowedRange.first}–${allowedRange.last} DPI"
-                        )
-                    }
-
-                    val alreadyApplied = targetDpi == currentDpi
-
-                    if (!alreadyApplied) {
-                        ensureDisplayUnchanged(context, active)
-                        backend.setDensity(targetDpi).getBackendOrThrow()
-                    }
-
-                    val actualDpi = backend.getCurrentDensity().getBackendOrThrow()
-                    if (actualDpi != targetDpi) {
-                        throw IllegalStateException(
-                            "Проверка DPI не пройдена: целевой=$targetDpi, фактический=$actualDpi"
-                        )
-                    }
-
-                    ensureDisplayUnchanged(context, active)
-                    if (!alreadyApplied) {
-                        DensityPreferences(context)
-                            .rememberPreviousDpiIfArmed(active.isExternal, currentDpi)
-                    }
-
-                    DensityApplyResult(
-                        isExternal = active.isExternal,
-                        targetDpi = targetDpi,
-                        actualDpi = actualDpi,
-                        alreadyApplied = alreadyApplied
+                if (target !in allowed) {
+                    error(
+                        "Достигнута граница диапазона: " +
+                            "${allowed.first}–${allowed.last} DPI"
                     )
                 }
-                Result.success(result)
+
+                val actual = applyAndVerify(context, target, timeoutMs)
+                ensureDisplayUnchanged(context, active)
+
+                DensityPreferences(context)
+                    .rememberPreviousDpiIfArmed(active.isExternal, current)
+
+                Result.success(
+                    DensityApplyResult(
+                        active.isExternal, target, actual, false
+                    )
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -210,15 +240,13 @@ object DensityExecutor {
         initial: DisplayInfo
     ) {
         val current = DisplayUtils.getActiveDisplay(context)
-            ?: throw IllegalStateException("Не удалось определить активный экран")
+            ?: error("Не удалось определить активный экран")
 
         if (
             current.isExternal != initial.isExternal ||
             current.shortPx != initial.shortPx
         ) {
-            throw IllegalStateException(
-                "Экран изменился во время применения DPI; команда отменена или результат не подтверждён"
-            )
+            error("Экран изменился во время применения DPI")
         }
     }
 }
