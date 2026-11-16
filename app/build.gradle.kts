@@ -17,6 +17,12 @@ android {
     }
 
     buildTypes {
+        create("directDiag") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".directdiag"
+            versionNameSuffix = "-directdiag"
+            isDebuggable = true
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))

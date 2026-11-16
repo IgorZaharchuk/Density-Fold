@@ -53,12 +53,23 @@ jobs:
           exit 1
         fi
         echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
-        ./gradlew :app:assembleDebug --stacktrace
-        cp app/build/outputs/apk/debug/app-debug.apk "app/build/outputs/apk/debug/Density-Fold-$VERSION_NAME.apk"
 
+        if [ "$GITHUB_REF_NAME" = "experiment/direct-density" ]; then
+          ./gradlew :app:assembleDirectDiag --stacktrace
+          APK_PATH="app/build/outputs/apk/directDiag/app-directDiag.apk"
+          cp "$APK_PATH" "app/build/outputs/apk/directDiag/Density-Fold-DirectDiag-$VERSION_NAME.apk"
+          echo "APK_PATH=app/build/outputs/apk/directDiag/Density-Fold-DirectDiag-$VERSION_NAME.apk" >> "$GITHUB_ENV"
+          echo "ARTIFACT_NAME=Density-Fold-DirectDiag-$VERSION_NAME" >> "$GITHUB_ENV"
+        else
+          ./gradlew :app:assembleDebug --stacktrace
+          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+          cp "$APK_PATH" "app/build/outputs/apk/debug/Density-Fold-$VERSION_NAME.apk"
+          echo "APK_PATH=app/build/outputs/apk/debug/Density-Fold-$VERSION_NAME.apk" >> "$GITHUB_ENV"
+          echo "ARTIFACT_NAME=Density-Fold-$VERSION_NAME" >> "$GITHUB_ENV"
+        fi
     - name: Upload APK
       uses: actions/upload-artifact@v7
       with:
-        name: Density-Fold-${{ env.VERSION_NAME }}
-        path: app/build/outputs/apk/debug/Density-Fold-${{ env.VERSION_NAME }}.apk
+        name: ${{ env.ARTIFACT_NAME }}
+        path: ${{ env.APK_PATH }}
         retention-days: 30
