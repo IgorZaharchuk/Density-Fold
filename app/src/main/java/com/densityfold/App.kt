@@ -11,7 +11,7 @@ class App : Application() {
             Application.getProcessName()
         } else {
             File("/proc/self/cmdline").readText()
-                .trimEnd('\\u0000')
+                .trimEnd('\u0000')
                 .trim()
         }
         return processName == packageName
