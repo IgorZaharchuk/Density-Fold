@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 object ShizukuPermissionGrant {
 
-    private const val EXPECTED_PACKAGE = "com.densityfold.direct"
+    private const val EXPECTED_PACKAGE = "com.densityfold"
     private const val PERMISSION =
         "android.permission.WRITE_SECURE_SETTINGS"
 
