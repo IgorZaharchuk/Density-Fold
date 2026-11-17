@@ -179,7 +179,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             color = if (uiState.isWriteSecureSettingsGranted)
-                                Color(0xFF4AD9FF)
+                                MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.error,
                             maxLines = 1
                         )
