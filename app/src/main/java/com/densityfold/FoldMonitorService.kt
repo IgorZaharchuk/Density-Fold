@@ -10,7 +10,6 @@ import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
-import android.provider.Settings
 import android.util.Log
 import android.view.Display
 import androidx.core.content.ContextCompat
@@ -247,13 +246,6 @@ class FoldMonitorService : Service() {
                 val settings = DensityPreferences(applicationContext).getSettings()
                 if (!settings.foldMonitorEnabled) {
                     Log.i(TAG, "Мониторинг отключён в настройках; остановка сервиса")
-                    stopSelf(startId)
-                    return@launch
-                }
-
-                if (!Settings.canDrawOverlays(applicationContext)) {
-                    Log.w(TAG, "Нет разрешения на отображение поверх окон; автоматизация отключена")
-                    DensityPreferences(applicationContext).setFoldMonitorEnabled(false)
                     stopSelf(startId)
                     return@launch
                 }

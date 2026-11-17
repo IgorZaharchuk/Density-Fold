@@ -1,9 +1,6 @@
 package com.densityfold
 
 import android.Manifest
-import android.content.Intent
-import android.net.Uri
-import android.provider.Settings
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -57,16 +54,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             DensityFoldTheme {
-                MainScreen(
-                    viewModel = mainViewModel,
-                    onRequestOverlayPermission = {
-                        val intent = Intent(
-                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:$packageName")
-                        )
-                        startActivity(intent)
-                    }
-                )
+                MainScreen(viewModel = mainViewModel)
             }
         }
     }
@@ -76,7 +64,6 @@ class MainActivity : ComponentActivity() {
         if (::mainViewModel.isInitialized) {
             mainViewModel.refreshDisplays()
             mainViewModel.refreshWriteSecureSettingsPermission()
-            mainViewModel.onOverlayPermissionSettingsReturned()
         }
     }
 
@@ -85,18 +72,8 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(
-    viewModel: MainViewModel,
-    onRequestOverlayPermission: () -> Unit
-) {
+fun MainScreen(viewModel: MainViewModel) {
     val uiState by viewModel.uiState.collectAsState()
-
-    LaunchedEffect(uiState.overlayPermissionRequestPending) {
-        if (uiState.overlayPermissionRequestPending) {
-            viewModel.consumeOverlayPermissionRequest()
-            onRequestOverlayPermission()
-        }
-    }
 
     var settingsExpanded by remember { mutableStateOf(false) }
 

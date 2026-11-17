@@ -3,7 +3,6 @@ package com.densityfold.viewmodel
 import android.app.Application
 import android.content.pm.PackageManager
 import android.content.Intent
-import android.provider.Settings
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -41,8 +40,6 @@ data class UiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val successMessage: String? = null,
-    val isOverlayPermissionGranted: Boolean = false,
-    val overlayPermissionRequestPending: Boolean = false
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -60,9 +57,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     @Volatile
     private var pendingShizukuPermissionRequest = false
-
-    @Volatile
-    private var pendingOverlayPermissionRequest = false
 
     private val shizukuPermissionResultListener =
         Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
@@ -116,31 +110,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun loadSettingsInternal() {
         val settings = preferences.getSettings()
-        val context = getApplication<Application>()
-        val overlayGranted = Settings.canDrawOverlays(context)
-        val monitorEnabled = settings.foldMonitorEnabled && overlayGranted
-
-        if (settings.foldMonitorEnabled && !overlayGranted) {
-            preferences.setFoldMonitorEnabled(false)
-        }
 
         _uiState.update {
             it.copy(
                 innerDpi = settings.innerDpi,
                 outerDpi = settings.outerDpi,
-                isFoldMonitorEnabled = monitorEnabled,
-                isAutoStartEnabled = settings.autoStartEnabled,
-                isOverlayPermissionGranted = overlayGranted,
-                errorMessage = if (settings.foldMonitorEnabled && !overlayGranted) {
-                    "Автоматизация отключена: отсутствует разрешение «Поверх других окон»."
-                } else {
-                    it.errorMessage
-                }
+                isFoldMonitorEnabled = settings.foldMonitorEnabled,
+                isAutoStartEnabled = settings.autoStartEnabled
             )
         }
 
-        updateFoldMonitorService(monitorEnabled)
-
+        updateFoldMonitorService(settings.foldMonitorEnabled)
         refreshWriteSecureSettingsPermission()
     }
 
@@ -157,72 +137,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setFoldMonitorEnabled(enabled: Boolean) {
-        if (!enabled) {
-            pendingOverlayPermissionRequest = false
-            viewModelScope.launch {
-                preferences.setFoldMonitorEnabled(false)
-                _uiState.update {
-                    it.copy(
-                        isFoldMonitorEnabled = false,
-                        overlayPermissionRequestPending = false
-                    )
-                }
-                updateFoldMonitorService(false)
-            }
-            return
-        }
-
-        val context = getApplication<Application>()
-        if (!Settings.canDrawOverlays(context)) {
-            pendingOverlayPermissionRequest = true
+        viewModelScope.launch {
+            preferences.setFoldMonitorEnabled(enabled)
             _uiState.update {
                 it.copy(
-                    overlayPermissionRequestPending = true,
+                    isFoldMonitorEnabled = enabled,
                     errorMessage = null
                 )
             }
-            return
+            updateFoldMonitorService(enabled)
         }
-
-        viewModelScope.launch { enableFoldMonitor() }
-    }
-
-    fun consumeOverlayPermissionRequest() {
-        _uiState.update { it.copy(overlayPermissionRequestPending = false) }
-    }
-
-    fun onOverlayPermissionSettingsReturned() {
-        if (!pendingOverlayPermissionRequest) return
-        pendingOverlayPermissionRequest = false
-
-        viewModelScope.launch {
-            val granted = Settings.canDrawOverlays(getApplication<Application>())
-            _uiState.update { it.copy(isOverlayPermissionGranted = granted) }
-
-            if (granted) {
-                enableFoldMonitor()
-            } else {
-                preferences.setFoldMonitorEnabled(false)
-                _uiState.update {
-                    it.copy(
-                        isFoldMonitorEnabled = false,
-                        errorMessage = "Автоматизация не включена: разрешение «Поверх других окон» не предоставлено."
-                    )
-                }
-            }
-        }
-    }
-
-    private suspend fun enableFoldMonitor() {
-        preferences.setFoldMonitorEnabled(true)
-        _uiState.update {
-            it.copy(
-                isFoldMonitorEnabled = true,
-                isOverlayPermissionGranted = true,
-                errorMessage = null
-            )
-        }
-        updateFoldMonitorService(true)
     }
 
     fun setAutoStartEnabled(enabled: Boolean) {
@@ -326,7 +250,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 outerShortPx = DisplayUtils.getOuterShortPx(active),
                 innerSizeEstimated = active == null || active.isExternal,
                 outerSizeEstimated = active == null || !active.isExternal,
-                isOverlayPermissionGranted = Settings.canDrawOverlays(context),
                 isWriteSecureSettingsGranted =
                     context.checkSelfPermission(
                         "android.permission.WRITE_SECURE_SETTINGS"
