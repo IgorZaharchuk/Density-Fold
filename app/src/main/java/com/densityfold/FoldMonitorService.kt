@@ -50,14 +50,10 @@ class FoldMonitorService : Service() {
     private var notificationControlsAvailable = false
 
 
-    private fun hasWriteSecureSettingsPermission(): Boolean {
-        return checkSelfPermission(
+    private fun refreshPermissionState(): Boolean {
+        val granted = checkSelfPermission(
             "android.permission.WRITE_SECURE_SETTINGS"
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun refreshPermissionState(): Boolean {
-        val granted = hasWriteSecureSettingsPermission()
         notificationControlsAvailable = granted
         if (!granted) {
             notificationCurrentDpi = null
@@ -69,7 +65,6 @@ class FoldMonitorService : Service() {
 
     private var lastRequestedExternal: Boolean? = null
     private var lastObservedExternal: Boolean? = null
-    private var pendingDensityAction = false
     private var activeRequestId: Long? = null
     private var retryPending = false
     private var consecutiveActionFailures = 0
@@ -118,11 +113,6 @@ class FoldMonitorService : Service() {
                     DensityActionService.EXTRA_IS_EXTERNAL,
                     false
                 )
-                val actualDpi = intent.getIntExtra(
-                    DensityActionService.EXTRA_ACTUAL_DPI,
-                    0
-                )
-
                 scope.launch {
                     refreshNotificationDpi()
                     updateNotification("Мониторинг складывания активен")
@@ -132,7 +122,6 @@ class FoldMonitorService : Service() {
 
                 val active = DisplayUtils.getActiveDisplay(applicationContext)
                 if (
-                    pendingDensityAction ||
                     active == null ||
                     active.isExternal != isExternal
                 ) {
@@ -304,13 +293,11 @@ class FoldMonitorService : Service() {
         if (activeRequestId != null) return
 
         if (
-            !pendingDensityAction &&
             lastRequestedExternal == isExternal &&
             !retryPending
         ) return
 
         val requestId = beginRequest(isExternal)
-        pendingDensityAction = false
 
         val actionName = if (isExternal) "Внешний" else "Внутренний"
         Log.i(TAG, "Запуск действия: $actionName")
@@ -507,7 +494,7 @@ class FoldMonitorService : Service() {
     }
 
     private fun withBackendWarning(message: String): String {
-        return if (hasWriteSecureSettingsPermission()) {
+        return if (notificationControlsAvailable) {
             message
         } else {
             "$message · Требуется WRITE_SECURE_SETTINGS"

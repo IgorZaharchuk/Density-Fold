@@ -171,8 +171,7 @@ object DensityExecutor {
     }
 
     suspend fun readCurrentDensity(
-        context: Context,
-        timeoutMs: Long = 10_000L
+        context: Context
     ): Result<Int> {
         return applyMutex.withLock {
             try {
