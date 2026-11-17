@@ -55,7 +55,7 @@ Direct Density использует системный API, внутренняя
 
 **Запасной способ — через ADB.** Если Shizuku недоступен, подключите устройство к компьютеру с ADB, откройте ADB shell и выполните команду:
 
-    pm grant com.densityfold.direct android.permission.WRITE_SECURE_SETTINGS
+    pm grant com.densityfold android.permission.WRITE_SECURE_SETTINGS
 
 Если разрешение уже выдано, повторять эту процедуру не требуется.
 

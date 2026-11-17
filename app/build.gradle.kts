@@ -8,7 +8,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.densityfold.direct"
+        applicationId = "com.densityfold"
         minSdk = 26
         targetSdk = 27
         versionCode = 30
