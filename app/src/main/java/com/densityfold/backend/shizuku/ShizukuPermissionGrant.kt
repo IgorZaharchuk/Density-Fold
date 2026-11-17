@@ -60,7 +60,7 @@ object ShizukuPermissionGrant {
                 .daemon(false)
                 .processNameSuffix("permission")
                 .debuggable(false)
-                .version(1)
+                .version(2)
 
             val deferred = CompletableDeferred<IShizukuService>()
             val bound = AtomicBoolean(false)
