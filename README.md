@@ -1,3 +1,5 @@
+<img width="4320" height="1540" alt="14521" src="https://github.com/user-attachments/assets/d60f775a-87d5-4727-b773-e792e3f3107b" />
+<img width="1061" height="2261" alt="14520" src="https://github.com/user-attachments/assets/f4068786-a748-4090-8dca-a50cfc8abf57" />
 # Density Fold
 
 **Основная версия проекта — 0.9.30 (ветка `main`).** Она использует Direct Density: меняет плотность интерфейса через системный WindowManager API без Root и без постоянной зависимости от Shizuku.
