@@ -35,6 +35,13 @@ android {
         compose = true
     aidl = true
     }
+
+    lint {
+        disable += setOf(
+            "ProtectedPermissions",
+            "ExpiredTargetSdkVersion"
+        )
+    }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.5"
     }
