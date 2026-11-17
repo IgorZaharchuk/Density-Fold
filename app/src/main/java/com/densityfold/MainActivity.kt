@@ -201,7 +201,9 @@ fun MainScreen(
                             if (uiState.isWriteSecureSettingsGranted) "DPI API" else "Нет разрешения",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = if (uiState.isWriteSecureSettingsGranted)
+                                Color(0xFF4AD9FF)
+                            else MaterialTheme.colorScheme.error,
                             maxLines = 1
                         )
                     }
@@ -345,32 +347,38 @@ fun MainScreen(
                             ),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Text(
-                                if (uiState.isWriteSecureSettingsGranted) {
-                                    "Разрешение WRITE_SECURE_SETTINGS выдано"
-                                } else {
-                                    "Для прямого изменения DPI требуется разрешение WRITE_SECURE_SETTINGS"
-                                },
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Button(
-                                onClick = viewModel::requestWriteSecureSettings,
-                                enabled = !uiState.isPermissionGrantInProgress &&
-                                    !uiState.isWriteSecureSettingsGranted,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
+                            if (!uiState.isWriteSecureSettingsGranted) {
                                 Text(
-                                    if (uiState.isPermissionGrantInProgress) {
-                                        "Ожидание Shizuku…"
-                                    } else if (uiState.isWriteSecureSettingsGranted) {
-                                        "Разрешение выдано"
-                                    } else {
-                                        "Выдать разрешение через Shizuku"
-                                    }
+                                    "Для прямого изменения DPI требуется разрешение WRITE_SECURE_SETTINGS",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                Button(
+                                    onClick = viewModel::requestWriteSecureSettings,
+                                    enabled = !uiState.isPermissionGrantInProgress,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        Color(0xFF4AD9FF).copy(
+                                            alpha = if (!uiState.isPermissionGrantInProgress) 0.85f else 0.25f
+                                        )
+                                    ),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF0B2B68),
+                                        contentColor = Color(0xFFDBFAFF),
+                                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+                                ) {
+                                    Text(
+                                        if (uiState.isPermissionGrantInProgress) "Ожидание Shizuku…"
+                                        else "Выдать разрешение через Shizuku"
+                                    )
+                                }
+                                Divider()
                             }
-                            Divider()
                             SettingSwitch(
                                 title = "Автоприменение",
                                 description = "Менять DPI при смене экрана",

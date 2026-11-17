@@ -121,6 +121,17 @@ class MonitorNotificationHelper(private val context: Context) {
             }
         }
 
+        val compactViews = RemoteViews(views).apply {
+            setViewVisibility(R.id.notification_open_app, android.view.View.GONE)
+        }
+        val expandedViews = RemoteViews(views).apply {
+            setViewVisibility(R.id.notification_open_app, android.view.View.VISIBLE)
+            setOnClickPendingIntent(
+                R.id.notification_open_app,
+                createOpenAppPendingIntent()
+            )
+        }
+
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -128,8 +139,8 @@ class MonitorNotificationHelper(private val context: Context) {
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .setContentIntent(createOpenAppPendingIntent())
-            .setCustomContentView(views)
-            .setCustomBigContentView(views)
+            .setCustomContentView(compactViews)
+            .setCustomBigContentView(expandedViews)
             .build()
     }
 
