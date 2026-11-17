@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class ShizukuUserService : IShizukuService.Stub() {
 
     companion object {
-        private const val ALLOWED_PACKAGE = "com.densityfold.direct"
+        private const val ALLOWED_PACKAGE = "com.densityfold"
         private const val PERMISSION =
             "android.permission.WRITE_SECURE_SETTINGS"
 
