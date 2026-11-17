@@ -35,10 +35,16 @@ class MonitorNotificationHelper(private val context: Context) {
         centerLabel: String,
         centerSubLabel: String? = null
     ): Notification {
-        val views = RemoteViews(
+        val compactViews = RemoteViews(
             context.packageName,
             R.layout.notification_dpi_controls
         )
+        val expandedViews = RemoteViews(
+            context.packageName,
+            R.layout.notification_dpi_controls
+        )
+
+        listOf(compactViews, expandedViews).forEach { views ->
 
         views.setOnClickPendingIntent(
             R.id.notification_root,
@@ -121,16 +127,16 @@ class MonitorNotificationHelper(private val context: Context) {
             }
         }
 
-        val compactViews = RemoteViews(views).apply {
-            setViewVisibility(R.id.notification_open_app, android.view.View.GONE)
         }
-        val expandedViews = RemoteViews(views).apply {
-            setViewVisibility(R.id.notification_open_app, android.view.View.VISIBLE)
-            setOnClickPendingIntent(
-                R.id.notification_open_app,
-                createOpenAppPendingIntent()
-            )
-        }
+
+        expandedViews.setViewVisibility(
+            R.id.notification_open_app,
+            android.view.View.VISIBLE
+        )
+        expandedViews.setOnClickPendingIntent(
+            R.id.notification_open_app,
+            createOpenAppPendingIntent()
+        )
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
