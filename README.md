@@ -1,5 +1,3 @@
-<img width="4320" height="1540" alt="14521" src="https://github.com/user-attachments/assets/d60f775a-87d5-4727-b773-e792e3f3107b" />
-<img width="1061" height="2261" alt="14520" src="https://github.com/user-attachments/assets/f4068786-a748-4090-8dca-a50cfc8abf57" />
 # Density Fold
 
 **Основная версия проекта — 0.9.30 (ветка `main`).** Она использует Direct Density: меняет плотность интерфейса через системный WindowManager API без Root и без постоянной зависимости от Shizuku.
@@ -24,8 +22,8 @@ Density Fold — приложение для раздельной настрой
 - Ярлыки «Внутренний» и «Внешний».
 - Автозапуск мониторинга после перезагрузки.
 
-<img width="4320" height="1024" alt="Density Fold" src="https://github.com/user-attachments/assets/35324a18-4250-47a0-9d83-9c1dd98d9457" />
-<img width="2120" height="4590" alt="Density Fold interface" src="https://github.com/user-attachments/assets/07eaf31e-6840-4fe4-944a-6980e5dc2df6" />
+<img width="4320" height="1540" alt="14521" src="https://github.com/user-attachments/assets/d60f775a-87d5-4727-b773-e792e3f3107b" />
+<img width="1061" height="2261" alt="14520" src="https://github.com/user-attachments/assets/f4068786-a748-4090-8dca-a50cfc8abf57" />
 
 ## Как работает Direct Density
 
